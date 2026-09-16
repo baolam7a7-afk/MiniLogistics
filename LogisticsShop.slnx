@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MiniLogistics.API/MiniLogistics.API.csproj" />
+  <Project Path="MiniLogistics.BLL/MiniLogistics.BLL.csproj" />
+  <Project Path="MiniLogistics.DAL/MiniLogistics.DAL.csproj" />
+  <Project Path="MiniLogistics.Web/MiniLogistics.Web.csproj" />
+</Solution>

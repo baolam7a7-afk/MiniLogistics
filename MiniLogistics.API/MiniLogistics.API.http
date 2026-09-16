@@ -1,0 +1,6 @@
+@MiniLogistics.API_HostAddress = http://localhost:5136
+
+GET {{MiniLogistics.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
