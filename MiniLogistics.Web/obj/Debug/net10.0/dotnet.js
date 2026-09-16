@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "MiniLogistics.Web",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-MIBMyNGHlXTZVOQUIwf0rWBfvi3MciFL5aDQ18s/Uhc=",
+    "hash": "sha256-dB6C9hLeQL7owsLxIXG2/Y0PRy5XegX6S8U8n87EbDw=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.ykrnppwhq2.js"
@@ -1242,16 +1242,16 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "MiniLogistics.Web.wasm",
-        "name": "MiniLogistics.Web.thz1m1684j.wasm",
-        "integrity": "sha256-8UPsHFqGth17m4QWw0slmr4OahiBUBS5gY0Ip6VBoZA=",
+        "name": "MiniLogistics.Web.mcgx7707an.wasm",
+        "integrity": "sha256-BnSf1iogo+B3DVau8mkqstFGkvl9AyUAEm2IQyrGVDY=",
         "cache": "force-cache"
       }
     ],
     "pdb": [
       {
         "virtualPath": "MiniLogistics.Web.pdb",
-        "name": "MiniLogistics.Web.ayjgh7abyd.pdb",
-        "integrity": "sha256-AlajsYfxdr8KmcWvAGnuS8bVJ6haZEke5FBSxNWUBHA=",
+        "name": "MiniLogistics.Web.0lrrfhnpmp.pdb",
+        "integrity": "sha256-ZMchyXb/nVJJNFmb5rbjmspITIjvQXVDywU3ubt20gQ=",
         "cache": "force-cache"
       }
     ],
