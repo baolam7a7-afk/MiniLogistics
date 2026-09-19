@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
+using MiniLogistics.API.Middleware;
 using MiniLogistics.BLL.DTOs.Auth;
 using MiniLogistics.BLL.Services.Auth;
 using MiniLogistics.DAL.Data;
@@ -219,7 +220,18 @@ var app = builder.Build();
 
 
 // ==========================================
-// 10. HTTP REQUEST PIPELINE
+// 10. GLOBAL EXCEPTION MIDDLEWARE
+// ==========================================
+
+// Phải đặt trước các Middleware phía dưới
+// để có thể bắt Exception từ Controller,
+// Service, Repository...
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
+
+// ==========================================
+// 11. HTTP REQUEST PIPELINE
 // ==========================================
 
 if (app.Environment.IsDevelopment())
@@ -233,11 +245,36 @@ app.UseHttpsRedirection();
 
 app.UseCors("BlazorPolicy");
 
-// Authentication phải đứng trước Authorization
+
+// ==========================================
+// 12. AUTHENTICATION
+// ==========================================
+
+// Xác định:
+// User là ai?
+// JWT có hợp lệ không?
+
 app.UseAuthentication();
+
+
+// ==========================================
+// 13. AUTHORIZATION
+// ==========================================
+
+// User có quyền truy cập API này không?
 
 app.UseAuthorization();
 
+
+// ==========================================
+// 14. CONTROLLERS
+// ==========================================
+
 app.MapControllers();
+
+
+// ==========================================
+// 15. RUN
+// ==========================================
 
 app.Run();
