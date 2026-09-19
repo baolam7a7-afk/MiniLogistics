@@ -6,9 +6,14 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
 using MiniLogistics.API.Middleware;
+
 using MiniLogistics.BLL.DTOs.Auth;
+using MiniLogistics.BLL.Services;
 using MiniLogistics.BLL.Services.Auth;
+
 using MiniLogistics.DAL.Data;
+using MiniLogistics.DAL.Repositories;
+using MiniLogistics.DAL.UnitOfWork;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,16 +91,8 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
 
 
 // ==========================================================
-// 3. DEPENDENCY INJECTION - SERVICES
+// 3. DEPENDENCY INJECTION - AUTH SERVICE
 // ==========================================================
-
-// AuthService:
-// - Register
-// - Login
-// - BCrypt
-// - JWT
-// - Refresh Token
-// - Logout
 
 builder.Services.AddScoped<
     IAuthService,
@@ -104,7 +101,57 @@ builder.Services.AddScoped<
 
 
 // ==========================================================
-// 4. JWT AUTHENTICATION
+// 4. DEPENDENCY INJECTION - GENERIC REPOSITORY
+// ==========================================================
+
+builder.Services.AddScoped(
+    typeof(IRepository<>),
+    typeof(Repository<>)
+);
+
+
+// ==========================================================
+// 5. DEPENDENCY INJECTION - UNIT OF WORK
+// ==========================================================
+
+builder.Services.AddScoped<
+    IUnitOfWork,
+    UnitOfWork
+>();
+
+
+// ==========================================================
+// 6. DEPENDENCY INJECTION - PRODUCT SERVICE
+// ==========================================================
+
+builder.Services.AddScoped<
+    IProductService,
+    ProductService
+>();
+
+
+// ==========================================================
+// 7. DEPENDENCY INJECTION - PRODUCT VARIANT SERVICE
+// ==========================================================
+
+// ProductVariantController
+//        ↓
+// IProductVariantService
+//        ↓
+// ProductVariantService
+//        ↓
+// IUnitOfWork
+//        ↓
+// Repository<ProductVariant>
+
+builder.Services.AddScoped<
+    IProductVariantService,
+    ProductVariantService
+>();
+
+
+// ==========================================================
+// 8. JWT AUTHENTICATION
 // ==========================================================
 
 var signingKey =
@@ -133,45 +180,54 @@ builder.Services
 
                 IssuerSigningKey = signingKey,
 
+
                 // Kiểm tra Issuer
                 ValidateIssuer = true,
 
-                ValidIssuer = jwtSettings.Issuer,
+                ValidIssuer =
+                    jwtSettings.Issuer,
+
 
                 // Kiểm tra Audience
                 ValidateAudience = true,
 
-                ValidAudience = jwtSettings.Audience,
+                ValidAudience =
+                    jwtSettings.Audience,
+
 
                 // Kiểm tra thời gian hết hạn
                 ValidateLifetime = true,
 
                 // Không cho phép sai lệch thời gian
-                ClockSkew = TimeSpan.Zero
+                ClockSkew =
+                    TimeSpan.Zero
             };
     });
 
 
 // ==========================================================
-// 5. AUTHORIZATION - PHÂN QUYỀN
+// 9. AUTHORIZATION
 // ==========================================================
 
 builder.Services.AddAuthorization();
 
 
 // ==========================================================
-// 6. CONTROLLERS
+// 10. CONTROLLERS
 // ==========================================================
 
 builder.Services.AddControllers();
 
 
 // ==========================================================
-// 7. CORS - CHO BLAZOR
+// 11. CORS - CHO BLAZOR
 // ==========================================================
 
-// Blazor của bạn:
+// Blazor:
 // http://localhost:5107
+//
+// API:
+// http://localhost:5136
 
 var allowedOrigins =
     builder.Configuration
@@ -202,14 +258,13 @@ builder.Services.AddCors(options =>
 
 
 // ==========================================================
-// 8. SWAGGER
+// 12. SWAGGER
 // ==========================================================
 
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
-    // JWT Bearer
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
@@ -245,42 +300,28 @@ builder.Services.AddSwaggerGen(options =>
 
 
 // ==========================================================
-// 9. BUILD APPLICATION
+// 13. BUILD APPLICATION
 // ==========================================================
 
 var app = builder.Build();
 
 
 // ==========================================================
-// 10. REQUEST LOGGING MIDDLEWARE
+// 14. REQUEST LOGGING MIDDLEWARE
 // ==========================================================
-
-// Ghi:
-// - RequestId
-// - HTTP Method
-// - URL
-// - Status Code
-// - Thời gian xử lý
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 
 // ==========================================================
-// 11. GLOBAL EXCEPTION MIDDLEWARE
+// 15. GLOBAL EXCEPTION MIDDLEWARE
 // ==========================================================
-
-// Bắt:
-// - 400
-// - 401
-// - 403
-// - 404
-// - 500
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 
 // ==========================================================
-// 12. SWAGGER
+// 16. SWAGGER
 // ==========================================================
 
 if (app.Environment.IsDevelopment())
@@ -292,62 +333,46 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 13. HTTPS
+// 17. HTTPS
 // ==========================================================
 
-// Nếu hiện tại bạn chạy API bằng HTTP
+// Hiện tại chạy HTTP:
 // http://localhost:5136
 //
-// và chưa cấu hình HTTPS,
-// có thể tạm comment dòng này:
-//
-// app.UseHttpsRedirection();
-
-
+// Tạm thời không bật:
 // app.UseHttpsRedirection();
 
 
 // ==========================================================
-// 14. CORS
+// 18. CORS
 // ==========================================================
-
-// Cho phép:
-// Blazor http://localhost:5107
-// gọi API http://localhost:5136
 
 app.UseCors("BlazorPolicy");
 
 
 // ==========================================================
-// 15. AUTHENTICATION
+// 19. AUTHENTICATION
 // ==========================================================
-
-// Xác định:
-// "User này là ai?"
-// JWT có hợp lệ không?
 
 app.UseAuthentication();
 
 
 // ==========================================================
-// 16. AUTHORIZATION
+// 20. AUTHORIZATION
 // ==========================================================
-
-// Kiểm tra:
-// User có quyền truy cập API này không?
 
 app.UseAuthorization();
 
 
 // ==========================================================
-// 17. CONTROLLERS
+// 21. MAP CONTROLLERS
 // ==========================================================
 
 app.MapControllers();
 
 
 // ==========================================================
-// 18. RUN
+// 22. RUN
 // ==========================================================
 
 app.Run();
