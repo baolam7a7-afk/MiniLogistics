@@ -13,12 +13,14 @@ using MiniLogistics.DAL.Data;
 var builder = WebApplication.CreateBuilder(args);
 
 
-// ==========================================
+// ==========================================================
 // 1. DATABASE - SQL SERVER
-// ==========================================
+// ==========================================================
 
 var connectionString =
-    builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Configuration.GetConnectionString(
+        "DefaultConnection"
+    );
 
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -28,13 +30,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString)
-);
+{
+    options.UseSqlServer(connectionString);
+});
 
 
-// ==========================================
+// ==========================================================
 // 2. JWT SETTINGS
-// ==========================================
+// ==========================================================
 
 var jwtSection =
     builder.Configuration.GetSection("Jwt");
@@ -82,9 +85,9 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
 }
 
 
-// ==========================================
+// ==========================================================
 // 3. DEPENDENCY INJECTION - SERVICES
-// ==========================================
+// ==========================================================
 
 // AuthService:
 // - Register
@@ -100,85 +103,113 @@ builder.Services.AddScoped<
 >();
 
 
-// ==========================================
+// ==========================================================
 // 4. JWT AUTHENTICATION
-// ==========================================
+// ==========================================================
 
 var signingKey =
     new SymmetricSecurityKey(
-        Encoding.UTF8.GetBytes(jwtSettings.Key)
+        Encoding.UTF8.GetBytes(
+            jwtSettings.Key
+        )
     );
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme =
-        JwtBearerDefaults.AuthenticationScheme;
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme =
+            JwtBearerDefaults.AuthenticationScheme;
 
-    options.DefaultChallengeScheme =
-        JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters =
-        new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
+        options.DefaultChallengeScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                // Kiểm tra chữ ký JWT
+                ValidateIssuerSigningKey = true,
 
-            IssuerSigningKey = signingKey,
+                IssuerSigningKey = signingKey,
 
-            ValidateIssuer = true,
+                // Kiểm tra Issuer
+                ValidateIssuer = true,
 
-            ValidIssuer = jwtSettings.Issuer,
+                ValidIssuer = jwtSettings.Issuer,
 
-            ValidateAudience = true,
+                // Kiểm tra Audience
+                ValidateAudience = true,
 
-            ValidAudience = jwtSettings.Audience,
+                ValidAudience = jwtSettings.Audience,
 
-            ValidateLifetime = true,
+                // Kiểm tra thời gian hết hạn
+                ValidateLifetime = true,
 
-            ClockSkew = TimeSpan.Zero
-        };
-});
+                // Không cho phép sai lệch thời gian
+                ClockSkew = TimeSpan.Zero
+            };
+    });
 
 
-// ==========================================
+// ==========================================================
 // 5. AUTHORIZATION - PHÂN QUYỀN
-// ==========================================
+// ==========================================================
 
 builder.Services.AddAuthorization();
 
 
-// ==========================================
+// ==========================================================
 // 6. CONTROLLERS
-// ==========================================
+// ==========================================================
 
 builder.Services.AddControllers();
 
 
-// ==========================================
+// ==========================================================
 // 7. CORS - CHO BLAZOR
-// ==========================================
+// ==========================================================
+
+// Blazor của bạn:
+// http://localhost:5107
+
+var allowedOrigins =
+    builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()
+        ?? Array.Empty<string>();
+
+if (allowedOrigins.Length == 0)
+{
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins chưa được cấu hình."
+    );
+}
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("BlazorPolicy", policy =>
-    {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+    options.AddPolicy(
+        "BlazorPolicy",
+        policy =>
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+    );
 });
 
 
-// ==========================================
+// ==========================================================
 // 8. SWAGGER
-// ==========================================
+// ==========================================================
 
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    // JWT Bearer
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
@@ -198,41 +229,59 @@ builder.Services.AddSwaggerGen(options =>
         }
     );
 
-    options.AddSecurityRequirement(document =>
-        new OpenApiSecurityRequirement
-        {
-            [
-                new OpenApiSecuritySchemeReference(
-                    "Bearer",
-                    document
-                )
-            ] = []
-        }
+    options.AddSecurityRequirement(
+        document =>
+            new OpenApiSecurityRequirement
+            {
+                [
+                    new OpenApiSecuritySchemeReference(
+                        "Bearer",
+                        document
+                    )
+                ] = []
+            }
     );
 });
 
 
-// ==========================================
-// 9. BUILD APP
-// ==========================================
+// ==========================================================
+// 9. BUILD APPLICATION
+// ==========================================================
 
 var app = builder.Build();
 
 
-// ==========================================
-// 10. GLOBAL EXCEPTION MIDDLEWARE
-// ==========================================
+// ==========================================================
+// 10. REQUEST LOGGING MIDDLEWARE
+// ==========================================================
 
-// Phải đặt trước các Middleware phía dưới
-// để có thể bắt Exception từ Controller,
-// Service, Repository...
+// Ghi:
+// - RequestId
+// - HTTP Method
+// - URL
+// - Status Code
+// - Thời gian xử lý
+
+app.UseMiddleware<RequestLoggingMiddleware>();
+
+
+// ==========================================================
+// 11. GLOBAL EXCEPTION MIDDLEWARE
+// ==========================================================
+
+// Bắt:
+// - 400
+// - 401
+// - 403
+// - 404
+// - 500
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 
-// ==========================================
-// 11. HTTP REQUEST PIPELINE
-// ==========================================
+// ==========================================================
+// 12. SWAGGER
+// ==========================================================
 
 if (app.Environment.IsDevelopment())
 {
@@ -241,40 +290,64 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+
+// ==========================================================
+// 13. HTTPS
+// ==========================================================
+
+// Nếu hiện tại bạn chạy API bằng HTTP
+// http://localhost:5136
+//
+// và chưa cấu hình HTTPS,
+// có thể tạm comment dòng này:
+//
+// app.UseHttpsRedirection();
+
+
+// app.UseHttpsRedirection();
+
+
+// ==========================================================
+// 14. CORS
+// ==========================================================
+
+// Cho phép:
+// Blazor http://localhost:5107
+// gọi API http://localhost:5136
 
 app.UseCors("BlazorPolicy");
 
 
-// ==========================================
-// 12. AUTHENTICATION
-// ==========================================
+// ==========================================================
+// 15. AUTHENTICATION
+// ==========================================================
 
 // Xác định:
-// User là ai?
+// "User này là ai?"
 // JWT có hợp lệ không?
 
 app.UseAuthentication();
 
 
-// ==========================================
-// 13. AUTHORIZATION
-// ==========================================
+// ==========================================================
+// 16. AUTHORIZATION
+// ==========================================================
 
+// Kiểm tra:
 // User có quyền truy cập API này không?
 
 app.UseAuthorization();
 
 
-// ==========================================
-// 14. CONTROLLERS
-// ==========================================
+// ==========================================================
+// 17. CONTROLLERS
+// ==========================================================
 
 app.MapControllers();
 
 
-// ==========================================
-// 15. RUN
-// ==========================================
+// ==========================================================
+// 18. RUN
+// ==========================================================
 
 app.Run();

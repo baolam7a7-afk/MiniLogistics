@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MiniLogistics.DAL")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3dea296b528314e5dc533475ccdfc929cc2b440f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d57855f20f0c9b2526634843b5969c213149d45d")]
 [assembly: System.Reflection.AssemblyProductAttribute("MiniLogistics.DAL")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MiniLogistics.DAL")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

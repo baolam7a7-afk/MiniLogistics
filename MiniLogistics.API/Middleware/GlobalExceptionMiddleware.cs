@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.Exceptions;
 
@@ -38,43 +39,13 @@ public class GlobalExceptionMiddleware
     {
         _logger.LogError(
             ex,
-            "Exception xảy ra khi xử lý request {Method} {Path}",
+            "Exception xảy ra | Method: {Method} | Path: {Path} | RequestId: {RequestId}",
             context.Request.Method,
-            context.Request.Path
+            context.Request.Path,
+            context.TraceIdentifier
         );
 
-        var statusCode = GetStatusCode(ex);
-
-        var message = GetMessage(ex);
-
-        var response = new ErrorResponseDTO
-        {
-            StatusCode = statusCode,
-            Message = message,
-            Detail = _environment.IsDevelopment()
-                ? ex.ToString()
-                : null,
-            Timestamp = DateTime.UtcNow
-        };
-
-        context.Response.StatusCode = statusCode;
-
-        context.Response.ContentType = "application/json";
-
-        var json = JsonSerializer.Serialize(
-            response,
-            new JsonSerializerOptions
-            {
-                PropertyNamingPolicy =
-                    JsonNamingPolicy.CamelCase
-            });
-
-        await context.Response.WriteAsync(json);
-    }
-
-    private static int GetStatusCode(Exception ex)
-    {
-        return ex switch
+        var statusCode = ex switch
         {
             BadRequestException =>
                 StatusCodes.Status400BadRequest,
@@ -91,11 +62,8 @@ public class GlobalExceptionMiddleware
             _ =>
                 StatusCodes.Status500InternalServerError
         };
-    }
 
-    private static string GetMessage(Exception ex)
-    {
-        return ex switch
+        var message = ex switch
         {
             BadRequestException =>
                 ex.Message,
@@ -110,7 +78,35 @@ public class GlobalExceptionMiddleware
                 ex.Message,
 
             _ =>
-                "Đã xảy ra lỗi hệ thống"
+                "Đã xảy ra lỗi hệ thống."
         };
+
+        var response = new ErrorResponseDTO
+        {
+            StatusCode = statusCode,
+
+            Message = message,
+
+            Detail = _environment.IsDevelopment()
+                ? ex.ToString()
+                : null,
+
+            Timestamp = DateTime.UtcNow
+        };
+
+        context.Response.StatusCode = statusCode;
+
+        context.Response.ContentType = "application/json";
+
+        var json = JsonSerializer.Serialize(
+            response,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy =
+                    JsonNamingPolicy.CamelCase
+            }
+        );
+
+        await context.Response.WriteAsync(json);
     }
 }
