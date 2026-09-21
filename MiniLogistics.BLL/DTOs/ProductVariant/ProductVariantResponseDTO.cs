@@ -14,6 +14,14 @@ public class ProductVariantResponseDTO
 
     public decimal Price { get; set; }
 
+    // =====================================================
+    // STOCK HIỂN THỊ
+    // =====================================================
+    // Không lưu trong ProductVariant.
+    // Giá trị này được tính từ Inventory:
+    //
+    // Stock = Quantity - ReservedQuantity
+    //
     public int Stock { get; set; }
 
     public bool IsActive { get; set; }

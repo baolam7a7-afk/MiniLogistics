@@ -1,4 +1,3 @@
-using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.Repositories;
 
@@ -6,33 +5,97 @@ namespace MiniLogistics.DAL.UnitOfWork;
 
 public class UnitOfWork : IUnitOfWork
 {
-    private readonly AppDbContext _context;
+    private readonly Data.AppDbContext _context;
 
-    private IRepository<Product>? _products;
-    private IRepository<ProductVariant>? _productVariants;
-    private IRepository<Category>? _categories;
-    
-
-    public UnitOfWork(AppDbContext context)
+    public UnitOfWork(Data.AppDbContext context)
     {
         _context = context;
     }
 
-    public IRepository<Product> Products =>
-        _products ??=
-            new Repository<Product>(_context);
 
-    public IRepository<ProductVariant> ProductVariants =>
-        _productVariants ??=
-            new Repository<ProductVariant>(_context);
+    // =====================================================
+    // USERS
+    // =====================================================
+
+    private IRepository<User>? _users;
+
+    public IRepository<User> Users =>
+        _users ??= new Repository<User>(_context);
+
+
+    // =====================================================
+    // ROLES
+    // =====================================================
+
+    private IRepository<Role>? _roles;
+
+    public IRepository<Role> Roles =>
+        _roles ??= new Repository<Role>(_context);
+
+
+    // =====================================================
+    // USER ROLES
+    // =====================================================
+
+    private IRepository<UserRole>? _userRoles;
+
+    public IRepository<UserRole> UserRoles =>
+        _userRoles ??= new Repository<UserRole>(_context);
+
+
+    // =====================================================
+    // USER SESSIONS
+    // =====================================================
+
+    private IRepository<UserSession>? _userSessions;
+
+    public IRepository<UserSession> UserSessions =>
+        _userSessions ??= new Repository<UserSession>(_context);
+
+
+    // =====================================================
+    // CATEGORIES
+    // =====================================================
+
+    private IRepository<Category>? _categories;
 
     public IRepository<Category> Categories =>
-        _categories ??=
-            new Repository<Category>(_context);
+        _categories ??= new Repository<Category>(_context);
+
+
+    // =====================================================
+    // PRODUCTS
+    // =====================================================
+
+    private IRepository<Product>? _products;
+
+    public IRepository<Product> Products =>
+        _products ??= new Repository<Product>(_context);
+
+
+    // =====================================================
+    // PRODUCT VARIANTS
+    // =====================================================
+
+    private IRepository<ProductVariant>? _productVariants;
+
+    public IRepository<ProductVariant> ProductVariants =>
+        _productVariants ??= new Repository<ProductVariant>(_context);
+
+
+    // =====================================================
+    // INVENTORIES
+    // =====================================================
+
+    private IRepository<Inventory>? _inventories;
 
     public IRepository<Inventory> Inventories =>
-        _inventories ??=
-            new Repository<Inventory>(_context);
+        _inventories ??= new Repository<Inventory>(_context);
+
+
+    // =====================================================
+    // SAVE CHANGES
+    // =====================================================
 
     public async Task<int> SaveChangesAsync()
     {

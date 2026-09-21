@@ -1,6 +1,7 @@
 using MiniLogistics.BLL.DTOs.ProductVariant;
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.UnitOfWork;
+using InventoryModel = MiniLogistics.DAL.Models.Inventory;
 
 namespace MiniLogistics.BLL.Services;
 
@@ -23,19 +24,28 @@ public class ProductVariantService : IProductVariantService
         var variants =
             await _unitOfWork.ProductVariants.GetAllAsync();
 
-        return variants.Select(variant => new ProductVariantResponseDTO
+        var result =
+            new List<ProductVariantResponseDTO>();
+
+        foreach (var variant in variants)
         {
-            Id = variant.Id,
-            ProductId = variant.ProductId,
-            Sku = variant.Sku,
-            VariantName = variant.VariantName,
-            AttributesJson = variant.AttributesJson,
-            Price = variant.Price,
-            Stock = variant.Stock,
-            IsActive = variant.IsActive,
-            CreatedAt = variant.CreatedAt,
-            UpdatedAt = variant.UpdatedAt
-        });
+            var inventories =
+                await _unitOfWork.Inventories.FindAsync(
+                    x => x.ProductVariantId == variant.Id
+                );
+
+            var inventory =
+                inventories.FirstOrDefault();
+
+            result.Add(
+                MapToResponseDTO(
+                    variant,
+                    inventory
+                )
+            );
+        }
+
+        return result;
     }
 
 
@@ -53,19 +63,18 @@ public class ProductVariantService : IProductVariantService
             return null;
         }
 
-        return new ProductVariantResponseDTO
-        {
-            Id = variant.Id,
-            ProductId = variant.ProductId,
-            Sku = variant.Sku,
-            VariantName = variant.VariantName,
-            AttributesJson = variant.AttributesJson,
-            Price = variant.Price,
-            Stock = variant.Stock,
-            IsActive = variant.IsActive,
-            CreatedAt = variant.CreatedAt,
-            UpdatedAt = variant.UpdatedAt
-        };
+        var inventories =
+            await _unitOfWork.Inventories.FindAsync(
+                x => x.ProductVariantId == variant.Id
+            );
+
+        var inventory =
+            inventories.FirstOrDefault();
+
+        return MapToResponseDTO(
+            variant,
+            inventory
+        );
     }
 
 
@@ -81,19 +90,28 @@ public class ProductVariantService : IProductVariantService
                 variant => variant.ProductId == productId
             );
 
-        return variants.Select(variant => new ProductVariantResponseDTO
+        var result =
+            new List<ProductVariantResponseDTO>();
+
+        foreach (var variant in variants)
         {
-            Id = variant.Id,
-            ProductId = variant.ProductId,
-            Sku = variant.Sku,
-            VariantName = variant.VariantName,
-            AttributesJson = variant.AttributesJson,
-            Price = variant.Price,
-            Stock = variant.Stock,
-            IsActive = variant.IsActive,
-            CreatedAt = variant.CreatedAt,
-            UpdatedAt = variant.UpdatedAt
-        });
+            var inventories =
+                await _unitOfWork.Inventories.FindAsync(
+                    x => x.ProductVariantId == variant.Id
+                );
+
+            var inventory =
+                inventories.FirstOrDefault();
+
+            result.Add(
+                MapToResponseDTO(
+                    variant,
+                    inventory
+                )
+            );
+        }
+
+        return result;
     }
 
 
@@ -104,7 +122,10 @@ public class ProductVariantService : IProductVariantService
     public async Task<ProductVariantResponseDTO> CreateAsync(
         CreateProductVariantDTO request)
     {
-        // Kiểm tra Product tồn tại
+        // -------------------------------------------------
+        // 1. Kiểm tra Product tồn tại
+        // -------------------------------------------------
+
         var product =
             await _unitOfWork.Products.GetByIdAsync(
                 request.ProductId
@@ -118,7 +139,10 @@ public class ProductVariantService : IProductVariantService
         }
 
 
-        // Validate Price
+        // -------------------------------------------------
+        // 2. Validate Price
+        // -------------------------------------------------
+
         if (request.Price < 0)
         {
             throw new ArgumentException(
@@ -127,16 +151,10 @@ public class ProductVariantService : IProductVariantService
         }
 
 
-        // Validate Stock
-        if (request.Stock < 0)
-        {
-            throw new ArgumentException(
-                "Stock không được nhỏ hơn 0."
-            );
-        }
+        // -------------------------------------------------
+        // 3. Tạo ProductVariant
+        // -------------------------------------------------
 
-
-        // Tạo entity
         var variant = new ProductVariant
         {
             ProductId = request.ProductId,
@@ -149,8 +167,6 @@ public class ProductVariantService : IProductVariantService
 
             Price = request.Price,
 
-            Stock = request.Stock,
-
             IsActive = request.IsActive,
 
             CreatedAt = DateTime.UtcNow,
@@ -159,37 +175,57 @@ public class ProductVariantService : IProductVariantService
         };
 
 
-        // Add vào Repository
-        await _unitOfWork.ProductVariants.AddAsync(variant);
+        // -------------------------------------------------
+        // 4. Tạo Inventory cho ProductVariant
+        // -------------------------------------------------
+
+        var inventory = new InventoryModel
+        {
+            ProductVariant = variant,
+
+            Quantity = 0,
+
+            ReservedQuantity = 0,
+
+            CreatedAt = DateTime.UtcNow,
+
+            UpdatedAt = null
+        };
 
 
-        // Save database
+        // -------------------------------------------------
+        // 5. Add ProductVariant
+        // -------------------------------------------------
+
+        await _unitOfWork.ProductVariants.AddAsync(
+            variant
+        );
+
+
+        // -------------------------------------------------
+        // 6. Add Inventory
+        // -------------------------------------------------
+
+        await _unitOfWork.Inventories.AddAsync(
+            inventory
+        );
+
+
+        // -------------------------------------------------
+        // 7. Save Database
+        // -------------------------------------------------
+
         await _unitOfWork.SaveChangesAsync();
 
 
-        // Trả response
-        return new ProductVariantResponseDTO
-        {
-            Id = variant.Id,
+        // -------------------------------------------------
+        // 8. Trả response
+        // -------------------------------------------------
 
-            ProductId = variant.ProductId,
-
-            Sku = variant.Sku,
-
-            VariantName = variant.VariantName,
-
-            AttributesJson = variant.AttributesJson,
-
-            Price = variant.Price,
-
-            Stock = variant.Stock,
-
-            IsActive = variant.IsActive,
-
-            CreatedAt = variant.CreatedAt,
-
-            UpdatedAt = variant.UpdatedAt
-        };
+        return MapToResponseDTO(
+            variant,
+            inventory
+        );
     }
 
 
@@ -201,6 +237,10 @@ public class ProductVariantService : IProductVariantService
         long id,
         UpdateProductVariantDTO request)
     {
+        // -------------------------------------------------
+        // 1. Tìm ProductVariant
+        // -------------------------------------------------
+
         var variant =
             await _unitOfWork.ProductVariants.GetByIdAsync(id);
 
@@ -210,7 +250,10 @@ public class ProductVariantService : IProductVariantService
         }
 
 
-        // Validate Price
+        // -------------------------------------------------
+        // 2. Validate Price
+        // -------------------------------------------------
+
         if (request.Price < 0)
         {
             throw new ArgumentException(
@@ -219,16 +262,10 @@ public class ProductVariantService : IProductVariantService
         }
 
 
-        // Validate Stock
-        if (request.Stock < 0)
-        {
-            throw new ArgumentException(
-                "Stock không được nhỏ hơn 0."
-            );
-        }
+        // -------------------------------------------------
+        // 3. Update ProductVariant
+        // -------------------------------------------------
 
-
-        // Update
         variant.Sku = request.Sku;
 
         variant.VariantName = request.VariantName;
@@ -237,22 +274,132 @@ public class ProductVariantService : IProductVariantService
 
         variant.Price = request.Price;
 
-        variant.Stock = request.Stock;
-
         variant.IsActive = request.IsActive;
 
         variant.UpdatedAt = DateTime.UtcNow;
 
 
-        // Update Repository
-        _unitOfWork.ProductVariants.Update(variant);
+        // -------------------------------------------------
+        // 4. Update Repository
+        // -------------------------------------------------
+
+        _unitOfWork.ProductVariants.Update(
+            variant
+        );
 
 
-        // Save
+        // -------------------------------------------------
+        // 5. Save
+        // -------------------------------------------------
+
         await _unitOfWork.SaveChangesAsync();
 
 
-        // Response
+        // -------------------------------------------------
+        // 6. Lấy Inventory
+        // -------------------------------------------------
+
+        var inventories =
+            await _unitOfWork.Inventories.FindAsync(
+                x => x.ProductVariantId == variant.Id
+            );
+
+        var inventory =
+            inventories.FirstOrDefault();
+
+
+        // -------------------------------------------------
+        // 7. Response
+        // -------------------------------------------------
+
+        return MapToResponseDTO(
+            variant,
+            inventory
+        );
+    }
+
+
+    // =====================================================
+    // DELETE
+    // =====================================================
+
+    public async Task<bool> DeleteAsync(long id)
+    {
+        // -------------------------------------------------
+        // 1. Tìm ProductVariant
+        // -------------------------------------------------
+
+        var variant =
+            await _unitOfWork.ProductVariants.GetByIdAsync(id);
+
+        if (variant == null)
+        {
+            return false;
+        }
+
+
+        // -------------------------------------------------
+        // 2. Tìm Inventory
+        // -------------------------------------------------
+
+        var inventories =
+            await _unitOfWork.Inventories.FindAsync(
+                x => x.ProductVariantId == id
+            );
+
+        var inventory =
+            inventories.FirstOrDefault();
+
+
+        // -------------------------------------------------
+        // 3. Xóa Inventory trước
+        // -------------------------------------------------
+
+        if (inventory != null)
+        {
+            _unitOfWork.Inventories.Delete(
+                inventory
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 4. Xóa ProductVariant
+        // -------------------------------------------------
+
+        _unitOfWork.ProductVariants.Delete(
+            variant
+        );
+
+
+        // -------------------------------------------------
+        // 5. Save
+        // -------------------------------------------------
+
+        await _unitOfWork.SaveChangesAsync();
+
+        return true;
+    }
+
+
+    // =====================================================
+    // PRIVATE: MAP DTO
+    // =====================================================
+
+    private ProductVariantResponseDTO MapToResponseDTO(
+        ProductVariant variant,
+        InventoryModel? inventory)
+    {
+        int quantity =
+            inventory?.Quantity ?? 0;
+
+        int reservedQuantity =
+            inventory?.ReservedQuantity ?? 0;
+
+        int availableQuantity =
+            quantity - reservedQuantity;
+
+
         return new ProductVariantResponseDTO
         {
             Id = variant.Id,
@@ -267,7 +414,9 @@ public class ProductVariantService : IProductVariantService
 
             Price = variant.Price,
 
-            Stock = variant.Stock,
+            // Stock = số lượng có thể bán
+            // Stock = Quantity - ReservedQuantity
+            Stock = availableQuantity,
 
             IsActive = variant.IsActive,
 
@@ -275,28 +424,5 @@ public class ProductVariantService : IProductVariantService
 
             UpdatedAt = variant.UpdatedAt
         };
-    }
-
-
-    // =====================================================
-    // DELETE
-    // =====================================================
-
-    public async Task<bool> DeleteAsync(long id)
-    {
-        var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(id);
-
-        if (variant == null)
-        {
-            return false;
-        }
-
-
-        _unitOfWork.ProductVariants.Delete(variant);
-
-        await _unitOfWork.SaveChangesAsync();
-
-        return true;
     }
 }

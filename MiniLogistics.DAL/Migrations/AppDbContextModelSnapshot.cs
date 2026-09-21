@@ -257,6 +257,43 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("dispute_messages", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.Inventory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<long>("ProductVariantId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("ReservedQuantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductVariantId")
+                        .IsUnique();
+
+                    b.ToTable("inventories", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Order", b =>
                 {
                     b.Property<long>("Id")
@@ -658,11 +695,6 @@ namespace MiniLogistics.DAL.Migrations
                     b.Property<string>("Sku")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("Stock")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -1477,6 +1509,17 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("SenderUser");
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.Inventory", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.ProductVariant", "ProductVariant")
+                        .WithOne("Inventory")
+                        .HasForeignKey("MiniLogistics.DAL.Models.Inventory", "ProductVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProductVariant");
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Order", b =>
                 {
                     b.HasOne("MiniLogistics.DAL.Models.User", "Customer")
@@ -1952,6 +1995,9 @@ namespace MiniLogistics.DAL.Migrations
             modelBuilder.Entity("MiniLogistics.DAL.Models.ProductVariant", b =>
                 {
                     b.Navigation("CartItems");
+
+                    b.Navigation("Inventory")
+                        .IsRequired();
 
                     b.Navigation("OrderItems");
                 });

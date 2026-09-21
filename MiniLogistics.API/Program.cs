@@ -10,11 +10,14 @@ using MiniLogistics.API.Middleware;
 using MiniLogistics.BLL.DTOs.Auth;
 using MiniLogistics.BLL.Services;
 using MiniLogistics.BLL.Services.Auth;
+using MiniLogistics.BLL.Services.Inventory;
 using MiniLogistics.BLL.Services.Product;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
 using MiniLogistics.DAL.UnitOfWork;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -143,6 +146,8 @@ builder.Services.AddScoped<
 // IUnitOfWork
 //        ↓
 // Repository<ProductVariant>
+//        +
+// Repository<Inventory>
 
 builder.Services.AddScoped<
     IProductVariantService,
@@ -171,7 +176,29 @@ builder.Services.AddScoped<
 
 
 // ==========================================================
-// 9. JWT AUTHENTICATION
+// 9. DEPENDENCY INJECTION - INVENTORY SERVICE
+// ==========================================================
+
+// InventoryController
+//        ↓
+// IInventoryService
+//        ↓
+// InventoryService
+//        ↓
+// IUnitOfWork
+//        ↓
+// Repository<Inventory>
+//        +
+// Repository<ProductVariant>
+
+builder.Services.AddScoped<
+    IInventoryService,
+    InventoryService
+>();
+
+
+// ==========================================================
+// 10. JWT AUTHENTICATION
 // ==========================================================
 
 var signingKey =
@@ -195,27 +222,39 @@ builder.Services
         options.TokenValidationParameters =
             new TokenValidationParameters
             {
+                // ------------------------------------------
                 // Kiểm tra chữ ký JWT
+                // ------------------------------------------
+
                 ValidateIssuerSigningKey = true,
 
                 IssuerSigningKey = signingKey,
 
 
+                // ------------------------------------------
                 // Kiểm tra Issuer
+                // ------------------------------------------
+
                 ValidateIssuer = true,
 
                 ValidIssuer =
                     jwtSettings.Issuer,
 
 
+                // ------------------------------------------
                 // Kiểm tra Audience
+                // ------------------------------------------
+
                 ValidateAudience = true,
 
                 ValidAudience =
                     jwtSettings.Audience,
 
 
+                // ------------------------------------------
                 // Kiểm tra thời gian hết hạn
+                // ------------------------------------------
+
                 ValidateLifetime = true,
 
                 // Không cho phép sai lệch thời gian
@@ -226,21 +265,21 @@ builder.Services
 
 
 // ==========================================================
-// 10. AUTHORIZATION
+// 11. AUTHORIZATION
 // ==========================================================
 
 builder.Services.AddAuthorization();
 
 
 // ==========================================================
-// 11. CONTROLLERS
+// 12. CONTROLLERS
 // ==========================================================
 
 builder.Services.AddControllers();
 
 
 // ==========================================================
-// 12. CORS - CHO BLAZOR
+// 13. CORS - CHO BLAZOR
 // ==========================================================
 
 // Blazor:
@@ -278,13 +317,17 @@ builder.Services.AddCors(options =>
 
 
 // ==========================================================
-// 13. SWAGGER
+// 14. SWAGGER
 // ==========================================================
 
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    // ------------------------------------------
+    // JWT Bearer
+    // ------------------------------------------
+
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
@@ -304,6 +347,11 @@ builder.Services.AddSwaggerGen(options =>
         }
     );
 
+
+    // ------------------------------------------
+    // Swagger Security Requirement
+    // ------------------------------------------
+
     options.AddSecurityRequirement(
         document =>
             new OpenApiSecurityRequirement
@@ -320,28 +368,28 @@ builder.Services.AddSwaggerGen(options =>
 
 
 // ==========================================================
-// 14. BUILD APPLICATION
+// 15. BUILD APPLICATION
 // ==========================================================
 
 var app = builder.Build();
 
 
 // ==========================================================
-// 15. REQUEST LOGGING MIDDLEWARE
+// 16. REQUEST LOGGING MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 
 // ==========================================================
-// 16. GLOBAL EXCEPTION MIDDLEWARE
+// 17. GLOBAL EXCEPTION MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 
 // ==========================================================
-// 17. SWAGGER
+// 18. SWAGGER
 // ==========================================================
 
 if (app.Environment.IsDevelopment())
@@ -353,11 +401,16 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 18. HTTPS
+// 19. HTTPS
 // ==========================================================
 
-// Hiện tại chạy HTTP:
+// Hiện tại project chạy HTTP:
+//
+// API:
 // http://localhost:5136
+//
+// Blazor:
+// http://localhost:5107
 //
 // Tạm thời không bật:
 //
@@ -365,35 +418,35 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 19. CORS
+// 20. CORS
 // ==========================================================
 
 app.UseCors("BlazorPolicy");
 
 
 // ==========================================================
-// 20. AUTHENTICATION
+// 21. AUTHENTICATION
 // ==========================================================
 
 app.UseAuthentication();
 
 
 // ==========================================================
-// 21. AUTHORIZATION
+// 22. AUTHORIZATION
 // ==========================================================
 
 app.UseAuthorization();
 
 
 // ==========================================================
-// 22. MAP CONTROLLERS
+// 23. MAP CONTROLLERS
 // ==========================================================
 
 app.MapControllers();
 
 
 // ==========================================================
-// 23. RUN
+// 24. RUN
 // ==========================================================
 
 app.Run();
