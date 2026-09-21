@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using MiniLogistics.BLL.DTOs.Product;
-using MiniLogistics.BLL.Services;
+using MiniLogistics.BLL.Services.Product;
 
 namespace MiniLogistics.API.Controllers;
 
@@ -10,15 +10,15 @@ public class ProductController : ControllerBase
 {
     private readonly IProductService _productService;
 
-    public ProductController(
-        IProductService productService)
+    public ProductController(IProductService productService)
     {
         _productService = productService;
     }
 
-    // ========================================
-    // GET: api/products
-    // ========================================
+    // ==========================================
+    // GET ALL
+    // ==========================================
+
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -28,11 +28,12 @@ public class ProductController : ControllerBase
         return Ok(products);
     }
 
-    // ========================================
-    // GET: api/products/1
-    // ========================================
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    // ==========================================
+    // GET BY ID
+    // ==========================================
+
+    [HttpGet("{id:long}")]
+    public async Task<IActionResult> GetById(long id)
     {
         var product =
             await _productService.GetByIdAsync(id);
@@ -41,16 +42,47 @@ public class ProductController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Product not found."
+                message = "Product không tồn tại."
             });
         }
 
         return Ok(product);
     }
 
-    // ========================================
-    // POST: api/products
-    // ========================================
+    // ==========================================
+    // GET BY CATEGORY
+    // ==========================================
+
+    [HttpGet("category/{categoryId:long}")]
+    public async Task<IActionResult> GetByCategory(
+        long categoryId)
+    {
+        var products =
+            await _productService
+                .GetByCategoryAsync(categoryId);
+
+        return Ok(products);
+    }
+
+    // ==========================================
+    // SEARCH
+    // ==========================================
+
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string keyword)
+    {
+        var products =
+            await _productService
+                .SearchAsync(keyword);
+
+        return Ok(products);
+    }
+
+    // ==========================================
+    // CREATE
+    // ==========================================
+
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateProductDTO request)
@@ -61,37 +93,39 @@ public class ProductController : ControllerBase
         return CreatedAtAction(
             nameof(GetById),
             new { id = product.Id },
-            product
-        );
+            product);
     }
 
-    // ========================================
-    // PUT: api/products/1
-    // ========================================
-    [HttpPut("{id:int}")]
+    // ==========================================
+    // UPDATE
+    // ==========================================
+
+    [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(
-        int id,
+        long id,
         [FromBody] UpdateProductDTO request)
     {
         var product =
-            await _productService.UpdateAsync(id, request);
+            await _productService
+                .UpdateAsync(id, request);
 
         if (product == null)
         {
             return NotFound(new
             {
-                message = "Product not found."
+                message = "Product không tồn tại."
             });
         }
 
         return Ok(product);
     }
 
-    // ========================================
-    // DELETE: api/products/1
-    // ========================================
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    // ==========================================
+    // DELETE
+    // ==========================================
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id)
     {
         var result =
             await _productService.DeleteAsync(id);
@@ -100,7 +134,7 @@ public class ProductController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Product not found."
+                message = "Product không tồn tại."
             });
         }
 

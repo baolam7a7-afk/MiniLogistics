@@ -1,15 +1,14 @@
 using MiniLogistics.BLL.DTOs.Product;
-
-using MiniLogistics.DAL.Models;
+using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
 
+using ProductEntity = MiniLogistics.DAL.Models.Product;
 
-namespace MiniLogistics.BLL.Services;
+namespace MiniLogistics.BLL.Services.Product;
 
 public class ProductService : IProductService
 {
     private readonly IUnitOfWork _unitOfWork;
-
 
     public ProductService(IUnitOfWork unitOfWork)
     {
@@ -26,29 +25,7 @@ public class ProductService : IProductService
         var products =
             await _unitOfWork.Products.GetAllAsync();
 
-
-        return products.Select(product =>
-            new ProductResponseDTO
-            {
-                Id = product.Id,
-
-                ShopId = product.ShopId,
-
-                CategoryId = product.CategoryId,
-
-                Name = product.Name,
-
-                Slug = product.Slug,
-
-                Description = product.Description,
-
-                Status = product.Status,
-
-                CreatedAt = product.CreatedAt,
-
-                UpdatedAt = product.UpdatedAt
-            }
-        );
+        return products.Select(MapToDTO);
     }
 
 
@@ -61,33 +38,85 @@ public class ProductService : IProductService
         var product =
             await _unitOfWork.Products.GetByIdAsync(id);
 
-
         if (product == null)
         {
             return null;
         }
 
+        return MapToDTO(product);
+    }
 
-        return new ProductResponseDTO
+
+    // =====================================================
+    // GET BY CATEGORY
+    // =====================================================
+
+    public async Task<IEnumerable<ProductResponseDTO>>
+        GetByCategoryAsync(long categoryId)
+    {
+        // -------------------------------------------------
+        // CHECK CATEGORY
+        // -------------------------------------------------
+
+        var categoryExists =
+            await _unitOfWork.Categories.AnyAsync(
+                c => c.Id == categoryId
+            );
+
+        if (!categoryExists)
         {
-            Id = product.Id,
+            throw new NotFoundException(
+                "Category không tồn tại."
+            );
+        }
 
-            ShopId = product.ShopId,
 
-            CategoryId = product.CategoryId,
+        // -------------------------------------------------
+        // GET PRODUCTS
+        // -------------------------------------------------
 
-            Name = product.Name,
+        var products =
+            await _unitOfWork.Products.FindAsync(
+                p => p.CategoryId == categoryId
+            );
 
-            Slug = product.Slug,
+        return products.Select(MapToDTO);
+    }
 
-            Description = product.Description,
 
-            Status = product.Status,
+    // =====================================================
+    // SEARCH
+    // =====================================================
 
-            CreatedAt = product.CreatedAt,
+    public async Task<IEnumerable<ProductResponseDTO>>
+        SearchAsync(string keyword)
+    {
+        // -------------------------------------------------
+        // VALIDATE KEYWORD
+        // -------------------------------------------------
 
-            UpdatedAt = product.UpdatedAt
-        };
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            throw new BadRequestException(
+                "Keyword không được để trống."
+            );
+        }
+
+        keyword = keyword.Trim();
+
+
+        // -------------------------------------------------
+        // SEARCH
+        // -------------------------------------------------
+
+        var products =
+            await _unitOfWork.Products.FindAsync(
+                p =>
+                    p.Name.Contains(keyword) ||
+                    p.Slug.Contains(keyword)
+            );
+
+        return products.Select(MapToDTO);
     }
 
 
@@ -95,55 +124,119 @@ public class ProductService : IProductService
     // CREATE
     // =====================================================
 
-    public async Task<ProductResponseDTO> CreateAsync(
-        CreateProductDTO request)
+    public async Task<ProductResponseDTO>
+        CreateAsync(CreateProductDTO request)
     {
-        var product = new Product
+        // -------------------------------------------------
+        // 1. VALIDATE NAME
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new BadRequestException(
+                "Tên Product không được để trống."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 2. VALIDATE SLUG
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Slug))
+        {
+            throw new BadRequestException(
+                "Slug không được để trống."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 3. CHECK CATEGORY
+        // -------------------------------------------------
+
+        var categoryExists =
+            await _unitOfWork.Categories.AnyAsync(
+                c => c.Id == request.CategoryId
+            );
+
+        if (!categoryExists)
+        {
+            throw new NotFoundException(
+                "Category không tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 4. CHECK DUPLICATE SLUG
+        // -------------------------------------------------
+
+        var slug =
+            request.Slug
+                .Trim()
+                .ToLowerInvariant();
+
+        var slugExists =
+            await _unitOfWork.Products.AnyAsync(
+                p => p.Slug == slug
+            );
+
+        if (slugExists)
+        {
+            throw new BadRequestException(
+                $"Slug '{slug}' đã tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 5. CREATE PRODUCT
+        // -------------------------------------------------
+
+        var product = new ProductEntity
         {
             ShopId = request.ShopId,
 
             CategoryId = request.CategoryId,
 
-            Name = request.Name,
+            Name = request.Name.Trim(),
 
-            Slug = request.Slug,
+            Slug = slug,
 
-            Description = request.Description,
+            Description =
+                request.Description?.Trim(),
 
-            Status = request.Status,
+            Status =
+                string.IsNullOrWhiteSpace(request.Status)
+                    ? "active"
+                    : request.Status
+                        .Trim()
+                        .ToLowerInvariant(),
 
-            CreatedAt = DateTime.UtcNow,
-
-            UpdatedAt = null
+            CreatedAt = DateTime.UtcNow
         };
 
+
+        // -------------------------------------------------
+        // 6. ADD
+        // -------------------------------------------------
 
         await _unitOfWork.Products.AddAsync(product);
 
 
+        // -------------------------------------------------
+        // 7. SAVE
+        // -------------------------------------------------
+
         await _unitOfWork.SaveChangesAsync();
 
 
-        return new ProductResponseDTO
-        {
-            Id = product.Id,
+        // -------------------------------------------------
+        // 8. RETURN
+        // -------------------------------------------------
 
-            ShopId = product.ShopId,
-
-            CategoryId = product.CategoryId,
-
-            Name = product.Name,
-
-            Slug = product.Slug,
-
-            Description = product.Description,
-
-            Status = product.Status,
-
-            CreatedAt = product.CreatedAt,
-
-            UpdatedAt = product.UpdatedAt
-        };
+        return MapToDTO(product);
     }
 
 
@@ -151,19 +244,92 @@ public class ProductService : IProductService
     // UPDATE
     // =====================================================
 
-    public async Task<ProductResponseDTO?> UpdateAsync(
-        long id,
-        UpdateProductDTO request)
+    public async Task<ProductResponseDTO?>
+        UpdateAsync(
+            long id,
+            UpdateProductDTO request)
     {
+        // -------------------------------------------------
+        // 1. FIND PRODUCT
+        // -------------------------------------------------
+
         var product =
             await _unitOfWork.Products.GetByIdAsync(id);
-
 
         if (product == null)
         {
             return null;
         }
 
+
+        // -------------------------------------------------
+        // 2. VALIDATE NAME
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new BadRequestException(
+                "Tên Product không được để trống."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 3. VALIDATE SLUG
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Slug))
+        {
+            throw new BadRequestException(
+                "Slug không được để trống."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 4. CHECK CATEGORY
+        // -------------------------------------------------
+
+        var categoryExists =
+            await _unitOfWork.Categories.AnyAsync(
+                c => c.Id == request.CategoryId
+            );
+
+        if (!categoryExists)
+        {
+            throw new NotFoundException(
+                "Category không tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 5. CHECK DUPLICATE SLUG
+        // -------------------------------------------------
+
+        var slug =
+            request.Slug
+                .Trim()
+                .ToLowerInvariant();
+
+        var slugExists =
+            await _unitOfWork.Products.AnyAsync(
+                p =>
+                    p.Slug == slug &&
+                    p.Id != id
+            );
+
+        if (slugExists)
+        {
+            throw new BadRequestException(
+                $"Slug '{slug}' đã tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 6. UPDATE PRODUCT
+        // -------------------------------------------------
 
         product.ShopId =
             request.ShopId;
@@ -172,47 +338,44 @@ public class ProductService : IProductService
             request.CategoryId;
 
         product.Name =
-            request.Name;
+            request.Name.Trim();
 
         product.Slug =
-            request.Slug;
+            slug;
 
         product.Description =
-            request.Description;
+            request.Description?.Trim();
 
         product.Status =
-            request.Status;
+            string.IsNullOrWhiteSpace(request.Status)
+                ? "active"
+                : request.Status
+                    .Trim()
+                    .ToLowerInvariant();
 
         product.UpdatedAt =
             DateTime.UtcNow;
 
 
+        // -------------------------------------------------
+        // 7. UPDATE
+        // -------------------------------------------------
+
         _unitOfWork.Products.Update(product);
 
+
+        // -------------------------------------------------
+        // 8. SAVE
+        // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
-        return new ProductResponseDTO
-        {
-            Id = product.Id,
+        // -------------------------------------------------
+        // 9. RETURN
+        // -------------------------------------------------
 
-            ShopId = product.ShopId,
-
-            CategoryId = product.CategoryId,
-
-            Name = product.Name,
-
-            Slug = product.Slug,
-
-            Description = product.Description,
-
-            Status = product.Status,
-
-            CreatedAt = product.CreatedAt,
-
-            UpdatedAt = product.UpdatedAt
-        };
+        return MapToDTO(product);
     }
 
 
@@ -222,9 +385,12 @@ public class ProductService : IProductService
 
     public async Task<bool> DeleteAsync(long id)
     {
+        // -------------------------------------------------
+        // 1. FIND PRODUCT
+        // -------------------------------------------------
+
         var product =
             await _unitOfWork.Products.GetByIdAsync(id);
-
 
         if (product == null)
         {
@@ -232,12 +398,67 @@ public class ProductService : IProductService
         }
 
 
+        // -------------------------------------------------
+        // 2. CHECK PRODUCT VARIANT
+        // -------------------------------------------------
+
+        var hasVariants =
+            await _unitOfWork.ProductVariants.AnyAsync(
+                v => v.ProductId == id
+            );
+
+        if (hasVariants)
+        {
+            throw new BadRequestException(
+                "Không thể xóa Product đang có ProductVariant."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 3. DELETE
+        // -------------------------------------------------
+
         _unitOfWork.Products.Delete(product);
 
+
+        // -------------------------------------------------
+        // 4. SAVE
+        // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         return true;
+    }
+
+
+    // =====================================================
+    // MAP ENTITY -> DTO
+    // =====================================================
+
+    private static ProductResponseDTO
+        MapToDTO(ProductEntity product)
+    {
+        return new ProductResponseDTO
+        {
+            Id = product.Id,
+
+            ShopId = product.ShopId,
+
+            CategoryId = product.CategoryId,
+
+            Name = product.Name,
+
+            Slug = product.Slug,
+
+            Description = product.Description,
+
+            Status = product.Status,
+
+            CreatedAt = product.CreatedAt,
+
+            UpdatedAt = product.UpdatedAt
+        };
     }
 }

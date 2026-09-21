@@ -1,45 +1,22 @@
 using MiniLogistics.BLL.DTOs.Product;
 
-namespace MiniLogistics.BLL.Services;
+namespace MiniLogistics.BLL.Services.Product;
 
 public interface IProductService
 {
-    // ========================================
-    // GET ALL
-    // ========================================
-
     Task<IEnumerable<ProductResponseDTO>> GetAllAsync();
-
-
-    // ========================================
-    // GET BY ID
-    // ========================================
 
     Task<ProductResponseDTO?> GetByIdAsync(long id);
 
+    Task<IEnumerable<ProductResponseDTO>> GetByCategoryAsync(long categoryId);
 
-    // ========================================
-    // CREATE
-    // ========================================
+    Task<IEnumerable<ProductResponseDTO>> SearchAsync(string keyword);
 
-    Task<ProductResponseDTO> CreateAsync(
-        CreateProductDTO request
-    );
-
-
-    // ========================================
-    // UPDATE
-    // ========================================
+    Task<ProductResponseDTO> CreateAsync(CreateProductDTO request);
 
     Task<ProductResponseDTO?> UpdateAsync(
         long id,
-        UpdateProductDTO request
-    );
-
-
-    // ========================================
-    // DELETE
-    // ========================================
+        UpdateProductDTO request);
 
     Task<bool> DeleteAsync(long id);
 }

@@ -10,11 +10,11 @@ using MiniLogistics.API.Middleware;
 using MiniLogistics.BLL.DTOs.Auth;
 using MiniLogistics.BLL.Services;
 using MiniLogistics.BLL.Services.Auth;
+using MiniLogistics.BLL.Services.Product;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
 using MiniLogistics.DAL.UnitOfWork;
-
 var builder = WebApplication.CreateBuilder(args);
 
 
