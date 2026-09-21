@@ -151,7 +151,27 @@ builder.Services.AddScoped<
 
 
 // ==========================================================
-// 8. JWT AUTHENTICATION
+// 8. DEPENDENCY INJECTION - CATEGORY SERVICE
+// ==========================================================
+
+// CategoryController
+//        ↓
+// ICategoryService
+//        ↓
+// CategoryService
+//        ↓
+// IUnitOfWork
+//        ↓
+// Repository<Category>
+
+builder.Services.AddScoped<
+    ICategoryService,
+    CategoryService
+>();
+
+
+// ==========================================================
+// 9. JWT AUTHENTICATION
 // ==========================================================
 
 var signingKey =
@@ -206,21 +226,21 @@ builder.Services
 
 
 // ==========================================================
-// 9. AUTHORIZATION
+// 10. AUTHORIZATION
 // ==========================================================
 
 builder.Services.AddAuthorization();
 
 
 // ==========================================================
-// 10. CONTROLLERS
+// 11. CONTROLLERS
 // ==========================================================
 
 builder.Services.AddControllers();
 
 
 // ==========================================================
-// 11. CORS - CHO BLAZOR
+// 12. CORS - CHO BLAZOR
 // ==========================================================
 
 // Blazor:
@@ -258,7 +278,7 @@ builder.Services.AddCors(options =>
 
 
 // ==========================================================
-// 12. SWAGGER
+// 13. SWAGGER
 // ==========================================================
 
 builder.Services.AddEndpointsApiExplorer();
@@ -300,28 +320,28 @@ builder.Services.AddSwaggerGen(options =>
 
 
 // ==========================================================
-// 13. BUILD APPLICATION
+// 14. BUILD APPLICATION
 // ==========================================================
 
 var app = builder.Build();
 
 
 // ==========================================================
-// 14. REQUEST LOGGING MIDDLEWARE
+// 15. REQUEST LOGGING MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 
 // ==========================================================
-// 15. GLOBAL EXCEPTION MIDDLEWARE
+// 16. GLOBAL EXCEPTION MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 
 // ==========================================================
-// 16. SWAGGER
+// 17. SWAGGER
 // ==========================================================
 
 if (app.Environment.IsDevelopment())
@@ -333,46 +353,47 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 17. HTTPS
+// 18. HTTPS
 // ==========================================================
 
 // Hiện tại chạy HTTP:
 // http://localhost:5136
 //
 // Tạm thời không bật:
+//
 // app.UseHttpsRedirection();
 
 
 // ==========================================================
-// 18. CORS
+// 19. CORS
 // ==========================================================
 
 app.UseCors("BlazorPolicy");
 
 
 // ==========================================================
-// 19. AUTHENTICATION
+// 20. AUTHENTICATION
 // ==========================================================
 
 app.UseAuthentication();
 
 
 // ==========================================================
-// 20. AUTHORIZATION
+// 21. AUTHORIZATION
 // ==========================================================
 
 app.UseAuthorization();
 
 
 // ==========================================================
-// 21. MAP CONTROLLERS
+// 22. MAP CONTROLLERS
 // ==========================================================
 
 app.MapControllers();
 
 
 // ==========================================================
-// 22. RUN
+// 23. RUN
 // ==========================================================
 
 app.Run();

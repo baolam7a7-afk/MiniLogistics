@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MiniLogistics.BLL")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0f0cab5914df11677a58ca19b9cde4f891f4e952")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d3339f04f06576f22d939b959970262302fa456e")]
 [assembly: System.Reflection.AssemblyProductAttribute("MiniLogistics.BLL")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MiniLogistics.BLL")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

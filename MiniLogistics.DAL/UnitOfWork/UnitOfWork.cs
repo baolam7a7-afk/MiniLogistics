@@ -8,13 +8,11 @@ public class UnitOfWork : IUnitOfWork
 {
     private readonly AppDbContext _context;
 
-
-    // Repository Product
     private IRepository<Product>? _products;
 
-
-    // Repository ProductVariant
     private IRepository<ProductVariant>? _productVariants;
+
+    private IRepository<Category>? _categories;
 
 
     public UnitOfWork(AppDbContext context)
@@ -24,7 +22,7 @@ public class UnitOfWork : IUnitOfWork
 
 
     // =====================================================
-    // PRODUCTS
+    // PRODUCT
     // =====================================================
 
     public IRepository<Product> Products
@@ -38,7 +36,7 @@ public class UnitOfWork : IUnitOfWork
 
 
     // =====================================================
-    // PRODUCT VARIANTS
+    // PRODUCT VARIANT
     // =====================================================
 
     public IRepository<ProductVariant> ProductVariants
@@ -52,7 +50,21 @@ public class UnitOfWork : IUnitOfWork
 
 
     // =====================================================
-    // SAVE CHANGES
+    // CATEGORY
+    // =====================================================
+
+    public IRepository<Category> Categories
+    {
+        get
+        {
+            return _categories ??=
+                new Repository<Category>(_context);
+        }
+    }
+
+
+    // =====================================================
+    // SAVE
     // =====================================================
 
     public async Task<int> SaveChangesAsync()

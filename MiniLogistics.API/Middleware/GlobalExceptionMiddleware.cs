@@ -1,6 +1,5 @@
+using System.Net;
 using System.Text.Json;
-
-using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.Exceptions;
 
 namespace MiniLogistics.API.Middleware;
@@ -9,16 +8,13 @@ public class GlobalExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionMiddleware> _logger;
-    private readonly IWebHostEnvironment _environment;
 
     public GlobalExceptionMiddleware(
         RequestDelegate next,
-        ILogger<GlobalExceptionMiddleware> logger,
-        IWebHostEnvironment environment)
+        ILogger<GlobalExceptionMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -29,83 +25,54 @@ public class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
+            _logger.LogError(
+                ex,
+                "Unhandled exception. Request: {Method} {Path}",
+                context.Request.Method,
+                context.Request.Path
+            );
+
             await HandleExceptionAsync(context, ex);
         }
     }
 
-    private async Task HandleExceptionAsync(
+    private static async Task HandleExceptionAsync(
         HttpContext context,
-        Exception ex)
+        Exception exception)
     {
-        _logger.LogError(
-            ex,
-            "Exception xảy ra | Method: {Method} | Path: {Path} | RequestId: {RequestId}",
-            context.Request.Method,
-            context.Request.Path,
-            context.TraceIdentifier
-        );
-
-        var statusCode = ex switch
+        var statusCode = exception switch
         {
-            BadRequestException =>
-                StatusCodes.Status400BadRequest,
-
-            UnauthorizedException =>
-                StatusCodes.Status401Unauthorized,
-
-            ForbiddenException =>
-                StatusCodes.Status403Forbidden,
-
-            NotFoundException =>
-                StatusCodes.Status404NotFound,
-
-            _ =>
-                StatusCodes.Status500InternalServerError
+            BadRequestException => StatusCodes.Status400BadRequest,
+            NotFoundException => StatusCodes.Status404NotFound,
+            UnauthorizedException => StatusCodes.Status401Unauthorized,
+            ForbiddenException => StatusCodes.Status403Forbidden,
+            _ => StatusCodes.Status500InternalServerError
         };
 
-        var message = ex switch
+        var message = exception switch
         {
-            BadRequestException =>
-                ex.Message,
+            BadRequestException => exception.Message,
 
-            UnauthorizedException =>
-                ex.Message,
+            NotFoundException => exception.Message,
 
-            ForbiddenException =>
-                ex.Message,
+            UnauthorizedException => exception.Message,
 
-            NotFoundException =>
-                ex.Message,
+            ForbiddenException => exception.Message,
 
-            _ =>
-                "Đã xảy ra lỗi hệ thống."
-        };
-
-        var response = new ErrorResponseDTO
-        {
-            StatusCode = statusCode,
-
-            Message = message,
-
-            Detail = _environment.IsDevelopment()
-                ? ex.ToString()
-                : null,
-
-            Timestamp = DateTime.UtcNow
+            _ => "Đã xảy ra lỗi không mong muốn."
         };
 
         context.Response.StatusCode = statusCode;
-
         context.Response.ContentType = "application/json";
 
-        var json = JsonSerializer.Serialize(
-            response,
-            new JsonSerializerOptions
-            {
-                PropertyNamingPolicy =
-                    JsonNamingPolicy.CamelCase
-            }
-        );
+        var response = new
+        {
+            statusCode,
+            message,
+            timestamp = DateTime.UtcNow
+        };
+
+        var json = JsonSerializer.Serialize(response);
 
         await context.Response.WriteAsync(json);
     }

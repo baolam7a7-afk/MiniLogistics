@@ -18,6 +18,8 @@ public interface IUnitOfWork
 
     IRepository<ProductVariant> ProductVariants { get; }
 
+    IRepository<Category> Categories { get; }
+
 
     // ========================================
     // SAVE
