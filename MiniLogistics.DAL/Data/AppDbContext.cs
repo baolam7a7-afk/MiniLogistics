@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<Inventory> Inventories => Set<Inventory>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Voucher> Vouchers => Set<Voucher>();
@@ -104,12 +105,64 @@ public class AppDbContext : DbContext
             e.ToTable("product_images"); e.HasKey(x => x.Id); e.Property(x => x.Url).HasMaxLength(1000).IsRequired();
             e.HasOne(x => x.Product).WithMany(x => x.ProductImages).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<ProductVariant>(e => {
-            e.ToTable("product_variants"); e.HasKey(x => x.Id);
-            e.Property(x => x.Sku).HasMaxLength(100); e.HasIndex(x => x.Sku).IsUnique().HasFilter("[sku] IS NOT NULL");
-            e.Property(x => x.VariantName).HasMaxLength(300).IsRequired(); e.Property(x => x.Price).HasPrecision(18,2).IsRequired();
-            e.Property(x => x.Stock).HasDefaultValue(0); e.HasOne(x => x.Product).WithMany(x => x.ProductVariants).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
-        });
+        b.Entity<ProductVariant>(e =>
+{
+    e.ToTable("product_variants");
+
+    e.HasKey(x => x.Id);
+
+    e.Property(x => x.Sku)
+        .HasMaxLength(100);
+
+    e.HasIndex(x => x.Sku)
+        .IsUnique()
+        .HasFilter("[sku] IS NOT NULL");
+
+    e.Property(x => x.VariantName)
+        .HasMaxLength(300)
+        .IsRequired();
+
+    e.Property(x => x.Price)
+        .HasPrecision(18, 2)
+        .IsRequired();
+
+    e.HasOne(x => x.Product)
+        .WithMany(x => x.ProductVariants)
+        .HasForeignKey(x => x.ProductId)
+        .OnDelete(DeleteBehavior.Cascade);
+});
+b.Entity<Inventory>(e =>
+{
+    e.ToTable("inventories");
+
+    e.HasKey(x => x.Id);
+
+    e.Property(x => x.ProductVariantId)
+        .IsRequired();
+
+    e.Property(x => x.Quantity)
+        .IsRequired()
+        .HasDefaultValue(0);
+
+    e.Property(x => x.ReservedQuantity)
+        .IsRequired()
+        .HasDefaultValue(0);
+
+    e.Property(x => x.CreatedAt)
+        .HasDefaultValueSql("GETUTCDATE()");
+
+    e.Property(x => x.UpdatedAt);
+
+    // Mỗi ProductVariant chỉ có 1 Inventory
+    e.HasIndex(x => x.ProductVariantId)
+        .IsUnique();
+
+    e.HasOne(x => x.ProductVariant)
+        .WithOne(x => x.Inventory)
+        .HasForeignKey<Inventory>(
+            x => x.ProductVariantId)
+        .OnDelete(DeleteBehavior.Restrict);
+});
         b.Entity<Cart>(e => {
             e.ToTable("carts"); e.HasKey(x => x.Id); e.HasIndex(x => x.UserId).IsUnique();
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

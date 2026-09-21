@@ -20,6 +20,8 @@ public interface IUnitOfWork
 
     IRepository<Category> Categories { get; }
 
+    IRepository<Inventory> Inventories { get; }
+
 
     // ========================================
     // SAVE

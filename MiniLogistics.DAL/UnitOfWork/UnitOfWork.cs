@@ -9,63 +9,30 @@ public class UnitOfWork : IUnitOfWork
     private readonly AppDbContext _context;
 
     private IRepository<Product>? _products;
-
     private IRepository<ProductVariant>? _productVariants;
-
     private IRepository<Category>? _categories;
-
+    
 
     public UnitOfWork(AppDbContext context)
     {
         _context = context;
     }
 
+    public IRepository<Product> Products =>
+        _products ??=
+            new Repository<Product>(_context);
 
-    // =====================================================
-    // PRODUCT
-    // =====================================================
+    public IRepository<ProductVariant> ProductVariants =>
+        _productVariants ??=
+            new Repository<ProductVariant>(_context);
 
-    public IRepository<Product> Products
-    {
-        get
-        {
-            return _products ??=
-                new Repository<Product>(_context);
-        }
-    }
+    public IRepository<Category> Categories =>
+        _categories ??=
+            new Repository<Category>(_context);
 
-
-    // =====================================================
-    // PRODUCT VARIANT
-    // =====================================================
-
-    public IRepository<ProductVariant> ProductVariants
-    {
-        get
-        {
-            return _productVariants ??=
-                new Repository<ProductVariant>(_context);
-        }
-    }
-
-
-    // =====================================================
-    // CATEGORY
-    // =====================================================
-
-    public IRepository<Category> Categories
-    {
-        get
-        {
-            return _categories ??=
-                new Repository<Category>(_context);
-        }
-    }
-
-
-    // =====================================================
-    // SAVE
-    // =====================================================
+    public IRepository<Inventory> Inventories =>
+        _inventories ??=
+            new Repository<Inventory>(_context);
 
     public async Task<int> SaveChangesAsync()
     {
