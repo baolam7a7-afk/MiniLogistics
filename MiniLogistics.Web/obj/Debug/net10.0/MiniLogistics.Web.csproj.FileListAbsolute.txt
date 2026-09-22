@@ -207,6 +207,9 @@ D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\do
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_CJK.tjcz0u77k5.dat
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_EFIGS.tptq2av103.dat
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_no_CJK.lfu7j35m59.dat
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.y5knuiepmz.wasm
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.aaa94ma7c9.pdb
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\dotnet.j1912zb3ou.js
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\blazor.webassembly.66stpp682q.js.gz
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Authorization.roqc1km2rj.wasm.gz
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Components.uddsvpv1sv.wasm.gz
@@ -415,6 +418,9 @@ D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\do
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_CJK.tjcz0u77k5.dat.gz
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_EFIGS.tptq2av103.dat.gz
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\icudt_no_CJK.lfu7j35m59.dat.gz
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.y5knuiepmz.wasm.gz
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.aaa94ma7c9.pdb.gz
+D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\dotnet.j1912zb3ou.js.gz
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\MiniLogistics.Web.staticwebassets.runtime.json
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\MiniLogistics.Web.staticwebassets.endpoints.json
 D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\MiniLogistics.Web.dll
@@ -1105,6 +1111,10 @@ D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\oj02n18www
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\rtc0rn5x98-{0}-tjcz0u77k5-tjcz0u77k5.gz
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\g7cvpwui5l-{0}-tptq2av103-tptq2av103.gz
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\yive85q7dm-{0}-lfu7j35m59-lfu7j35m59.gz
+D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\9l7vh82pyy-{0}-y5knuiepmz-y5knuiepmz.gz
+D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\rjofyb5ov4-{0}-aaa94ma7c9-aaa94ma7c9.gz
+D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\nqinyvx20y-{0}-j1912zb3ou-j1912zb3ou.gz
+D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\okkve883aq-{0}-bmyv0zqm8b-bmyv0zqm8b.gz
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\staticwebassets.build.json
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\staticwebassets.build.json.cache
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\staticwebassets.development.json
@@ -1115,13 +1125,3 @@ D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\MiniLogistics.Web.dll
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\refint\MiniLogistics.Web.dll
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\MiniLogistics.Web.pdb
 D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\ref\MiniLogistics.Web.dll
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.1di8ai4uvi.wasm
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.e4473yg2pt.pdb
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\dotnet.0ikq845uf4.js
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.1di8ai4uvi.wasm.gz
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\MiniLogistics.Web.e4473yg2pt.pdb.gz
-D:\LogisticsManagement\MiniLogistics.Web\bin\Debug\net10.0\wwwroot\_framework\dotnet.0ikq845uf4.js.gz
-D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\9l7vh82pyy-{0}-1di8ai4uvi-1di8ai4uvi.gz
-D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\rjofyb5ov4-{0}-e4473yg2pt-e4473yg2pt.gz
-D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\nqinyvx20y-{0}-0ikq845uf4-0ikq845uf4.gz
-D:\LogisticsManagement\MiniLogistics.Web\obj\Debug\net10.0\compressed\okkve883aq-{0}-7xet7cw7y1-7xet7cw7y1.gz

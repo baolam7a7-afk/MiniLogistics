@@ -35,10 +35,20 @@ public class Repository<T> : IRepository<T>
 
 
     // =====================================================
-    // GET BY ID
+    // GET BY ID - LONG
     // =====================================================
 
     public async Task<T?> GetByIdAsync(long id)
+    {
+        return await _dbSet.FindAsync(id);
+    }
+
+
+    // =====================================================
+    // GET BY ID - INT
+    // =====================================================
+
+    public async Task<T?> GetByIdAsync(int id)
     {
         return await _dbSet.FindAsync(id);
     }

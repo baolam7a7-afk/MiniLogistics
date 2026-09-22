@@ -65,6 +65,10 @@ public interface IUnitOfWork
 
     IRepository<OrderStatusLog> OrderStatusLogs { get; }
 
+    IRepository<Shipment> Shipments { get; }
+
+    IRepository<ShipmentEvent> ShipmentEvents { get; }
+
 
     // ==========================================
     // SAVE

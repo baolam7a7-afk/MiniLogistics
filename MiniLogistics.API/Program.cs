@@ -13,6 +13,7 @@ using MiniLogistics.BLL.Services.Auth;
 using MiniLogistics.BLL.Services.Inventory;
 using MiniLogistics.BLL.Services.Product;
 using MiniLogistics.BLL.Services.Order;
+using MiniLogistics.BLL.Services.Shipment;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
@@ -200,6 +201,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IOrderService,
     OrderService
+>();
+builder.Services.AddScoped<
+    IShipmentService,
+    ShipmentService
 >();
 
 

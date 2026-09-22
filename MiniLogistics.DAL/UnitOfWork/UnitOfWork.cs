@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.Repositories;
 
@@ -13,7 +11,6 @@ public class UnitOfWork : IUnitOfWork
     {
         _context = context;
     }
-
 
     // =====================================================
     // USERS
@@ -143,6 +140,26 @@ public class UnitOfWork : IUnitOfWork
 
     public IRepository<OrderStatusLog> OrderStatusLogs =>
         _orderStatusLogs ??= new Repository<OrderStatusLog>(_context);
+
+
+    // =====================================================
+    // SHIPMENTS
+    // =====================================================
+
+    private IRepository<Shipment>? _shipments;
+
+    public IRepository<Shipment> Shipments =>
+        _shipments ??= new Repository<Shipment>(_context);
+
+
+    // =====================================================
+    // SHIPMENT EVENTS
+    // =====================================================
+
+    private IRepository<ShipmentEvent>? _shipmentEvents;
+
+    public IRepository<ShipmentEvent> ShipmentEvents =>
+        _shipmentEvents ??= new Repository<ShipmentEvent>(_context);
 
 
     // =====================================================
