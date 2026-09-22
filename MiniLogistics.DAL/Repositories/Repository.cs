@@ -118,4 +118,14 @@ public class Repository<T> : IRepository<T>
     {
         _dbSet.Remove(entity);
     }
+
+
+    // =====================================================
+    // QUERY
+    // =====================================================
+
+    public IQueryable<T> Query()
+    {
+        return _dbSet;
+    }
 }

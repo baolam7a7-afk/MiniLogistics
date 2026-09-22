@@ -54,6 +54,13 @@ public interface IUnitOfWork
 
     IRepository<Inventory> Inventories { get; }
 
+    // ==========================================
+    // CART
+    // ==========================================
+
+    IRepository<Cart> Carts { get; }
+
+    IRepository<CartItem> CartItems { get; }
 
     // ==========================================
     // ORDER

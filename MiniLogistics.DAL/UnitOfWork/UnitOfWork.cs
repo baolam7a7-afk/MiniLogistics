@@ -111,6 +111,24 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Inventory> Inventories =>
         _inventories ??= new Repository<Inventory>(_context);
 
+    // =====================================================
+    // CARTS
+    // =====================================================
+
+    private IRepository<Cart>? _carts;
+
+    public IRepository<Cart> Carts =>
+        _carts ??= new Repository<Cart>(_context);
+
+
+    // =====================================================
+    // CART ITEMS
+    // =====================================================
+
+    private IRepository<CartItem>? _cartItems;
+
+    public IRepository<CartItem> CartItems =>
+        _cartItems ??= new Repository<CartItem>(_context);
 
     // =====================================================
     // ORDERS

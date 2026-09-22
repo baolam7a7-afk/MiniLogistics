@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "D:\\LogisticsManagement\\MiniLogistics.Web\\MiniLogistics.Web.csproj": {}
+    "E:\\BC.Net06\\MiniLogistics-master\\MiniLogistics.Web\\MiniLogistics.Web.csproj": {}
   },
   "projects": {
-    "D:\\LogisticsManagement\\MiniLogistics.Web\\MiniLogistics.Web.csproj": {
+    "E:\\BC.Net06\\MiniLogistics-master\\MiniLogistics.Web\\MiniLogistics.Web.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\LogisticsManagement\\MiniLogistics.Web\\MiniLogistics.Web.csproj",
+        "projectUniqueName": "E:\\BC.Net06\\MiniLogistics-master\\MiniLogistics.Web\\MiniLogistics.Web.csproj",
         "projectName": "MiniLogistics.Web",
-        "projectPath": "D:\\LogisticsManagement\\MiniLogistics.Web\\MiniLogistics.Web.csproj",
-        "packagesPath": "C:\\Users\\Administrator\\.nuget\\packages\\",
-        "outputPath": "D:\\LogisticsManagement\\MiniLogistics.Web\\obj\\",
+        "projectPath": "E:\\BC.Net06\\MiniLogistics-master\\MiniLogistics.Web\\MiniLogistics.Web.csproj",
+        "packagesPath": "C:\\Users\\PC\\.nuget\\packages\\",
+        "outputPath": "E:\\BC.Net06\\MiniLogistics-master\\MiniLogistics.Web\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\PC\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
