@@ -8,12 +8,28 @@ public class UnitOfWork : IUnitOfWork
 {
     private readonly AppDbContext _context;
 
+    // ========================================
+    // REPOSITORY FIELDS
+    // ========================================
+
+    private IRepository<User>? _users;
+
     private IRepository<Product>? _products;
 
     private IRepository<ProductVariant>? _productVariants;
 
     private IRepository<Category>? _categories;
 
+    private IRepository<Shop>? _shops;
+
+    private IRepository<Cart>? _carts;
+
+    private IRepository<CartItem>? _cartItems;
+
+
+    // ========================================
+    // CONSTRUCTOR
+    // ========================================
 
     public UnitOfWork(AppDbContext context)
     {
@@ -21,9 +37,23 @@ public class UnitOfWork : IUnitOfWork
     }
 
 
-    // =====================================================
+    // ========================================
+    // USER
+    // ========================================
+
+    public IRepository<User> Users
+    {
+        get
+        {
+            return _users ??=
+                new Repository<User>(_context);
+        }
+    }
+
+
+    // ========================================
     // PRODUCT
-    // =====================================================
+    // ========================================
 
     public IRepository<Product> Products
     {
@@ -35,9 +65,9 @@ public class UnitOfWork : IUnitOfWork
     }
 
 
-    // =====================================================
+    // ========================================
     // PRODUCT VARIANT
-    // =====================================================
+    // ========================================
 
     public IRepository<ProductVariant> ProductVariants
     {
@@ -49,9 +79,9 @@ public class UnitOfWork : IUnitOfWork
     }
 
 
-    // =====================================================
+    // ========================================
     // CATEGORY
-    // =====================================================
+    // ========================================
 
     public IRepository<Category> Categories
     {
@@ -63,9 +93,51 @@ public class UnitOfWork : IUnitOfWork
     }
 
 
-    // =====================================================
+    // ========================================
+    // SHOP
+    // ========================================
+
+    public IRepository<Shop> Shops
+    {
+        get
+        {
+            return _shops ??=
+                new Repository<Shop>(_context);
+        }
+    }
+
+
+    // ========================================
+    // CART
+    // ========================================
+
+    public IRepository<Cart> Carts
+    {
+        get
+        {
+            return _carts ??=
+                new Repository<Cart>(_context);
+        }
+    }
+
+
+    // ========================================
+    // CART ITEM
+    // ========================================
+
+    public IRepository<CartItem> CartItems
+    {
+        get
+        {
+            return _cartItems ??=
+                new Repository<CartItem>(_context);
+        }
+    }
+
+
+    // ========================================
     // SAVE
-    // =====================================================
+    // ========================================
 
     public async Task<int> SaveChangesAsync()
     {

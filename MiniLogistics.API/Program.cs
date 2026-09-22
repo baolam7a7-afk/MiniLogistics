@@ -10,11 +10,15 @@ using MiniLogistics.API.Middleware;
 using MiniLogistics.BLL.DTOs.Auth;
 using MiniLogistics.BLL.Services;
 using MiniLogistics.BLL.Services.Auth;
+using MiniLogistics.BLL.Services.Cart;
 using MiniLogistics.BLL.Services.Product;
+using MiniLogistics.BLL.Services.Shop;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
 using MiniLogistics.DAL.UnitOfWork;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -111,6 +115,16 @@ builder.Services.AddScoped(
 
 
 // ==========================================================
+// 4.1. DEPENDENCY INJECTION - CART REPOSITORY
+// ==========================================================
+
+builder.Services.AddScoped<
+    ICartRepository,
+    CartRepository
+>();
+
+
+// ==========================================================
 // 5. DEPENDENCY INJECTION - UNIT OF WORK
 // ==========================================================
 
@@ -171,7 +185,45 @@ builder.Services.AddScoped<
 
 
 // ==========================================================
-// 9. JWT AUTHENTICATION
+// 9. DEPENDENCY INJECTION - CART SERVICE
+// ==========================================================
+
+// CartController
+//        ↓
+// ICartService
+//        ↓
+// CartService
+//        ↓
+// ICartRepository + IUnitOfWork
+
+builder.Services.AddScoped<
+    ICartService,
+    CartService
+>();
+
+
+// ==========================================================
+// 10. DEPENDENCY INJECTION - SHOP SERVICE
+// ==========================================================
+
+// ShopController
+//        ↓
+// IShopService
+//        ↓
+// ShopService
+//        ↓
+// IUnitOfWork
+//        ↓
+// Repository<Shop>
+
+builder.Services.AddScoped<
+    IShopService,
+    ShopService
+>();
+
+
+// ==========================================================
+// 11. JWT AUTHENTICATION
 // ==========================================================
 
 var signingKey =
@@ -226,21 +278,21 @@ builder.Services
 
 
 // ==========================================================
-// 10. AUTHORIZATION
+// 12. AUTHORIZATION
 // ==========================================================
 
 builder.Services.AddAuthorization();
 
 
 // ==========================================================
-// 11. CONTROLLERS
+// 13. CONTROLLERS
 // ==========================================================
 
 builder.Services.AddControllers();
 
 
 // ==========================================================
-// 12. CORS - CHO BLAZOR
+// 14. CORS - CHO BLAZOR
 // ==========================================================
 
 // Blazor:
@@ -278,7 +330,7 @@ builder.Services.AddCors(options =>
 
 
 // ==========================================================
-// 13. SWAGGER
+// 15. SWAGGER
 // ==========================================================
 
 builder.Services.AddEndpointsApiExplorer();
@@ -320,28 +372,28 @@ builder.Services.AddSwaggerGen(options =>
 
 
 // ==========================================================
-// 14. BUILD APPLICATION
+// 16. BUILD APPLICATION
 // ==========================================================
 
 var app = builder.Build();
 
 
 // ==========================================================
-// 15. REQUEST LOGGING MIDDLEWARE
+// 17. REQUEST LOGGING MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 
 // ==========================================================
-// 16. GLOBAL EXCEPTION MIDDLEWARE
+// 18. GLOBAL EXCEPTION MIDDLEWARE
 // ==========================================================
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 
 // ==========================================================
-// 17. SWAGGER
+// 19. SWAGGER
 // ==========================================================
 
 if (app.Environment.IsDevelopment())
@@ -353,7 +405,7 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 18. HTTPS
+// 20. HTTPS
 // ==========================================================
 
 // Hiện tại chạy HTTP:
@@ -365,35 +417,35 @@ if (app.Environment.IsDevelopment())
 
 
 // ==========================================================
-// 19. CORS
+// 21. CORS
 // ==========================================================
 
 app.UseCors("BlazorPolicy");
 
 
 // ==========================================================
-// 20. AUTHENTICATION
+// 22. AUTHENTICATION
 // ==========================================================
 
 app.UseAuthentication();
 
 
 // ==========================================================
-// 21. AUTHORIZATION
+// 23. AUTHORIZATION
 // ==========================================================
 
 app.UseAuthorization();
 
 
 // ==========================================================
-// 22. MAP CONTROLLERS
+// 24. MAP CONTROLLERS
 // ==========================================================
 
 app.MapControllers();
 
 
 // ==========================================================
-// 23. RUN
+// 25. RUN
 // ==========================================================
 
 app.Run();
