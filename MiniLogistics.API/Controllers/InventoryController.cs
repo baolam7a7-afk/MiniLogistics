@@ -93,7 +93,7 @@ public class InventoryController : ControllerBase
     }
 
     // =====================================================
-    // ADJUSTlam
+    // ADJUST
     // =====================================================
 
     [HttpPut(
