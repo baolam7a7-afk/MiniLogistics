@@ -1,0 +1,14 @@
+## Bỏ qua các thư mục biên dịch tự sinh của .NET
+bin/
+obj/
+**/bin/
+**/obj/
+
+## Bỏ qua cấu hình riêng của Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+
+## Bỏ qua cấu hình local (để mỗi người dùng ConnectionString riêng)
+appsettings.Development.json
