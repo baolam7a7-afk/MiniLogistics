@@ -8,15 +8,23 @@ using Microsoft.OpenApi;
 using MiniLogistics.API.Middleware;
 
 using MiniLogistics.BLL.DTOs.Auth;
+
 using MiniLogistics.BLL.Services;
 using MiniLogistics.BLL.Services.Auth;
-using MiniLogistics.BLL.Services.Inventory;
 using MiniLogistics.BLL.Services.Cart;
-using MiniLogistics.BLL.Services.Product;
+using MiniLogistics.BLL.Services.Inventory;
 using MiniLogistics.BLL.Services.Order;
-using MiniLogistics.BLL.Services.Shipment;
 using MiniLogistics.BLL.Services.Payment;
+using MiniLogistics.BLL.Services.Product;
 using MiniLogistics.BLL.Services.ProductImage;
+using MiniLogistics.BLL.Services.Review;
+using MiniLogistics.BLL.Services.ReviewReply;
+using MiniLogistics.BLL.Services.Shipment;
+using MiniLogistics.BLL.Services.SupportTicket;
+using MiniLogistics.BLL.Services.SupportMessage;
+using MiniLogistics.BLL.Services.Dispute;
+using MiniLogistics.BLL.Services.DisputeMessage;
+using MiniLogistics.BLL.Services.ReportSnapshot;
 using MiniLogistics.BLL.Services.Voucher;
 
 using MiniLogistics.DAL.Data;
@@ -24,45 +32,44 @@ using MiniLogistics.DAL.Repositories;
 using MiniLogistics.DAL.UnitOfWork;
 
 
-// ==========================================================
-// CREATE BUILDER
-// ==========================================================
+// =====================================================
+// 1. CREATE BUILDER
+// =====================================================
 
-var builder = WebApplication.CreateBuilder(args);
+var builder =
+    WebApplication.CreateBuilder(args);
 
 
-// ==========================================================
-// 1. DATABASE - SQL SERVER
-// ==========================================================
+// =====================================================
+// 2. DATABASE
+// =====================================================
 
 var connectionString =
-    builder.Configuration.GetConnectionString(
-        "DefaultConnection"
-    );
+    builder.Configuration
+        .GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException(
-        "DefaultConnection chưa được cấu hình."
-    );
+        "DefaultConnection chưa được cấu hình.");
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseSqlServer(connectionString);
-});
+builder.Services.AddDbContext<AppDbContext>(
+    options =>
+    {
+        options.UseSqlServer(connectionString);
+    });
 
 
-// ==========================================================
-// 2. JWT SETTINGS
-// ==========================================================
+// =====================================================
+// 3. JWT SETTINGS
+// =====================================================
 
 var jwtSection =
     builder.Configuration.GetSection("Jwt");
 
 builder.Services.Configure<JwtSettings>(
-    jwtSection
-);
+    jwtSection);
 
 var jwtSettings =
     jwtSection.Get<JwtSettings>();
@@ -70,400 +77,355 @@ var jwtSettings =
 if (jwtSettings == null)
 {
     throw new InvalidOperationException(
-        "Không đọc được cấu hình Jwt."
-    );
+        "Không đọc được cấu hình Jwt.");
 }
 
 if (string.IsNullOrWhiteSpace(jwtSettings.Key))
 {
     throw new InvalidOperationException(
-        "Jwt:Key chưa được cấu hình."
-    );
+        "Jwt:Key chưa được cấu hình.");
 }
 
 if (jwtSettings.Key.Length < 32)
 {
     throw new InvalidOperationException(
-        "Jwt:Key phải có ít nhất 32 ký tự."
-    );
+        "Jwt:Key phải có ít nhất 32 ký tự.");
 }
 
 if (string.IsNullOrWhiteSpace(jwtSettings.Issuer))
 {
     throw new InvalidOperationException(
-        "Jwt:Issuer chưa được cấu hình."
-    );
+        "Jwt:Issuer chưa được cấu hình.");
 }
 
 if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
 {
     throw new InvalidOperationException(
-        "Jwt:Audience chưa được cấu hình."
-    );
+        "Jwt:Audience chưa được cấu hình.");
 }
 
 
-// ==========================================================
-// 3. DEPENDENCY INJECTION - AUTH SERVICE
-// ==========================================================
+// =====================================================
+// 4. AUTH SERVICE
+// =====================================================
 
 builder.Services.AddScoped<
     IAuthService,
-    AuthService
->();
+    AuthService>();
 
 
-// ==========================================================
-// 4. DEPENDENCY INJECTION - GENERIC REPOSITORY
-// ==========================================================
+// =====================================================
+// 5. GENERIC REPOSITORY
+// =====================================================
 
 builder.Services.AddScoped(
     typeof(IRepository<>),
-    typeof(Repository<>)
-);
+    typeof(Repository<>));
 
 
-// ==========================================================
-// 5. DEPENDENCY INJECTION - UNIT OF WORK
-// ==========================================================
+// =====================================================
+// 6. UNIT OF WORK
+// =====================================================
 
 builder.Services.AddScoped<
     IUnitOfWork,
-    UnitOfWork
->();
+    UnitOfWork>();
 
 
-// ==========================================================
-// 6. DEPENDENCY INJECTION - PRODUCT SERVICE
-// ==========================================================
+// =====================================================
+// 7. PRODUCT
+// =====================================================
 
 builder.Services.AddScoped<
     IProductService,
-    ProductService
->();
+    ProductService>();
 
 
-// ==========================================================
-// 7. DEPENDENCY INJECTION - PRODUCT VARIANT SERVICE
-// ==========================================================
-
-// ProductVariantController
-//        ↓
-// IProductVariantService
-//        ↓
-// ProductVariantService
-//        ↓
-// IUnitOfWork
-//        ↓
-// Repository<ProductVariant>
-//        +
-// Repository<Inventory>
+// =====================================================
+// 8. PRODUCT VARIANT
+// =====================================================
 
 builder.Services.AddScoped<
     IProductVariantService,
-    ProductVariantService
->();
+    ProductVariantService>();
+
+
+// =====================================================
+// 9. PRODUCT IMAGE
+// =====================================================
 
 builder.Services.AddScoped<
     IProductImageService,
-    ProductImageService
->();
+    ProductImageService>();
 
 
-// ==========================================================
-// 8. DEPENDENCY INJECTION - CATEGORY SERVICE
-// ==========================================================
-
-// CategoryController
-//        ↓
-// ICategoryService
-//        ↓
-// CategoryService
-//        ↓
-// IUnitOfWork
-//        ↓
-// Repository<Category>
+// =====================================================
+// 10. CATEGORY
+// =====================================================
 
 builder.Services.AddScoped<
     ICategoryService,
-    CategoryService
->();
+    CategoryService>();
 
 
-// ==========================================================
-// 9. DEPENDENCY INJECTION - INVENTORY SERVICE
-// ==========================================================
-
-// InventoryController
-//        ↓
-// IInventoryService
-//        ↓
-// InventoryService
-//        ↓
-// IUnitOfWork
-//        ↓
-// Repository<Inventory>
-//        +
-// Repository<ProductVariant>
+// =====================================================
+// 11. INVENTORY
+// =====================================================
 
 builder.Services.AddScoped<
     IInventoryService,
-    InventoryService
->();
+    InventoryService>();
 
 
-// ==========================================================
-// 10. DEPENDENCY INJECTION - CART SERVICE
-// ==========================================================
-
-// CartController
-//        ↓
-// ICartService
-//        ↓
-// CartService
-//        ↓
-// IUnitOfWork
-//        ↓
-// Repository<Cart>
-//        +
-// Repository<CartItem>
-//        +
-// Repository<ProductVariant>
-//        +
-// Repository<Inventory>
+// =====================================================
+// 12. CART
+// =====================================================
 
 builder.Services.AddScoped<
     ICartService,
-    CartService
->();
+    CartService>();
 
 
-// ==========================================================
-// 11. DEPENDENCY INJECTION - ORDER SERVICE
-// ==========================================================
+// =====================================================
+// 13. ORDER
+// =====================================================
 
 builder.Services.AddScoped<
     IOrderService,
-    OrderService
->();
+    OrderService>();
 
 
-// ==========================================================
-// 12. DEPENDENCY INJECTION - SHIPMENT SERVICE
-// ==========================================================
+// =====================================================
+// 14. SHIPMENT
+// =====================================================
 
 builder.Services.AddScoped<
     IShipmentService,
-    ShipmentService
->();
-// ==========================================================
-// 13. DEPENDENCY INJECTION - PAYMENT SERVICE
-// ==========================================================
+    ShipmentService>();
+
+
+// =====================================================
+// 15. PAYMENT
+// =====================================================
 
 builder.Services.AddScoped<
     IPaymentService,
-    PaymentService
->();
+    PaymentService>();
 
+
+// =====================================================
+// 16. VOUCHER
+// =====================================================
 
 builder.Services.AddScoped<
     IVoucherService,
-    VoucherService
->();
-// ==========================================================
-// 13. JWT AUTHENTICATION
-// ==========================================================
+    VoucherService>();
+
+
+// =====================================================
+// 17. REVIEW
+// =====================================================
+
+builder.Services.AddScoped<
+    IReviewService,
+    ReviewService>();
+
+
+// =====================================================
+// 18. REVIEW REPLY
+// =====================================================
+
+builder.Services.AddScoped<
+    IReviewReplyService,
+    ReviewReplyService>();
+
+
+// =====================================================
+// 19. SUPPORT TICKET
+// =====================================================
+
+builder.Services.AddScoped<
+    ISupportTicketService,
+    SupportTicketService>();
+
+
+builder.Services.AddScoped<
+    ISupportMessageService,
+    SupportMessageService>();
+
+builder.Services.AddScoped<
+    IDisputeService,
+    DisputeService>();
+builder.Services.AddScoped<
+    IDisputeMessageService,
+    DisputeMessageService>();
+builder.Services.AddScoped<
+    IReportSnapshotService,
+    ReportSnapshotService>();
+// =====================================================
+// 20. JWT AUTHENTICATION
+// =====================================================
 
 var signingKey =
     new SymmetricSecurityKey(
         Encoding.UTF8.GetBytes(
-            jwtSettings.Key
-        )
-    );
+            jwtSettings.Key));
+
 
 builder.Services
-    .AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme =
-            JwtBearerDefaults.AuthenticationScheme;
+    .AddAuthentication(
+        options =>
+        {
+            options.DefaultAuthenticateScheme =
+                JwtBearerDefaults.AuthenticationScheme;
 
-        options.DefaultChallengeScheme =
-            JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters =
-            new TokenValidationParameters
-            {
-                // ------------------------------------------
-                // Kiểm tra chữ ký JWT
-                // ------------------------------------------
+            options.DefaultChallengeScheme =
+                JwtBearerDefaults.AuthenticationScheme;
+        })
+    .AddJwtBearer(
+        options =>
+        {
+            options.TokenValidationParameters =
+                new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
 
-                ValidateIssuerSigningKey = true,
+                    IssuerSigningKey =
+                        signingKey,
 
-                IssuerSigningKey = signingKey,
+                    ValidateIssuer = true,
 
+                    ValidIssuer =
+                        jwtSettings.Issuer,
 
-                // ------------------------------------------
-                // Kiểm tra Issuer
-                // ------------------------------------------
+                    ValidateAudience = true,
 
-                ValidateIssuer = true,
+                    ValidAudience =
+                        jwtSettings.Audience,
 
-                ValidIssuer =
-                    jwtSettings.Issuer,
+                    ValidateLifetime = true,
 
-
-                // ------------------------------------------
-                // Kiểm tra Audience
-                // ------------------------------------------
-
-                ValidateAudience = true,
-
-                ValidAudience =
-                    jwtSettings.Audience,
+                    ClockSkew =
+                        TimeSpan.Zero
+                };
+        });
 
 
-                // ------------------------------------------
-                // Kiểm tra thời gian hết hạn
-                // ------------------------------------------
-
-                ValidateLifetime = true,
-
-                // Không cho phép sai lệch thời gian
-                ClockSkew =
-                    TimeSpan.Zero
-            };
-    });
-
-
-// ==========================================================
-// 14. AUTHORIZATION
-// ==========================================================
+// =====================================================
+// 21. AUTHORIZATION
+// =====================================================
 
 builder.Services.AddAuthorization();
 
 
-// ==========================================================
-// 15. CONTROLLERS
-// ==========================================================
+// =====================================================
+// 22. CONTROLLERS
+// =====================================================
 
 builder.Services.AddControllers();
 
 
-// ==========================================================
-// 16. CORS - CHO BLAZOR
-// ==========================================================
-
-// Blazor:
-// http://localhost:5107
-//
-// API:
-// http://localhost:5136
+// =====================================================
+// 23. CORS
+// =====================================================
 
 var allowedOrigins =
     builder.Configuration
         .GetSection("Cors:AllowedOrigins")
-        .Get<string[]>()
-        ?? Array.Empty<string>();
+        .Get<string[]>();
 
-if (allowedOrigins.Length == 0)
+if (allowedOrigins == null ||
+    allowedOrigins.Length == 0)
 {
     throw new InvalidOperationException(
-        "Cors:AllowedOrigins chưa được cấu hình."
-    );
+        "Cors:AllowedOrigins chưa được cấu hình.");
 }
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(
-        "BlazorPolicy",
-        policy =>
-        {
-            policy
-                .WithOrigins(allowedOrigins)
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        }
-    );
-});
+builder.Services.AddCors(
+    options =>
+    {
+        options.AddPolicy(
+            "BlazorPolicy",
+            policy =>
+            {
+                policy
+                    .WithOrigins(
+                        allowedOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod();
+            });
+    });
 
 
-// ==========================================================
-// 17. SWAGGER
-// ==========================================================
+// =====================================================
+// 24. SWAGGER
+// =====================================================
 
 builder.Services.AddEndpointsApiExplorer();
 
-builder.Services.AddSwaggerGen(options =>
-{
-    // ------------------------------------------
-    // JWT Bearer
-    // ------------------------------------------
-
-    options.AddSecurityDefinition(
-        "Bearer",
-        new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-
-            Type = SecuritySchemeType.Http,
-
-            Scheme = "bearer",
-
-            BearerFormat = "JWT",
-
-            In = ParameterLocation.Header,
-
-            Description =
-                "Nhập Access Token JWT"
-        }
-    );
-
-
-    // ------------------------------------------
-    // Swagger Security Requirement
-    // ------------------------------------------
-
-    options.AddSecurityRequirement(
-        document =>
-            new OpenApiSecurityRequirement
+builder.Services.AddSwaggerGen(
+    options =>
+    {
+        options.AddSecurityDefinition(
+            "Bearer",
+            new OpenApiSecurityScheme
             {
-                [
-                    new OpenApiSecuritySchemeReference(
-                        "Bearer",
-                        document
-                    )
-                ] = []
-            }
-    );
-});
+                Name = "Authorization",
+
+                Type =
+                    SecuritySchemeType.Http,
+
+                Scheme = "bearer",
+
+                BearerFormat = "JWT",
+
+                In =
+                    ParameterLocation.Header,
+
+                Description =
+                    "Nhập Access Token JWT"
+            });
+
+        options.AddSecurityRequirement(
+            document =>
+                new OpenApiSecurityRequirement
+                {
+                    [
+                        new OpenApiSecuritySchemeReference(
+                            "Bearer",
+                            document)
+                    ] = []
+                });
+    });
 
 
-// ==========================================================
-// 18. BUILD APPLICATION
-// ==========================================================
+// =====================================================
+// 25. BUILD
+// =====================================================
 
-var app = builder.Build();
-
-
-// ==========================================================
-// 19. REQUEST LOGGING MIDDLEWARE
-// ==========================================================
-
-app.UseMiddleware<RequestLoggingMiddleware>();
+var app =
+    builder.Build();
 
 
-// ==========================================================
-// 20. GLOBAL EXCEPTION MIDDLEWARE
-// ==========================================================
+// =====================================================
+// 26. REQUEST LOGGING
+// =====================================================
 
-app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<
+    RequestLoggingMiddleware>();
 
 
-// ==========================================================
-// 21. SWAGGER
-// ==========================================================
+// =====================================================
+// 27. GLOBAL EXCEPTION
+// =====================================================
+
+app.UseMiddleware<
+    GlobalExceptionMiddleware>();
+
+
+// =====================================================
+// 28. SWAGGER
+// =====================================================
 
 if (app.Environment.IsDevelopment())
 {
@@ -473,53 +435,36 @@ if (app.Environment.IsDevelopment())
 }
 
 
-// ==========================================================
-// 22. HTTPS
-// ==========================================================
-
-// Hiện tại project chạy HTTP:
-//
-// API:
-// http://localhost:5136
-//
-// Blazor:
-// http://localhost:5107
-//
-// Tạm thời không bật:
-//
-// app.UseHttpsRedirection();
-
-
-// ==========================================================
-// 23. CORS
-// ==========================================================
+// =====================================================
+// 29. CORS
+// =====================================================
 
 app.UseCors("BlazorPolicy");
 
 
-// ==========================================================
-// 24. AUTHENTICATION
-// ==========================================================
+// =====================================================
+// 30. AUTHENTICATION
+// =====================================================
 
 app.UseAuthentication();
 
 
-// ==========================================================
-// 25. AUTHORIZATION
-// ==========================================================
+// =====================================================
+// 31. AUTHORIZATION
+// =====================================================
 
 app.UseAuthorization();
 
 
-// ==========================================================
-// 26. MAP CONTROLLERS
-// ==========================================================
+// =====================================================
+// 32. CONTROLLERS
+// =====================================================
 
 app.MapControllers();
 
 
-// ==========================================================
-// 27. RUN
-// ==========================================================
+// =====================================================
+// 33. RUN
+// =====================================================
 
 app.Run();

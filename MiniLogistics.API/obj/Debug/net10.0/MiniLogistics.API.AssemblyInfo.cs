@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MiniLogistics.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7e99dc2d1201e442144cb7cd6ea06d693607f4a2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4cbf5c3c576544383f8037b0967ed0f29d5c2e86")]
 [assembly: System.Reflection.AssemblyProductAttribute("MiniLogistics.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MiniLogistics.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
