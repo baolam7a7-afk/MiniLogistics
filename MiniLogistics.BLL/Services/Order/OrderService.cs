@@ -609,6 +609,12 @@ public class OrderService : IOrderService
                     }
 
                     // ========================================
+                    // RELEASE VOUCHER
+                    // ========================================
+
+                    await ReleaseVoucher(order.Id);
+
+                    // ========================================
                     // CANCEL PAYMENT
                     // ========================================
 
@@ -750,6 +756,12 @@ public class OrderService : IOrderService
                                 item.VariantId,
                                 item.Quantity);
                         }
+
+                        // ========================================
+                        // RELEASE VOUCHER
+                        // ========================================
+
+                        await ReleaseVoucher(order.Id);
 
                         // ========================================
                         // CANCEL PAYMENT
@@ -915,6 +927,41 @@ public class OrderService : IOrderService
             .Update(inventory);
 
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    // =====================================================
+    // RELEASE VOUCHER
+    // DÙNG KHI CANCEL ORDER
+    // =====================================================
+
+    private async Task ReleaseVoucher(
+        long orderId)
+    {
+        var orderVouchers =
+            await _unitOfWork.OrderVouchers
+                .FindAsync(
+                    x =>
+                        x.OrderId == orderId);
+
+        foreach (var orderVoucher in orderVouchers)
+        {
+            var voucher =
+                await _unitOfWork.Vouchers
+                    .GetByIdAsync(
+                        orderVoucher.VoucherId);
+
+            if (voucher != null &&
+                voucher.UsedCount > 0)
+            {
+                voucher.UsedCount--;
+
+                _unitOfWork.Vouchers
+                    .Update(voucher);
+            }
+
+            _unitOfWork.OrderVouchers
+                .Delete(orderVoucher);
+        }
     }
 
     // =====================================================

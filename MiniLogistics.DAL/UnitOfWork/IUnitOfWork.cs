@@ -44,6 +44,10 @@ public interface IUnitOfWork
     // ==========================================
 
     IRepository<Product> Products { get; }
+    IRepository<ProductImage> ProductImages { get; }
+    IRepository<Voucher> Vouchers { get; }
+
+IRepository<OrderVoucher> OrderVouchers { get; }
 
     IRepository<ProductVariant> ProductVariants { get; }
 

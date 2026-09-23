@@ -16,6 +16,8 @@ using MiniLogistics.BLL.Services.Product;
 using MiniLogistics.BLL.Services.Order;
 using MiniLogistics.BLL.Services.Shipment;
 using MiniLogistics.BLL.Services.Payment;
+using MiniLogistics.BLL.Services.ProductImage;
+using MiniLogistics.BLL.Services.Voucher;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
@@ -162,6 +164,11 @@ builder.Services.AddScoped<
     ProductVariantService
 >();
 
+builder.Services.AddScoped<
+    IProductImageService,
+    ProductImageService
+>();
+
 
 // ==========================================================
 // 8. DEPENDENCY INJECTION - CATEGORY SERVICE
@@ -258,6 +265,11 @@ builder.Services.AddScoped<
     PaymentService
 >();
 
+
+builder.Services.AddScoped<
+    IVoucherService,
+    VoucherService
+>();
 // ==========================================================
 // 13. JWT AUTHENTICATION
 // ==========================================================

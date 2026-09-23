@@ -91,6 +91,16 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Product> Products =>
         _products ??= new Repository<Product>(_context);
 
+    private IRepository<ProductImage>? _productImages;
+
+     public IRepository<ProductImage> ProductImages =>
+    _productImages ??=
+        new Repository<ProductImage>(_context);
+
+
+        private IRepository<Voucher>? _vouchers;
+    private IRepository<OrderVoucher>? _orderVouchers;
+
 
     // =====================================================
     // PRODUCT VARIANTS
@@ -180,6 +190,23 @@ public class UnitOfWork : IUnitOfWork
         _shipmentEvents ??= new Repository<ShipmentEvent>(_context);
 
         private IRepository<PaymentTransaction>? _paymentTransactions;
+
+        public IRepository<Voucher> Vouchers
+{
+    get
+    {
+        return _vouchers ??=
+            new Repository<Voucher>(_context);
+    }
+}
+public IRepository<OrderVoucher> OrderVouchers
+{
+    get
+    {
+        return _orderVouchers ??=
+            new Repository<OrderVoucher>(_context);
+    }
+}
 
 public IRepository<PaymentTransaction> PaymentTransactions =>
     _paymentTransactions ??=
