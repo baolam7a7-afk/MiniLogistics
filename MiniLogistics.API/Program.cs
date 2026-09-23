@@ -25,7 +25,18 @@ using MiniLogistics.BLL.Services.SupportMessage;
 using MiniLogistics.BLL.Services.Dispute;
 using MiniLogistics.BLL.Services.DisputeMessage;
 using MiniLogistics.BLL.Services.ReportSnapshot;
+using MiniLogistics.BLL.Services.Address;
+using MiniLogistics.BLL.Services.Shop;
 using MiniLogistics.BLL.Services.Voucher;
+
+// =====================================================
+// GROUP A
+// =====================================================
+
+using MiniLogistics.BLL.Services.ReturnRequest;
+using MiniLogistics.BLL.Services.RefundTransaction;
+using MiniLogistics.BLL.Services.ShopWallet;
+using MiniLogistics.BLL.Services.ShopWalletTransaction;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
@@ -253,17 +264,86 @@ builder.Services.AddScoped<
     ISupportMessageService,
     SupportMessageService>();
 
+
+// =====================================================
+// 20. DISPUTE
+// =====================================================
+
 builder.Services.AddScoped<
     IDisputeService,
     DisputeService>();
+
+
 builder.Services.AddScoped<
     IDisputeMessageService,
     DisputeMessageService>();
+
+
+// =====================================================
+// 21. REPORT SNAPSHOT
+// =====================================================
+
 builder.Services.AddScoped<
     IReportSnapshotService,
     ReportSnapshotService>();
+
+
 // =====================================================
-// 20. JWT AUTHENTICATION
+// 22. ADDRESS
+// =====================================================
+
+builder.Services.AddScoped<
+    IAddressService,
+    AddressService>();
+
+
+// =====================================================
+// 23. SHOP
+// =====================================================
+
+builder.Services.AddScoped<
+    IShopService,
+    ShopService>();
+
+
+// =====================================================
+// 24. GROUP A - RETURN REQUEST
+// =====================================================
+
+builder.Services.AddScoped<
+    IReturnRequestService,
+    ReturnRequestService>();
+
+
+// =====================================================
+// 25. GROUP A - REFUND TRANSACTION
+// =====================================================
+
+builder.Services.AddScoped<
+    IRefundTransactionService,
+    RefundTransactionService>();
+
+
+// =====================================================
+// 26. GROUP A - SHOP WALLET
+// =====================================================
+
+builder.Services.AddScoped<
+    IShopWalletService,
+    ShopWalletService>();
+
+
+// =====================================================
+// 27. GROUP A - SHOP WALLET TRANSACTION
+// =====================================================
+
+builder.Services.AddScoped<
+    IShopWalletTransactionService,
+    ShopWalletTransactionService>();
+
+
+// =====================================================
+// 28. JWT AUTHENTICATION
 // =====================================================
 
 var signingKey =
@@ -312,21 +392,21 @@ builder.Services
 
 
 // =====================================================
-// 21. AUTHORIZATION
+// 29. AUTHORIZATION
 // =====================================================
 
 builder.Services.AddAuthorization();
 
 
 // =====================================================
-// 22. CONTROLLERS
+// 30. CONTROLLERS
 // =====================================================
 
 builder.Services.AddControllers();
 
 
 // =====================================================
-// 23. CORS
+// 31. CORS
 // =====================================================
 
 var allowedOrigins =
@@ -358,7 +438,7 @@ builder.Services.AddCors(
 
 
 // =====================================================
-// 24. SWAGGER
+// 32. SWAGGER
 // =====================================================
 
 builder.Services.AddEndpointsApiExplorer();
@@ -400,7 +480,7 @@ builder.Services.AddSwaggerGen(
 
 
 // =====================================================
-// 25. BUILD
+// 33. BUILD
 // =====================================================
 
 var app =
@@ -408,7 +488,7 @@ var app =
 
 
 // =====================================================
-// 26. REQUEST LOGGING
+// 34. REQUEST LOGGING
 // =====================================================
 
 app.UseMiddleware<
@@ -416,7 +496,7 @@ app.UseMiddleware<
 
 
 // =====================================================
-// 27. GLOBAL EXCEPTION
+// 35. GLOBAL EXCEPTION
 // =====================================================
 
 app.UseMiddleware<
@@ -424,7 +504,7 @@ app.UseMiddleware<
 
 
 // =====================================================
-// 28. SWAGGER
+// 36. SWAGGER
 // =====================================================
 
 if (app.Environment.IsDevelopment())
@@ -436,35 +516,35 @@ if (app.Environment.IsDevelopment())
 
 
 // =====================================================
-// 29. CORS
+// 37. CORS
 // =====================================================
 
 app.UseCors("BlazorPolicy");
 
 
 // =====================================================
-// 30. AUTHENTICATION
+// 38. AUTHENTICATION
 // =====================================================
 
 app.UseAuthentication();
 
 
 // =====================================================
-// 31. AUTHORIZATION
+// 39. AUTHORIZATION
 // =====================================================
 
 app.UseAuthorization();
 
 
 // =====================================================
-// 32. CONTROLLERS
+// 40. CONTROLLERS
 // =====================================================
 
 app.MapControllers();
 
 
 // =====================================================
-// 33. RUN
+// 41. RUN
 // =====================================================
 
 app.Run();
