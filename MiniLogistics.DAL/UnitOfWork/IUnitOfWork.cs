@@ -71,6 +71,7 @@ public interface IUnitOfWork
     IRepository<OrderItem> OrderItems { get; }
 
     IRepository<OrderStatusLog> OrderStatusLogs { get; }
+    IRepository<PaymentTransaction> PaymentTransactions { get; }
 
     IRepository<Shipment> Shipments { get; }
 

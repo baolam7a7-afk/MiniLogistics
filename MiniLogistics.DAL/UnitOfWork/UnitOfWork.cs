@@ -179,6 +179,12 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<ShipmentEvent> ShipmentEvents =>
         _shipmentEvents ??= new Repository<ShipmentEvent>(_context);
 
+        private IRepository<PaymentTransaction>? _paymentTransactions;
+
+public IRepository<PaymentTransaction> PaymentTransactions =>
+    _paymentTransactions ??=
+        new Repository<PaymentTransaction>(_context);
+
 
     // =====================================================
     // SAVE CHANGES

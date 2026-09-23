@@ -46,7 +46,9 @@ public class OrderService : IOrderService
         // ================================================
 
         string paymentMethod =
-            request.PaymentMethod.Trim().ToLowerInvariant();
+            string.IsNullOrWhiteSpace(request.PaymentMethod)
+                ? "cod"
+                : request.PaymentMethod.Trim().ToLowerInvariant();
 
         if (paymentMethod != "cod")
         {
@@ -203,8 +205,8 @@ public class OrderService : IOrderService
                     // ------------------------------------
 
                     decimal lineTotal =
-                        variant.Price
-                        * requestItem.Quantity;
+                        variant.Price *
+                        requestItem.Quantity;
 
                     subtotal += lineTotal;
 
@@ -361,6 +363,41 @@ public class OrderService : IOrderService
                 }
 
                 // ========================================
+                // ADD PAYMENT
+                // ========================================
+
+                var payment =
+                    new PaymentTransaction
+                    {
+                        OrderId =
+                            order.Id,
+
+                        Provider =
+                            null,
+
+                        Method =
+                            paymentMethod,
+
+                        Amount =
+                            order.Total,
+
+                        Status =
+                            "pending",
+
+                        ProviderTxnId =
+                            null,
+
+                        PaidAt =
+                            null,
+
+                        CreatedAt =
+                            DateTime.UtcNow
+                    };
+
+                await _unitOfWork.PaymentTransactions
+                    .AddAsync(payment);
+
+                // ========================================
                 // STATUS LOG
                 // ========================================
 
@@ -388,6 +425,10 @@ public class OrderService : IOrderService
 
                 await _unitOfWork.OrderStatusLogs
                     .AddAsync(statusLog);
+
+                // ========================================
+                // SAVE ALL
+                // ========================================
 
                 await _unitOfWork.SaveChangesAsync();
 
@@ -567,6 +608,32 @@ public class OrderService : IOrderService
                             item.Quantity);
                     }
 
+                    // ========================================
+                    // CANCEL PAYMENT
+                    // ========================================
+
+                    var payments =
+                        await _unitOfWork.PaymentTransactions
+                            .FindAsync(
+                                x =>
+                                    x.OrderId
+                                    == order.Id);
+
+                    foreach (var payment in payments)
+                    {
+                        if (payment.Status == "pending")
+                        {
+                            payment.Status =
+                                "cancelled";
+
+                            payment.PaidAt =
+                                null;
+
+                            _unitOfWork.PaymentTransactions
+                                .Update(payment);
+                        }
+                    }
+
                     string oldStatus =
                         order.Status;
 
@@ -682,6 +749,32 @@ public class OrderService : IOrderService
                             await ReleaseInventory(
                                 item.VariantId,
                                 item.Quantity);
+                        }
+
+                        // ========================================
+                        // CANCEL PAYMENT
+                        // ========================================
+
+                        var payments =
+                            await _unitOfWork.PaymentTransactions
+                                .FindAsync(
+                                    x =>
+                                        x.OrderId
+                                        == order.Id);
+
+                        foreach (var payment in payments)
+                        {
+                            if (payment.Status == "pending")
+                            {
+                                payment.Status =
+                                    "cancelled";
+
+                                payment.PaidAt =
+                                    null;
+
+                                _unitOfWork.PaymentTransactions
+                                    .Update(payment);
+                            }
                         }
                     }
 

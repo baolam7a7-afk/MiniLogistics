@@ -33,6 +33,9 @@ public class ShipmentService : IShipmentService
                 "Request không được null.");
         }
 
+        actorRole =
+            actorRole.Trim().ToLowerInvariant();
+
         if (actorRole != "admin" &&
             actorRole != "seller")
         {
@@ -115,7 +118,7 @@ public class ShipmentService : IShipmentService
 
         await _unitOfWork.ShipmentEvents
             .AddAsync(
-                new ShipmentEvent
+                new ShipmentEventModel
                 {
                     ShipmentId = shipment.Id,
 
@@ -133,7 +136,6 @@ public class ShipmentService : IShipmentService
         return await BuildResponse(shipment);
     }
 
-
     // =====================================================
     // ASSIGN SHIPPER
     // ADMIN / SELLER
@@ -145,6 +147,9 @@ public class ShipmentService : IShipmentService
         string actorRole,
         AssignShipperDTO request)
     {
+        actorRole =
+            actorRole.Trim().ToLowerInvariant();
+
         if (actorRole != "admin" &&
             actorRole != "seller")
         {
@@ -249,7 +254,7 @@ public class ShipmentService : IShipmentService
 
         await _unitOfWork.ShipmentEvents
             .AddAsync(
-                new ShipmentEvent
+                new ShipmentEventModel
                 {
                     ShipmentId =
                         shipment.Id,
@@ -270,7 +275,6 @@ public class ShipmentService : IShipmentService
 
         return await BuildResponse(shipment);
     }
-
 
     // =====================================================
     // GET ALL
@@ -295,7 +299,6 @@ public class ShipmentService : IShipmentService
 
         return result;
     }
-
 
     // =====================================================
     // GET MY SHIPMENTS
@@ -322,7 +325,6 @@ public class ShipmentService : IShipmentService
         return result;
     }
 
-
     // =====================================================
     // GET BY ID
     // =====================================================
@@ -333,6 +335,9 @@ public class ShipmentService : IShipmentService
             long userId,
             string role)
     {
+        role =
+            role.Trim().ToLowerInvariant();
+
         var shipment =
             await _unitOfWork.Shipments
                 .GetByIdAsync(shipmentId);
@@ -379,7 +384,6 @@ public class ShipmentService : IShipmentService
 
         return await BuildResponse(shipment);
     }
-
 
     // =====================================================
     // UPDATE SHIPMENT STATUS
@@ -445,18 +449,118 @@ public class ShipmentService : IShipmentService
                 DateTime.UtcNow;
         }
 
+        // =================================================
+        // DELIVERED
+        // =================================================
+
         if (newStatus == "delivered")
         {
             shipment.DeliveredAt =
                 DateTime.UtcNow;
+
+            // =============================================
+            // GET ORDER
+            // =============================================
+
+            var order =
+                await _unitOfWork.Orders
+                    .GetByIdAsync(shipment.OrderId);
+
+            if (order == null)
+            {
+                throw new NotFoundException(
+                    "Order của Shipment không tồn tại.");
+            }
+
+            // =============================================
+            // COD PAYMENT
+            // =============================================
+
+            if (order.PaymentMethod == "cod")
+            {
+                var payments =
+                    await _unitOfWork.PaymentTransactions
+                        .FindAsync(
+                            x =>
+                                x.OrderId
+                                == order.Id);
+
+                var payment =
+                    payments
+                        .OrderByDescending(
+                            x => x.CreatedAt)
+                        .FirstOrDefault();
+
+                // -----------------------------------------
+                // OLD ORDER WITHOUT PAYMENT
+                // -----------------------------------------
+
+                if (payment == null)
+                {
+                    payment =
+                        new PaymentTransaction
+                        {
+                            OrderId =
+                                order.Id,
+
+                            Provider =
+                                null,
+
+                            Method =
+                                "cod",
+
+                            Amount =
+                                order.Total,
+
+                            Status =
+                                "paid",
+
+                            ProviderTxnId =
+                                null,
+
+                            PaidAt =
+                                DateTime.UtcNow,
+
+                            CreatedAt =
+                                DateTime.UtcNow
+                        };
+
+                    await _unitOfWork.PaymentTransactions
+                        .AddAsync(payment);
+                }
+
+                // -----------------------------------------
+                // CURRENT PAYMENT = PENDING
+                // -----------------------------------------
+
+                else if (payment.Status == "pending")
+                {
+                    payment.Status =
+                        "paid";
+
+                    payment.PaidAt =
+                        DateTime.UtcNow;
+
+                    _unitOfWork.PaymentTransactions
+                        .Update(payment);
+                }
+            }
         }
+
+        // ================================================
+        // UPDATE SHIPMENT
+        // ================================================
 
         _unitOfWork.Shipments
             .Update(shipment);
 
+        // ================================================
+        // SHIPMENT EVENT
+        // ================================================
+
         await _unitOfWork.ShipmentEvents
             .AddAsync(
-                new ShipmentEvent
+                new ShipmentEventModel
                 {
                     ShipmentId =
                         shipment.Id,
@@ -480,39 +584,45 @@ public class ShipmentService : IShipmentService
                         DateTime.UtcNow
                 });
 
+        // ================================================
+        // SAVE SHIPMENT + EVENT + PAYMENT
+        // ================================================
+
         await _unitOfWork.SaveChangesAsync();
 
         return await BuildResponse(shipment);
     }
-
 
     // =====================================================
     // CHECK USER HAS SHIPPER ROLE
     // =====================================================
 
     private async Task<bool> IsShipperUser(long userId)
-{
-    var userRoles = await _unitOfWork.UserRoles.FindAsync(
-        x => x.UserId == userId);
-
-    foreach (var userRole in userRoles)
     {
-        var role = await _unitOfWork.Roles.GetByIdAsync(
-            userRole.RoleId);
+        var userRoles =
+            await _unitOfWork.UserRoles
+                .FindAsync(
+                    x => x.UserId == userId);
 
-        if (role != null &&
-            string.Equals(
-                role.Name,
-                "shipper",
-                StringComparison.OrdinalIgnoreCase))
+        foreach (var userRole in userRoles)
         {
-            return true;
+            var role =
+                await _unitOfWork.Roles
+                    .GetByIdAsync(
+                        userRole.RoleId);
+
+            if (role != null &&
+                string.Equals(
+                    role.Name,
+                    "shipper",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
+
+        return false;
     }
-
-    return false;
-}
-
 
     // =====================================================
     // STATUS TRANSITION
@@ -522,6 +632,12 @@ public class ShipmentService : IShipmentService
         string currentStatus,
         string newStatus)
     {
+        currentStatus =
+            currentStatus.Trim().ToLowerInvariant();
+
+        newStatus =
+            newStatus.Trim().ToLowerInvariant();
+
         if (currentStatus == "created" &&
             newStatus == "assigned")
         {
@@ -550,7 +666,6 @@ public class ShipmentService : IShipmentService
             $"Không thể chuyển Shipment từ " +
             $"'{currentStatus}' sang '{newStatus}'.");
     }
-
 
     // =====================================================
     // BUILD RESPONSE
@@ -618,24 +733,25 @@ public class ShipmentService : IShipmentService
             Events =
                 events
                     .OrderBy(x => x.CreatedAt)
-                    .Select(x =>
-                        new ShipmentEventResponseDTO
-                        {
-                            Id =
-                                x.Id,
+                    .Select(
+                        x =>
+                            new ShipmentEventResponseDTO
+                            {
+                                Id =
+                                    x.Id,
 
-                            Status =
-                                x.Status,
+                                Status =
+                                    x.Status,
 
-                            Location =
-                                x.Location,
+                                Location =
+                                    x.Location,
 
-                            Note =
-                                x.Note,
+                                Note =
+                                    x.Note,
 
-                            CreatedAt =
-                                x.CreatedAt
-                        })
+                                CreatedAt =
+                                    x.CreatedAt
+                            })
                     .ToList()
         };
     }

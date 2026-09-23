@@ -15,6 +15,7 @@ using MiniLogistics.BLL.Services.Cart;
 using MiniLogistics.BLL.Services.Product;
 using MiniLogistics.BLL.Services.Order;
 using MiniLogistics.BLL.Services.Shipment;
+using MiniLogistics.BLL.Services.Payment;
 
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Repositories;
@@ -248,7 +249,14 @@ builder.Services.AddScoped<
     IShipmentService,
     ShipmentService
 >();
+// ==========================================================
+// 13. DEPENDENCY INJECTION - PAYMENT SERVICE
+// ==========================================================
 
+builder.Services.AddScoped<
+    IPaymentService,
+    PaymentService
+>();
 
 // ==========================================================
 // 13. JWT AUTHENTICATION
