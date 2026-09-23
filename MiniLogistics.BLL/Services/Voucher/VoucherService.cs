@@ -266,7 +266,7 @@ public class VoucherService : IVoucherService
             CreatedAt = DateTime.UtcNow
         };
 
-        _unitOfWork.Vouchers.AddAsync(voucher);
+        await _unitOfWork.Vouchers.AddAsync(voucher);
 
         await _unitOfWork.SaveChangesAsync();
 
