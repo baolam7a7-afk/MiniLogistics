@@ -484,14 +484,26 @@ public class RefundTransactionService
             long adminUserId,
             long refundId)
     {
+        // =====================================================
+        // 1. LẤY REFUND
+        // =====================================================
+
         var refund =
             await GetRefundOrThrowAsync(
                 refundId);
 
 
+        // =====================================================
+        // 2. KIỂM TRA ADMIN
+        // =====================================================
+
         await ValidateAdminAsync(
             adminUserId);
 
+
+        // =====================================================
+        // 3. REFUND PHẢI ĐANG PENDING
+        // =====================================================
 
         var status =
             refund.Status
@@ -506,20 +518,9 @@ public class RefundTransactionService
         }
 
 
-        refund.Status =
-            "done";
-
-        refund.CompletedAt =
-            DateTime.UtcNow;
-
-
-        _unitOfWork.RefundTransactions
-            .Update(refund);
-
-
-        await _unitOfWork
-            .SaveChangesAsync();
-
+        // =====================================================
+        // 4. LẤY RETURN REQUEST
+        // =====================================================
 
         var returnRequest =
             await _unitOfWork.ReturnRequests
@@ -533,6 +534,10 @@ public class RefundTransactionService
         }
 
 
+        // =====================================================
+        // 5. LẤY ORDER
+        // =====================================================
+
         var order =
             await _unitOfWork.Orders
                 .GetByIdAsync(
@@ -545,15 +550,102 @@ public class RefundTransactionService
         }
 
 
-        return await BuildResponseAsync(
-            refund,
-            order);
+        // =====================================================
+        // 6. LẤY SHOP WALLET
+        // =====================================================
+
+        var wallets =
+            await _unitOfWork.ShopWallets
+                .FindAsync(
+                    x => x.ShopId == order.ShopId);
+
+        var shopWallet =
+            wallets.FirstOrDefault();
+
+        if (shopWallet == null)
+        {
+            throw new NotFoundException(
+                $"Shop {order.ShopId} chưa có ShopWallet.");
+        }
+
+
+        // =====================================================
+        // 7. KIỂM TRA SỐ DƯ
+        // =====================================================
+
+        if (shopWallet.Balance < refund.Amount)
+        {
+            throw new BadRequestException(
+                $"ShopWallet không đủ số dư để hoàn tiền. " +
+                $"Balance hiện tại: {shopWallet.Balance}, " +
+                $"Refund: {refund.Amount}.");
+        }
+
+
+        // =====================================================
+        // 8. THỰC HIỆN TOÀN BỘ TRONG 1 TRANSACTION
+        // =====================================================
+
+        return await _unitOfWork.ExecuteInTransactionAsync(
+            async () =>
+            {
+                // ---------------------------------------------
+                // 8.1. TRỪ TIỀN SHOP WALLET
+                // ---------------------------------------------
+
+                shopWallet.Balance -= refund.Amount;
+                shopWallet.UpdatedAt = DateTime.UtcNow;
+
+                _unitOfWork.ShopWallets
+                    .Update(shopWallet);
+
+
+                // ---------------------------------------------
+                // 8.2. TẠO WALLET TRANSACTION
+                // ---------------------------------------------
+
+                var walletTransaction =
+                    new MiniLogistics.DAL.Models.ShopWalletTransaction
+                    {
+                        WalletId = shopWallet.Id,
+                        OrderId = order.Id,
+                        Type = "REFUND_DEBIT",
+                        Amount = refund.Amount,
+                        Description =
+                            $"Refund transaction #{refund.Id}",
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                await _unitOfWork.ShopWalletTransactions
+                    .AddAsync(walletTransaction);
+
+
+                // ---------------------------------------------
+                // 8.3. COMPLETE REFUND
+                // ---------------------------------------------
+
+                refund.Status = "done";
+                refund.CompletedAt = DateTime.UtcNow;
+
+                _unitOfWork.RefundTransactions
+                    .Update(refund);
+
+
+                // ---------------------------------------------
+                // 8.4. TRẢ RESPONSE
+                // ---------------------------------------------
+
+                return await BuildResponseAsync(
+                    refund,
+                    order);
+            });
     }
 
 
     // =====================================================
     // FAIL
     // =====================================================
+
 
     public async Task<
         RefundTransactionResponseDTO>

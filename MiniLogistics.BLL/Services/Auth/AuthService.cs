@@ -11,7 +11,10 @@ using Microsoft.IdentityModel.Tokens;
 
 using MiniLogistics.BLL.DTOs.Auth;
 using MiniLogistics.DAL.Data;
-using MiniLogistics.DAL.Models;
+
+using UserModel = MiniLogistics.DAL.Models.User;
+using UserRoleModel = MiniLogistics.DAL.Models.UserRole;
+using UserSessionModel = MiniLogistics.DAL.Models.UserSession;
 
 namespace MiniLogistics.BLL.Services.Auth;
 
@@ -31,12 +34,14 @@ public class AuthService : IAuthService
     // =====================================================
     // 1. REGISTER
     // =====================================================
+
     public async Task<AuthResponseDTO> RegisterAsync(
         RegisterRequestDTO request)
     {
         if (request == null)
         {
-            throw new ArgumentNullException(nameof(request));
+            throw new ArgumentNullException(
+                nameof(request));
         }
 
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -57,11 +62,13 @@ public class AuthService : IAuthService
                 "Họ tên không được để trống.");
         }
 
-        string email = request.Email
-            .Trim()
-            .ToLowerInvariant();
+        string email =
+            request.Email
+                .Trim()
+                .ToLowerInvariant();
 
-        string fullName = request.FullName.Trim();
+        string fullName =
+            request.FullName.Trim();
 
         if (request.Password.Length < 8)
         {
@@ -69,9 +76,14 @@ public class AuthService : IAuthService
                 "Mật khẩu phải có ít nhất 8 ký tự.");
         }
 
-        // Kiểm tra email đã tồn tại
-        bool emailExists = await _context.Users
-            .AnyAsync(x => x.Email == email);
+        // =================================================
+        // KIỂM TRA EMAIL
+        // =================================================
+
+        bool emailExists =
+            await _context.Users
+                .AnyAsync(
+                    x => x.Email == email);
 
         if (emailExists)
         {
@@ -81,11 +93,12 @@ public class AuthService : IAuthService
 
         // =================================================
         // TÌM ROLE CUSTOMER
-        // Database của bạn dùng:
-        // admin, seller, customer, shipper
         // =================================================
-        var customerRole = await _context.Roles
-            .FirstOrDefaultAsync(x => x.Name == "customer");
+
+        var customerRole =
+            await _context.Roles
+                .FirstOrDefaultAsync(
+                    x => x.Name == "customer");
 
         if (customerRole == null)
         {
@@ -93,7 +106,10 @@ public class AuthService : IAuthService
                 "Role customer chưa tồn tại trong Database.");
         }
 
-        // Hash mật khẩu
+        // =================================================
+        // HASH PASSWORD
+        // =================================================
+
         string passwordHash =
             BCrypt.Net.BCrypt.HashPassword(
                 request.Password);
@@ -101,52 +117,69 @@ public class AuthService : IAuthService
         // =================================================
         // TẠO USER
         // =================================================
-        var user = new User
-        {
-            Email = email,
 
-            PasswordHash = passwordHash,
+        var user =
+            new UserModel
+            {
+                Email = email,
 
-            Phone = string.IsNullOrWhiteSpace(request.Phone)
-                ? null
-                : request.Phone.Trim(),
+                PasswordHash =
+                    passwordHash,
 
-            FullName = fullName,
+                Phone =
+                    string.IsNullOrWhiteSpace(
+                        request.Phone)
+                        ? null
+                        : request.Phone.Trim(),
 
-            Status = "active",
+                FullName =
+                    fullName,
 
-            CreatedAt = DateTime.UtcNow
-        };
+                Status =
+                    "active",
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
 
         _context.Users.Add(user);
 
-        // Lưu User trước để có User.Id
+        // Lưu User trước
+        // để Database sinh User.Id
+
         await _context.SaveChangesAsync();
 
         // =================================================
-        // GÁN ROLE CUSTOMER CHO USER
+        // GÁN ROLE CUSTOMER
         // =================================================
-        var userRole = new UserRole
-        {
-            UserId = user.Id,
 
-            RoleId = customerRole.Id,
+        var userRole =
+            new UserRoleModel
+            {
+                UserId =
+                    user.Id,
 
-            AssignedAt = DateTime.UtcNow
-        };
+                RoleId =
+                    customerRole.Id,
+
+                AssignedAt =
+                    DateTime.UtcNow
+            };
 
         _context.UserRoles.Add(userRole);
 
         await _context.SaveChangesAsync();
 
         // =================================================
-        // LOAD LẠI USER KÈM ROLE
-        // Đây là phần code cũ của bạn đang thiếu
+        // LOAD LẠI USER + ROLE
         // =================================================
-        var userWithRoles = await _context.Users
-            .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x => x.Id == user.Id);
+
+        var userWithRoles =
+            await _context.Users
+                .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+                .FirstOrDefaultAsync(
+                    x => x.Id == user.Id);
 
         if (userWithRoles == null)
         {
@@ -154,20 +187,26 @@ public class AuthService : IAuthService
                 "Không thể tải lại User sau khi đăng ký.");
         }
 
-        // Tạo Access Token và Refresh Token
+        // =================================================
+        // TẠO AUTH RESPONSE
+        // =================================================
+
         return await CreateAuthResponseAsync(
             userWithRoles);
     }
 
+
     // =====================================================
     // 2. LOGIN
     // =====================================================
+
     public async Task<AuthResponseDTO> LoginAsync(
         LoginRequestDTO request)
     {
         if (request == null)
         {
-            throw new ArgumentNullException(nameof(request));
+            throw new ArgumentNullException(
+                nameof(request));
         }
 
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -182,15 +221,21 @@ public class AuthService : IAuthService
                 "Mật khẩu không được để trống.");
         }
 
-        string email = request.Email
-            .Trim()
-            .ToLowerInvariant();
+        string email =
+            request.Email
+                .Trim()
+                .ToLowerInvariant();
 
-        // Load User cùng UserRoles và Role
-        var user = await _context.Users
-            .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x => x.Email == email);
+        // =================================================
+        // LOAD USER + ROLE
+        // =================================================
+
+        var user =
+            await _context.Users
+                .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+                .FirstOrDefaultAsync(
+                    x => x.Email == email);
 
         if (user == null)
         {
@@ -198,11 +243,19 @@ public class AuthService : IAuthService
                 "Email hoặc mật khẩu không đúng.");
         }
 
+        // =================================================
+        // CHECK STATUS
+        // =================================================
+
         if (user.Status != "active")
         {
             throw new Exception(
                 "Tài khoản hiện không hoạt động.");
         }
+
+        // =================================================
+        // VERIFY PASSWORD
+        // =================================================
 
         bool passwordValid =
             BCrypt.Net.BCrypt.Verify(
@@ -215,30 +268,63 @@ public class AuthService : IAuthService
                 "Email hoặc mật khẩu không đúng.");
         }
 
-        return await CreateAuthResponseAsync(user);
+        // =================================================
+        // CREATE AUTH RESPONSE
+        // =================================================
+
+        return await CreateAuthResponseAsync(
+            user);
     }
+
 
     // =====================================================
     // 3. CREATE AUTH RESPONSE
     // =====================================================
-    private async Task<AuthResponseDTO> CreateAuthResponseAsync(
-        User user)
+
+    private async Task<AuthResponseDTO>
+        CreateAuthResponseAsync(
+            UserModel user)
     {
-        var roles = user.UserRoles?
-            .Where(x => x.Role != null)
-            .Select(x => x.Role.Name)
-            .ToList()
+        // =================================================
+        // LẤY ROLE
+        // =================================================
+
+        var roles =
+            user.UserRoles?
+                .Where(
+                    x => x.Role != null)
+                .Select(
+                    x => x.Role.Name)
+                .ToList()
             ?? new List<string>();
 
+        // =================================================
+        // ACCESS TOKEN
+        // =================================================
+
         string accessToken =
-            GenerateAccessToken(user, roles);
+            GenerateAccessToken(
+                user,
+                roles);
+
+        // =================================================
+        // REFRESH TOKEN
+        // =================================================
 
         string refreshToken =
             GenerateRefreshToken();
 
+        // =================================================
+        // HASH REFRESH TOKEN
+        // =================================================
+
         string refreshTokenHash =
             BCrypt.Net.BCrypt.HashPassword(
                 refreshToken);
+
+        // =================================================
+        // TOKEN EXPIRATION
+        // =================================================
 
         DateTime accessTokenExpiresAt =
             DateTime.UtcNow.AddMinutes(
@@ -248,67 +334,101 @@ public class AuthService : IAuthService
             DateTime.UtcNow.AddDays(
                 _jwtSettings.RefreshTokenDays);
 
-        // Chỉ lưu hash của refresh token
-        var session = new UserSession
-        {
-            UserId = user.Id,
+        // =================================================
+        // CREATE USER SESSION
+        // =================================================
 
-            RefreshTokenHash = refreshTokenHash,
+        var session =
+            new UserSessionModel
+            {
+                UserId =
+                    user.Id,
 
-            CreatedAt = DateTime.UtcNow,
+                RefreshTokenHash =
+                    refreshTokenHash,
 
-            ExpiresAt = refreshTokenExpiresAt,
+                CreatedAt =
+                    DateTime.UtcNow,
 
-            RevokedAt = null
-        };
+                ExpiresAt =
+                    refreshTokenExpiresAt,
 
-        _context.UserSessions.Add(session);
+                RevokedAt =
+                    null
+            };
+
+        _context.UserSessions.Add(
+            session);
 
         await _context.SaveChangesAsync();
 
+        // =================================================
+        // RESPONSE
+        // =================================================
+
         return new AuthResponseDTO
         {
-            UserId = user.Id,
+            UserId =
+                user.Id,
 
-            Email = user.Email,
+            Email =
+                user.Email,
 
-            FullName = user.FullName ?? string.Empty,
+            FullName =
+                user.FullName
+                ?? string.Empty,
 
-            Roles = roles,
+            Roles =
+                roles,
 
-            AccessToken = accessToken,
+            AccessToken =
+                accessToken,
 
-            RefreshToken = refreshToken,
+            RefreshToken =
+                refreshToken,
 
-            AccessTokenExpiresAt = accessTokenExpiresAt,
+            AccessTokenExpiresAt =
+                accessTokenExpiresAt,
 
-            RefreshTokenExpiresAt = refreshTokenExpiresAt
+            RefreshTokenExpiresAt =
+                refreshTokenExpiresAt
         };
     }
+
 
     // =====================================================
     // 4. GENERATE ACCESS TOKEN
     // =====================================================
+
     private string GenerateAccessToken(
-        User user,
+        UserModel user,
         List<string> roles)
     {
-        var claims = new List<Claim>
-        {
-            new Claim(
-                ClaimTypes.NameIdentifier,
-                user.Id.ToString()),
+        // =================================================
+        // CLAIMS
+        // =================================================
 
-            new Claim(
-                ClaimTypes.Email,
-                user.Email),
+        var claims =
+            new List<Claim>
+            {
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    user.Id.ToString()),
 
-            new Claim(
-                ClaimTypes.Name,
-                user.FullName ?? user.Email)
-        };
+                new Claim(
+                    ClaimTypes.Email,
+                    user.Email),
 
-        // Thêm Role vào JWT
+                new Claim(
+                    ClaimTypes.Name,
+                    user.FullName
+                    ?? user.Email)
+            };
+
+        // =================================================
+        // ROLE CLAIMS
+        // =================================================
+
         foreach (string role in roles)
         {
             claims.Add(
@@ -317,75 +437,123 @@ public class AuthService : IAuthService
                     role));
         }
 
-        if (string.IsNullOrWhiteSpace(_jwtSettings.Key))
+        // =================================================
+        // CHECK JWT KEY
+        // =================================================
+
+        if (string.IsNullOrWhiteSpace(
+            _jwtSettings.Key))
         {
             throw new Exception(
                 "Jwt:Key không được để trống.");
         }
 
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(
-                _jwtSettings.Key));
+        // =================================================
+        // SIGNING KEY
+        // =================================================
 
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
+        var key =
+            new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(
+                    _jwtSettings.Key));
 
-        var token = new JwtSecurityToken(
-            issuer: _jwtSettings.Issuer,
+        // =================================================
+        // SIGNING CREDENTIALS
+        // =================================================
 
-            audience: _jwtSettings.Audience,
+        var credentials =
+            new SigningCredentials(
+                key,
+                SecurityAlgorithms.HmacSha256);
 
-            claims: claims,
+        // =================================================
+        // CREATE JWT
+        // =================================================
 
-            expires: DateTime.UtcNow.AddMinutes(
-                _jwtSettings.AccessTokenMinutes),
+        var token =
+            new JwtSecurityToken(
+                issuer:
+                    _jwtSettings.Issuer,
 
-            signingCredentials: credentials);
+                audience:
+                    _jwtSettings.Audience,
+
+                claims:
+                    claims,
+
+                expires:
+                    DateTime.UtcNow.AddMinutes(
+                        _jwtSettings.AccessTokenMinutes),
+
+                signingCredentials:
+                    credentials);
+
+        // =================================================
+        // RETURN TOKEN
+        // =================================================
 
         return new JwtSecurityTokenHandler()
             .WriteToken(token);
     }
 
+
     // =====================================================
     // 5. GENERATE REFRESH TOKEN
     // =====================================================
+
     private string GenerateRefreshToken()
     {
         byte[] randomBytes =
-            RandomNumberGenerator.GetBytes(64);
+            RandomNumberGenerator.GetBytes(
+                64);
 
         return Convert.ToBase64String(
             randomBytes);
     }
 
+
     // =====================================================
     // 6. REFRESH TOKEN
     // =====================================================
-    public async Task<AuthResponseDTO> RefreshTokenAsync(
-        RefreshTokenRequestDTO request)
+
+    public async Task<AuthResponseDTO>
+        RefreshTokenAsync(
+            RefreshTokenRequestDTO request)
     {
         if (request == null)
         {
-            throw new ArgumentNullException(nameof(request));
+            throw new ArgumentNullException(
+                nameof(request));
         }
 
-        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        if (string.IsNullOrWhiteSpace(
+            request.RefreshToken))
         {
             throw new Exception(
                 "Refresh Token không được để trống.");
         }
 
-        var sessions = await _context.UserSessions
-            .Include(x => x.User)
-            .ThenInclude(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .Where(x =>
-                x.RevokedAt == null &&
-                x.ExpiresAt > DateTime.UtcNow)
-            .ToListAsync();
+        // =================================================
+        // LOAD SESSION
+        // =================================================
 
-        UserSession? matchedSession = null;
+        var sessions =
+            await _context.UserSessions
+                .Include(x => x.User)
+                .ThenInclude(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+                .Where(
+                    x =>
+                        x.RevokedAt == null &&
+                        x.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+
+        UserSessionModel? matchedSession =
+            null;
+
+        // =================================================
+        // FIND MATCHED SESSION
+        // =================================================
 
         foreach (var session in sessions)
         {
@@ -396,10 +564,16 @@ public class AuthService : IAuthService
 
             if (valid)
             {
-                matchedSession = session;
+                matchedSession =
+                    session;
+
                 break;
             }
         }
+
+        // =================================================
+        // SESSION NOT FOUND
+        // =================================================
 
         if (matchedSession == null)
         {
@@ -407,11 +581,19 @@ public class AuthService : IAuthService
                 "Refresh Token không hợp lệ hoặc đã hết hạn.");
         }
 
+        // =================================================
+        // USER NOT FOUND
+        // =================================================
+
         if (matchedSession.User == null)
         {
             throw new Exception(
                 "Không tìm thấy User của Refresh Token.");
         }
+
+        // =================================================
+        // CHECK USER STATUS
+        // =================================================
 
         if (matchedSession.User.Status != "active")
         {
@@ -419,34 +601,53 @@ public class AuthService : IAuthService
                 "Tài khoản hiện không hoạt động.");
         }
 
-        // Thu hồi refresh token cũ
+        // =================================================
+        // REVOKE OLD REFRESH TOKEN
+        // =================================================
+
         matchedSession.RevokedAt =
             DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
-        // Tạo token mới
+        // =================================================
+        // CREATE NEW TOKEN
+        // =================================================
+
         return await CreateAuthResponseAsync(
             matchedSession.User);
     }
 
+
     // =====================================================
     // 7. LOGOUT
     // =====================================================
+
     public async Task LogoutAsync(
         LogoutRequestDTO request)
     {
         if (request == null ||
-            string.IsNullOrWhiteSpace(request.RefreshToken))
+            string.IsNullOrWhiteSpace(
+                request.RefreshToken))
         {
             return;
         }
 
-        var sessions = await _context.UserSessions
-            .Where(x =>
-                x.RevokedAt == null &&
-                x.ExpiresAt > DateTime.UtcNow)
-            .ToListAsync();
+        // =================================================
+        // LOAD ACTIVE SESSIONS
+        // =================================================
+
+        var sessions =
+            await _context.UserSessions
+                .Where(
+                    x =>
+                        x.RevokedAt == null &&
+                        x.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+
+        // =================================================
+        // FIND REFRESH TOKEN
+        // =================================================
 
         foreach (var session in sessions)
         {
