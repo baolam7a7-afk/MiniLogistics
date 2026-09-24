@@ -1,6 +1,9 @@
 using MiniLogistics.BLL.DTOs.ProductVariant;
-using MiniLogistics.DAL.Models;
+using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
+
+using ProductModel = MiniLogistics.DAL.Models.Product;
+using ProductVariantModel = MiniLogistics.DAL.Models.ProductVariant;
 using InventoryModel = MiniLogistics.DAL.Models.Inventory;
 
 namespace MiniLogistics.BLL.Services;
@@ -53,8 +56,16 @@ public class ProductVariantService : IProductVariantService
     // GET BY ID
     // =====================================================
 
-    public async Task<ProductVariantResponseDTO?> GetByIdAsync(long id)
+    public async Task<ProductVariantResponseDTO?> GetByIdAsync(
+        long id)
     {
+        if (id <= 0)
+        {
+            throw new BadRequestException(
+                "ProductVariant ID không hợp lệ."
+            );
+        }
+
         var variant =
             await _unitOfWork.ProductVariants.GetByIdAsync(id);
 
@@ -85,9 +96,17 @@ public class ProductVariantService : IProductVariantService
     public async Task<IEnumerable<ProductVariantResponseDTO>>
         GetByProductIdAsync(long productId)
     {
+        if (productId <= 0)
+        {
+            throw new BadRequestException(
+                "ProductId không hợp lệ."
+            );
+        }
+
         var variants =
             await _unitOfWork.ProductVariants.FindAsync(
-                variant => variant.ProductId == productId
+                variant =>
+                    variant.ProductId == productId
             );
 
         var result =
@@ -97,7 +116,9 @@ public class ProductVariantService : IProductVariantService
         {
             var inventories =
                 await _unitOfWork.Inventories.FindAsync(
-                    x => x.ProductVariantId == variant.Id
+                    x =>
+                        x.ProductVariantId ==
+                        variant.Id
                 );
 
             var inventory =
@@ -120,10 +141,38 @@ public class ProductVariantService : IProductVariantService
     // =====================================================
 
     public async Task<ProductVariantResponseDTO> CreateAsync(
+        long userId,
         CreateProductVariantDTO request)
     {
+        if (userId <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ."
+            );
+        }
+
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống."
+            );
+        }
+
+
         // -------------------------------------------------
-        // 1. Kiểm tra Product tồn tại
+        // 1. Validate ProductId
+        // -------------------------------------------------
+
+        if (request.ProductId <= 0)
+        {
+            throw new BadRequestException(
+                "ProductId không hợp lệ."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 2. Tìm Product
         // -------------------------------------------------
 
         var product =
@@ -133,68 +182,122 @@ public class ProductVariantService : IProductVariantService
 
         if (product == null)
         {
-            throw new KeyNotFoundException(
+            throw new NotFoundException(
                 $"Product với ID {request.ProductId} không tồn tại."
             );
         }
 
 
         // -------------------------------------------------
-        // 2. Validate Price
+        // 3. Kiểm tra quyền Seller với Shop
+        // -------------------------------------------------
+
+        await CheckProductShopAccessAsync(
+            product,
+            userId
+        );
+
+
+        // -------------------------------------------------
+        // 4. Validate SKU
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Sku))
+        {
+            throw new BadRequestException(
+                "SKU không được để trống."
+            );
+        }
+
+        var sku =
+            request.Sku.Trim();
+
+        var existingVariants =
+            await _unitOfWork.ProductVariants.FindAsync(
+                x =>
+                    x.Sku != null &&
+                    x.Sku.ToLower() == sku.ToLower()
+            );
+
+        if (existingVariants.Any())
+        {
+            throw new BadRequestException(
+                $"SKU '{sku}' đã tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 5. Validate Price
         // -------------------------------------------------
 
         if (request.Price < 0)
         {
-            throw new ArgumentException(
+            throw new BadRequestException(
                 "Price không được nhỏ hơn 0."
             );
         }
 
 
         // -------------------------------------------------
-        // 3. Tạo ProductVariant
+        // 6. Tạo ProductVariant
         // -------------------------------------------------
 
-        var variant = new ProductVariant
-        {
-            ProductId = request.ProductId,
+        var variant =
+            new ProductVariantModel
+            {
+                ProductId =
+                    request.ProductId,
 
-            Sku = request.Sku,
+                Sku =
+                    sku,
 
-            VariantName = request.VariantName,
+                VariantName =
+                    request.VariantName,
 
-            AttributesJson = request.AttributesJson,
+                AttributesJson =
+                    request.AttributesJson,
 
-            Price = request.Price,
+                Price =
+                    request.Price,
 
-            IsActive = request.IsActive,
+                IsActive =
+                    request.IsActive,
 
-            CreatedAt = DateTime.UtcNow,
+                CreatedAt =
+                    DateTime.UtcNow,
 
-            UpdatedAt = null
-        };
-
-
-        // -------------------------------------------------
-        // 4. Tạo Inventory cho ProductVariant
-        // -------------------------------------------------
-
-        var inventory = new InventoryModel
-        {
-            ProductVariant = variant,
-
-            Quantity = 0,
-
-            ReservedQuantity = 0,
-
-            CreatedAt = DateTime.UtcNow,
-
-            UpdatedAt = null
-        };
+                UpdatedAt =
+                    null
+            };
 
 
         // -------------------------------------------------
-        // 5. Add ProductVariant
+        // 7. Tạo Inventory
+        // -------------------------------------------------
+
+        var inventory =
+            new InventoryModel
+            {
+                ProductVariant =
+                    variant,
+
+                Quantity =
+                    0,
+
+                ReservedQuantity =
+                    0,
+
+                CreatedAt =
+                    DateTime.UtcNow,
+
+                UpdatedAt =
+                    null
+            };
+
+
+        // -------------------------------------------------
+        // 8. Add ProductVariant
         // -------------------------------------------------
 
         await _unitOfWork.ProductVariants.AddAsync(
@@ -203,7 +306,7 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 6. Add Inventory
+        // 9. Add Inventory
         // -------------------------------------------------
 
         await _unitOfWork.Inventories.AddAsync(
@@ -212,14 +315,14 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 7. Save Database
+        // 10. Save
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         // -------------------------------------------------
-        // 8. Trả response
+        // 11. Response
         // -------------------------------------------------
 
         return MapToResponseDTO(
@@ -234,15 +337,40 @@ public class ProductVariantService : IProductVariantService
     // =====================================================
 
     public async Task<ProductVariantResponseDTO?> UpdateAsync(
+        long userId,
         long id,
         UpdateProductVariantDTO request)
     {
+        if (userId <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ."
+            );
+        }
+
+        if (id <= 0)
+        {
+            throw new BadRequestException(
+                "ProductVariant ID không hợp lệ."
+            );
+        }
+
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống."
+            );
+        }
+
+
         // -------------------------------------------------
         // 1. Tìm ProductVariant
         // -------------------------------------------------
 
         var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(id);
+            await _unitOfWork.ProductVariants.GetByIdAsync(
+                id
+            );
 
         if (variant == null)
         {
@@ -251,36 +379,99 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 2. Validate Price
+        // 2. Tìm Product
+        // -------------------------------------------------
+
+        var product =
+            await _unitOfWork.Products.GetByIdAsync(
+                variant.ProductId
+            );
+
+        if (product == null)
+        {
+            throw new NotFoundException(
+                $"Product với ID {variant.ProductId} không tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 3. Kiểm tra quyền Seller
+        // -------------------------------------------------
+
+        await CheckProductShopAccessAsync(
+            product,
+            userId
+        );
+
+
+        // -------------------------------------------------
+        // 4. Validate SKU
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(request.Sku))
+        {
+            throw new BadRequestException(
+                "SKU không được để trống."
+            );
+        }
+
+        var sku =
+            request.Sku.Trim();
+
+        var duplicateVariants =
+            await _unitOfWork.ProductVariants.FindAsync(
+                x =>
+                    x.Id != id &&
+                    x.Sku != null &&
+                    x.Sku.ToLower() == sku.ToLower()
+            );
+
+        if (duplicateVariants.Any())
+        {
+            throw new BadRequestException(
+                $"SKU '{sku}' đã tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 5. Validate Price
         // -------------------------------------------------
 
         if (request.Price < 0)
         {
-            throw new ArgumentException(
+            throw new BadRequestException(
                 "Price không được nhỏ hơn 0."
             );
         }
 
 
         // -------------------------------------------------
-        // 3. Update ProductVariant
+        // 6. Update
         // -------------------------------------------------
 
-        variant.Sku = request.Sku;
+        variant.Sku =
+            sku;
 
-        variant.VariantName = request.VariantName;
+        variant.VariantName =
+            request.VariantName;
 
-        variant.AttributesJson = request.AttributesJson;
+        variant.AttributesJson =
+            request.AttributesJson;
 
-        variant.Price = request.Price;
+        variant.Price =
+            request.Price;
 
-        variant.IsActive = request.IsActive;
+        variant.IsActive =
+            request.IsActive;
 
-        variant.UpdatedAt = DateTime.UtcNow;
+        variant.UpdatedAt =
+            DateTime.UtcNow;
 
 
         // -------------------------------------------------
-        // 4. Update Repository
+        // 7. Update Repository
         // -------------------------------------------------
 
         _unitOfWork.ProductVariants.Update(
@@ -289,19 +480,21 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 5. Save
+        // 8. Save
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         // -------------------------------------------------
-        // 6. Lấy Inventory
+        // 9. Get Inventory
         // -------------------------------------------------
 
         var inventories =
             await _unitOfWork.Inventories.FindAsync(
-                x => x.ProductVariantId == variant.Id
+                x =>
+                    x.ProductVariantId ==
+                    variant.Id
             );
 
         var inventory =
@@ -309,7 +502,7 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 7. Response
+        // 10. Response
         // -------------------------------------------------
 
         return MapToResponseDTO(
@@ -323,14 +516,33 @@ public class ProductVariantService : IProductVariantService
     // DELETE
     // =====================================================
 
-    public async Task<bool> DeleteAsync(long id)
+    public async Task<bool> DeleteAsync(
+        long userId,
+        long id)
     {
+        if (userId <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ."
+            );
+        }
+
+        if (id <= 0)
+        {
+            throw new BadRequestException(
+                "ProductVariant ID không hợp lệ."
+            );
+        }
+
+
         // -------------------------------------------------
         // 1. Tìm ProductVariant
         // -------------------------------------------------
 
         var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(id);
+            await _unitOfWork.ProductVariants.GetByIdAsync(
+                id
+            );
 
         if (variant == null)
         {
@@ -339,12 +551,41 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 2. Tìm Inventory
+        // 2. Tìm Product
+        // -------------------------------------------------
+
+        var product =
+            await _unitOfWork.Products.GetByIdAsync(
+                variant.ProductId
+            );
+
+        if (product == null)
+        {
+            throw new NotFoundException(
+                $"Product với ID {variant.ProductId} không tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // 3. Kiểm tra quyền Seller
+        // -------------------------------------------------
+
+        await CheckProductShopAccessAsync(
+            product,
+            userId
+        );
+
+
+        // -------------------------------------------------
+        // 4. Tìm Inventory
         // -------------------------------------------------
 
         var inventories =
             await _unitOfWork.Inventories.FindAsync(
-                x => x.ProductVariantId == id
+                x =>
+                    x.ProductVariantId ==
+                    id
             );
 
         var inventory =
@@ -352,7 +593,7 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 3. Xóa Inventory trước
+        // 5. Xóa Inventory trước
         // -------------------------------------------------
 
         if (inventory != null)
@@ -364,7 +605,7 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 4. Xóa ProductVariant
+        // 6. Xóa ProductVariant
         // -------------------------------------------------
 
         _unitOfWork.ProductVariants.Delete(
@@ -373,7 +614,7 @@ public class ProductVariantService : IProductVariantService
 
 
         // -------------------------------------------------
-        // 5. Save
+        // 7. Save
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
@@ -383,11 +624,72 @@ public class ProductVariantService : IProductVariantService
 
 
     // =====================================================
-    // PRIVATE: MAP DTO
+    // CHECK PRODUCT SHOP ACCESS
+    // =====================================================
+
+    private async Task CheckProductShopAccessAsync(
+        ProductModel product,
+        long userId)
+    {
+        if (product.ShopId <= 0)
+        {
+            throw new BadRequestException(
+                "Product chưa được gắn với Shop hợp lệ."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // Tìm Shop
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork.Shops.GetByIdAsync(
+                product.ShopId
+            );
+
+        if (shop == null)
+        {
+            throw new NotFoundException(
+                $"Shop {product.ShopId} không tồn tại."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // Kiểm tra Owner
+        // -------------------------------------------------
+
+        if (shop.OwnerUserId != userId)
+        {
+            throw new ForbiddenException(
+                "Bạn không có quyền quản lý ProductVariant của Shop này."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // Kiểm tra Shop đã được Admin duyệt
+        // -------------------------------------------------
+
+        if (!string.Equals(
+                shop.Status?.Trim(),
+                "approved",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException(
+                $"Shop chưa được Admin duyệt. Trạng thái hiện tại: '{shop.Status}'."
+            );
+        }
+    }
+
+
+    // =====================================================
+    // MAP DTO
     // =====================================================
 
     private ProductVariantResponseDTO MapToResponseDTO(
-        ProductVariant variant,
+        ProductVariantModel variant,
         InventoryModel? inventory)
     {
         int quantity =
@@ -402,27 +704,35 @@ public class ProductVariantService : IProductVariantService
 
         return new ProductVariantResponseDTO
         {
-            Id = variant.Id,
+            Id =
+                variant.Id,
 
-            ProductId = variant.ProductId,
+            ProductId =
+                variant.ProductId,
 
-            Sku = variant.Sku,
+            Sku =
+                variant.Sku,
 
-            VariantName = variant.VariantName,
+            VariantName =
+                variant.VariantName,
 
-            AttributesJson = variant.AttributesJson,
+            AttributesJson =
+                variant.AttributesJson,
 
-            Price = variant.Price,
+            Price =
+                variant.Price,
 
-            // Stock = số lượng có thể bán
-            // Stock = Quantity - ReservedQuantity
-            Stock = availableQuantity,
+            Stock =
+                availableQuantity,
 
-            IsActive = variant.IsActive,
+            IsActive =
+                variant.IsActive,
 
-            CreatedAt = variant.CreatedAt,
+            CreatedAt =
+                variant.CreatedAt,
 
-            UpdatedAt = variant.UpdatedAt
+            UpdatedAt =
+                variant.UpdatedAt
         };
     }
 }

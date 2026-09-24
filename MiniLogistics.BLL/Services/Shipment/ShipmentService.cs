@@ -408,189 +408,299 @@ public class ShipmentService : IShipmentService
                 "Status không được để trống.");
         }
 
-        var shipment =
-            await _unitOfWork.Shipments
-                .GetByIdAsync(shipmentId);
-
-        if (shipment == null)
-        {
-            throw new NotFoundException(
-                "Shipment không tồn tại.");
-        }
-
-        // Kiểm tra ownership
-        if (shipment.ShipperUserId != shipperUserId)
-        {
-            throw new ForbiddenException(
-                "Bạn không được thao tác Shipment này.");
-        }
-
-        string newStatus =
-            request.Status
-                .Trim()
-                .ToLowerInvariant();
-
-        ValidateStatusTransition(
-            shipment.Status,
-            newStatus);
-
-        string oldStatus =
-            shipment.Status;
-
-        shipment.Status =
-            newStatus;
-
-        shipment.UpdatedAt =
-            DateTime.UtcNow;
-
-        if (newStatus == "picked_up")
-        {
-            shipment.PickedAt =
-                DateTime.UtcNow;
-        }
-
         // =================================================
-        // DELIVERED
+        // TOÀN BỘ LUỒNG UPDATE STATUS NẰM TRONG TRANSACTION
         // =================================================
 
-        if (newStatus == "delivered")
-        {
-            shipment.DeliveredAt =
-                DateTime.UtcNow;
-
-            // =============================================
-            // GET ORDER
-            // =============================================
-
-            var order =
-                await _unitOfWork.Orders
-                    .GetByIdAsync(shipment.OrderId);
-
-            if (order == null)
+        return await _unitOfWork.ExecuteInTransactionAsync(
+            async () =>
             {
-                throw new NotFoundException(
-                    "Order của Shipment không tồn tại.");
-            }
+                // =========================================
+                // GET SHIPMENT
+                // =========================================
 
-            // =============================================
-            // COD PAYMENT
-            // =============================================
+                var shipment =
+                    await _unitOfWork.Shipments
+                        .GetByIdAsync(shipmentId);
 
-            if (order.PaymentMethod == "cod")
-            {
-                var payments =
-                    await _unitOfWork.PaymentTransactions
-                        .FindAsync(
-                            x =>
-                                x.OrderId
-                                == order.Id);
-
-                var payment =
-                    payments
-                        .OrderByDescending(
-                            x => x.CreatedAt)
-                        .FirstOrDefault();
-
-                // -----------------------------------------
-                // OLD ORDER WITHOUT PAYMENT
-                // -----------------------------------------
-
-                if (payment == null)
+                if (shipment == null)
                 {
-                    payment =
-                        new PaymentTransaction
+                    throw new NotFoundException(
+                        "Shipment không tồn tại.");
+                }
+
+                // =========================================
+                // CHECK SHIPPER OWNERSHIP
+                // =========================================
+
+                if (shipment.ShipperUserId != shipperUserId)
+                {
+                    throw new ForbiddenException(
+                        "Bạn không được thao tác Shipment này.");
+                }
+
+                // =========================================
+                // NORMALIZE STATUS
+                // =========================================
+
+                string newStatus =
+                    request.Status
+                        .Trim()
+                        .ToLowerInvariant();
+
+                string oldShipmentStatus =
+                    shipment.Status
+                        .Trim()
+                        .ToLowerInvariant();
+
+                // =========================================
+                // VALIDATE TRANSITION
+                // =========================================
+
+                ValidateStatusTransition(
+                    oldShipmentStatus,
+                    newStatus);
+
+                // =========================================
+                // UPDATE SHIPMENT STATUS
+                // =========================================
+
+                shipment.Status =
+                    newStatus;
+
+                shipment.UpdatedAt =
+                    DateTime.UtcNow;
+
+                // =========================================
+                // PICKED UP
+                // =========================================
+
+                if (newStatus == "picked_up")
+                {
+                    shipment.PickedAt =
+                        DateTime.UtcNow;
+                }
+
+                // =========================================
+                // DELIVERED
+                // =========================================
+
+                if (newStatus == "delivered")
+                {
+                    shipment.DeliveredAt =
+                        DateTime.UtcNow;
+
+                    // =====================================
+                    // GET ORDER
+                    // =====================================
+
+                    var order =
+                        await _unitOfWork.Orders
+                            .GetByIdAsync(
+                                shipment.OrderId);
+
+                    if (order == null)
+                    {
+                        throw new NotFoundException(
+                            "Order của Shipment không tồn tại.");
+                    }
+
+                    // =====================================
+                    // ORDER MUST BE PROCESSING
+                    // =====================================
+
+                    string oldOrderStatus =
+                        order.Status
+                            .Trim()
+                            .ToLowerInvariant();
+
+                    if (!string.Equals(
+                            oldOrderStatus,
+                            "processing",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new BadRequestException(
+                            $"Order hiện tại đang ở trạng thái " +
+                            $"'{order.Status}', " +
+                            "không thể chuyển sang delivered.");
+                    }
+
+                    // =====================================
+                    // UPDATE ORDER
+                    // =====================================
+
+                    order.Status =
+                        "delivered";
+
+                    order.UpdatedAt =
+                        DateTime.UtcNow;
+
+                    _unitOfWork.Orders
+                        .Update(order);
+
+                    // =====================================
+                    // ORDER STATUS LOG
+                    // =====================================
+
+                    await _unitOfWork.OrderStatusLogs
+                        .AddAsync(
+                            new OrderStatusLog
+                            {
+                                OrderId =
+                                    order.Id,
+
+                                FromStatus =
+                                    oldOrderStatus,
+
+                                ToStatus =
+                                    "delivered",
+
+                                Message =
+                                    "Shipment đã giao hàng thành công.",
+
+                                CreatedByUserId =
+                                    shipperUserId,
+
+                                CreatedAt =
+                                    DateTime.UtcNow
+                            });
+
+                    // =====================================
+                    // COD PAYMENT
+                    // =====================================
+
+                    if (string.Equals(
+                            order.PaymentMethod,
+                            "cod",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        var payments =
+                            await _unitOfWork
+                                .PaymentTransactions
+                                .FindAsync(
+                                    x =>
+                                        x.OrderId ==
+                                        order.Id);
+
+                        var payment =
+                            payments
+                                .OrderByDescending(
+                                    x => x.CreatedAt)
+                                .FirstOrDefault();
+
+                        // =================================
+                        // OLD ORDER WITHOUT PAYMENT
+                        // =================================
+
+                        if (payment == null)
                         {
-                            OrderId =
-                                order.Id,
+                            payment =
+                                new PaymentTransaction
+                                {
+                                    OrderId =
+                                        order.Id,
 
-                            Provider =
-                                null,
+                                    Provider =
+                                        null,
 
-                            Method =
-                                "cod",
+                                    Method =
+                                        "cod",
 
-                            Amount =
-                                order.Total,
+                                    Amount =
+                                        order.Total,
+
+                                    Status =
+                                        "paid",
+
+                                    ProviderTxnId =
+                                        null,
+
+                                    PaidAt =
+                                        DateTime.UtcNow,
+
+                                    CreatedAt =
+                                        DateTime.UtcNow
+                                };
+
+                            await _unitOfWork
+                                .PaymentTransactions
+                                .AddAsync(payment);
+                        }
+
+                        // =================================
+                        // PENDING → PAID
+                        // =================================
+
+                        else if (string.Equals(
+                            payment.Status,
+                            "pending",
+                            StringComparison.OrdinalIgnoreCase))
+                        {
+                            payment.Status =
+                                "paid";
+
+                            payment.PaidAt =
+                                DateTime.UtcNow;
+
+                            _unitOfWork
+                                .PaymentTransactions
+                                .Update(payment);
+                        }
+                    }
+                }
+
+                // =========================================
+                // UPDATE SHIPMENT
+                // =========================================
+
+                _unitOfWork.Shipments
+                    .Update(shipment);
+
+                // =========================================
+                // SHIPMENT EVENT
+                // =========================================
+
+                await _unitOfWork.ShipmentEvents
+                    .AddAsync(
+                        new ShipmentEventModel
+                        {
+                            ShipmentId =
+                                shipment.Id,
 
                             Status =
-                                "paid",
+                                newStatus,
 
-                            ProviderTxnId =
-                                null,
+                            Location =
+                                string.IsNullOrWhiteSpace(
+                                    request.Location)
+                                    ? null
+                                    : request.Location.Trim(),
 
-                            PaidAt =
-                                DateTime.UtcNow,
+                            Note =
+                                string.IsNullOrWhiteSpace(
+                                    request.Note)
+                                    ? null
+                                    : request.Note.Trim(),
 
                             CreatedAt =
                                 DateTime.UtcNow
-                        };
+                        });
 
-                    await _unitOfWork.PaymentTransactions
-                        .AddAsync(payment);
-                }
+                // =========================================
+                // SAVE
+                // =========================================
+                //
+                // Save ở đây để BuildResponse có thể đọc
+                // ShipmentEvent vừa tạo.
+                //
+                // ExecuteInTransactionAsync bên ngoài sẽ
+                // SaveChanges thêm một lần nữa trước Commit.
+                // =========================================
 
-                // -----------------------------------------
-                // CURRENT PAYMENT = PENDING
-                // -----------------------------------------
+                await _unitOfWork.SaveChangesAsync();
 
-                else if (payment.Status == "pending")
-                {
-                    payment.Status =
-                        "paid";
-
-                    payment.PaidAt =
-                        DateTime.UtcNow;
-
-                    _unitOfWork.PaymentTransactions
-                        .Update(payment);
-                }
-            }
-        }
-
-        // ================================================
-        // UPDATE SHIPMENT
-        // ================================================
-
-        _unitOfWork.Shipments
-            .Update(shipment);
-
-        // ================================================
-        // SHIPMENT EVENT
-        // ================================================
-
-        await _unitOfWork.ShipmentEvents
-            .AddAsync(
-                new ShipmentEventModel
-                {
-                    ShipmentId =
-                        shipment.Id,
-
-                    Status =
-                        newStatus,
-
-                    Location =
-                        string.IsNullOrWhiteSpace(
-                            request.Location)
-                            ? null
-                            : request.Location.Trim(),
-
-                    Note =
-                        string.IsNullOrWhiteSpace(
-                            request.Note)
-                            ? null
-                            : request.Note.Trim(),
-
-                    CreatedAt =
-                        DateTime.UtcNow
-                });
-
-        // ================================================
-        // SAVE SHIPMENT + EVENT + PAYMENT
-        // ================================================
-
-        await _unitOfWork.SaveChangesAsync();
-
-        return await BuildResponse(shipment);
+                return await BuildResponse(shipment);
+            });
     }
 
     // =====================================================
@@ -633,29 +743,37 @@ public class ShipmentService : IShipmentService
         string newStatus)
     {
         currentStatus =
-            currentStatus.Trim().ToLowerInvariant();
+            currentStatus
+                .Trim()
+                .ToLowerInvariant();
 
         newStatus =
-            newStatus.Trim().ToLowerInvariant();
+            newStatus
+                .Trim()
+                .ToLowerInvariant();
 
+        // created → assigned
         if (currentStatus == "created" &&
             newStatus == "assigned")
         {
             return;
         }
 
+        // assigned → picked_up
         if (currentStatus == "assigned" &&
             newStatus == "picked_up")
         {
             return;
         }
 
+        // picked_up → shipping
         if (currentStatus == "picked_up" &&
             newStatus == "shipping")
         {
             return;
         }
 
+        // shipping → delivered
         if (currentStatus == "shipping" &&
             newStatus == "delivered")
         {

@@ -1,3 +1,6 @@
+using System.Security.Claims;
+
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using MiniLogistics.BLL.DTOs.ProductVariant;
@@ -9,136 +12,173 @@ namespace MiniLogistics.API.Controllers;
 [Route("api/product-variants")]
 public class ProductVariantController : ControllerBase
 {
-    private readonly IProductVariantService _variantService;
-
+    private readonly IProductVariantService
+        _productVariantService;
 
     public ProductVariantController(
-        IProductVariantService variantService)
+        IProductVariantService productVariantService)
     {
-        _variantService = variantService;
+        _productVariantService =
+            productVariantService;
     }
 
 
     // =====================================================
     // GET ALL
+    // PUBLIC
     // =====================================================
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var variants =
-            await _variantService.GetAllAsync();
+        var result =
+            await _productVariantService.GetAllAsync();
 
-        return Ok(variants);
+        return Ok(result);
     }
 
 
     // =====================================================
     // GET BY ID
+    // PUBLIC
     // =====================================================
 
     [HttpGet("{id:long}")]
-    public async Task<IActionResult> GetById(long id)
+    public async Task<IActionResult> GetById(
+        long id)
     {
-        var variant =
-            await _variantService.GetByIdAsync(id);
+        var result =
+            await _productVariantService.GetByIdAsync(
+                id
+            );
 
-        if (variant == null)
+        if (result == null)
         {
-            return NotFound(new
-            {
-                message = "Product variant not found."
-            });
+            return NotFound();
         }
 
-        return Ok(variant);
+        return Ok(result);
     }
 
 
     // =====================================================
     // GET BY PRODUCT
+    // PUBLIC
     // =====================================================
 
     [HttpGet("product/{productId:long}")]
     public async Task<IActionResult> GetByProductId(
         long productId)
     {
-        var variants =
-            await _variantService.GetByProductIdAsync(
-                productId
-            );
+        var result =
+            await _productVariantService
+                .GetByProductIdAsync(productId);
 
-        return Ok(variants);
+        return Ok(result);
     }
 
 
     // =====================================================
     // CREATE
+    // SELLER
     // =====================================================
 
+    [Authorize(Roles = "seller")]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateProductVariantDTO request)
     {
-        var variant =
-            await _variantService.CreateAsync(request);
+        var userId =
+            GetCurrentUserId();
 
-        return CreatedAtAction(
-            nameof(GetById),
-            new
-            {
-                id = variant.Id
-            },
-            variant
-        );
+        var result =
+            await _productVariantService.CreateAsync(
+                userId,
+                request
+            );
+
+        return Ok(result);
     }
 
 
     // =====================================================
     // UPDATE
+    // SELLER
     // =====================================================
 
+    [Authorize(Roles = "seller")]
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(
         long id,
         [FromBody] UpdateProductVariantDTO request)
     {
-        var variant =
-            await _variantService.UpdateAsync(
+        var userId =
+            GetCurrentUserId();
+
+        var result =
+            await _productVariantService.UpdateAsync(
+                userId,
                 id,
                 request
             );
 
-        if (variant == null)
+        if (result == null)
         {
-            return NotFound(new
-            {
-                message = "Product variant not found."
-            });
+            return NotFound();
         }
 
-        return Ok(variant);
+        return Ok(result);
     }
 
 
     // =====================================================
     // DELETE
+    // SELLER
     // =====================================================
 
+    [Authorize(Roles = "seller")]
     [HttpDelete("{id:long}")]
-    public async Task<IActionResult> Delete(long id)
+    public async Task<IActionResult> Delete(
+        long id)
     {
+        var userId =
+            GetCurrentUserId();
+
         var result =
-            await _variantService.DeleteAsync(id);
+            await _productVariantService.DeleteAsync(
+                userId,
+                id
+            );
 
         if (!result)
         {
-            return NotFound(new
-            {
-                message = "Product variant not found."
-            });
+            return NotFound();
         }
 
         return NoContent();
+    }
+
+
+    // =====================================================
+    // GET CURRENT USER ID
+    // =====================================================
+
+    private long GetCurrentUserId()
+    {
+        var userIdClaim =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!long.TryParse(
+                userIdClaim,
+                out var userId))
+        {
+            throw new UnauthorizedAccessException(
+                "Không xác định được UserId."
+            );
+        }
+
+        return userId;
     }
 }

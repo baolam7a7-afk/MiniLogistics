@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+
 using MiniLogistics.BLL.DTOs.Shop;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -12,13 +13,16 @@ public class ShopService : IShopService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public ShopService(IUnitOfWork unitOfWork)
+    public ShopService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
 
+
     // =====================================================
     // CREATE SHOP
+    // SELLER ONLY
     // =====================================================
 
     public async Task<ShopResponseDTO> CreateAsync(
@@ -37,13 +41,15 @@ public class ShopService : IShopService
                 "Tên Shop không được để trống.");
         }
 
-        var name = request.Name.Trim();
+        var name =
+            request.Name.Trim();
 
         if (name.Length > 200)
         {
             throw new BadRequestException(
                 "Tên Shop không được vượt quá 200 ký tự.");
         }
+
 
         // =================================================
         // CHECK USER
@@ -59,11 +65,13 @@ public class ShopService : IShopService
                 "Không tìm thấy User.");
         }
 
+
         // =================================================
         // GENERATE SLUG
         // =================================================
 
-        var baseSlug = GenerateSlug(name);
+        var baseSlug =
+            GenerateSlug(name);
 
         if (string.IsNullOrWhiteSpace(baseSlug))
         {
@@ -72,38 +80,52 @@ public class ShopService : IShopService
         }
 
         var slug =
-            await GenerateUniqueSlugAsync(baseSlug);
+            await GenerateUniqueSlugAsync(
+                baseSlug);
+
 
         // =================================================
         // CREATE ENTITY
         // =================================================
 
-        var shop = new ShopModel
-        {
-            OwnerUserId = ownerUserId,
+        var shop =
+            new ShopModel
+            {
+                OwnerUserId =
+                    ownerUserId,
 
-            Name = name,
+                Name =
+                    name,
 
-            Slug = slug,
+                Slug =
+                    slug,
 
-            Description =
-                string.IsNullOrWhiteSpace(request.Description)
-                    ? null
-                    : request.Description.Trim(),
+                Description =
+                    string.IsNullOrWhiteSpace(
+                        request.Description)
+                        ? null
+                        : request.Description.Trim(),
 
-            LogoUrl =
-                string.IsNullOrWhiteSpace(request.LogoUrl)
-                    ? null
-                    : request.LogoUrl.Trim(),
+                LogoUrl =
+                    string.IsNullOrWhiteSpace(
+                        request.LogoUrl)
+                        ? null
+                        : request.LogoUrl.Trim(),
 
-            Status = "pending",
+                // Shop mới phải chờ Admin duyệt
+                Status =
+                    "pending",
 
-            ApprovedAt = null,
+                ApprovedAt =
+                    null,
 
-            CreatedAt = DateTime.UtcNow,
+                CreatedAt =
+                    DateTime.UtcNow,
 
-            UpdatedAt = null
-        };
+                UpdatedAt =
+                    null
+            };
+
 
         await _unitOfWork.Shops
             .AddAsync(shop);
@@ -111,16 +133,19 @@ public class ShopService : IShopService
         await _unitOfWork
             .SaveChangesAsync();
 
+
         return MapToResponseDTO(shop);
     }
 
 
     // =====================================================
     // GET MY SHOPS
+    // SELLER ONLY
     // =====================================================
 
     public async Task<IEnumerable<ShopResponseDTO>>
-        GetMyShopsAsync(long ownerUserId)
+        GetMyShopsAsync(
+            long ownerUserId)
     {
         var shops =
             await _unitOfWork.Shops
@@ -136,10 +161,12 @@ public class ShopService : IShopService
 
     // =====================================================
     // GET SHOP BY ID
+    // COMMON
     // =====================================================
 
     public async Task<ShopResponseDTO?>
-        GetByIdAsync(long shopId)
+        GetByIdAsync(
+            long shopId)
     {
         var shop =
             await _unitOfWork.Shops
@@ -156,6 +183,7 @@ public class ShopService : IShopService
 
     // =====================================================
     // GET MY SHOP BY ID
+    // SELLER ONLY
     // =====================================================
 
     public async Task<ShopResponseDTO?>
@@ -163,13 +191,14 @@ public class ShopService : IShopService
             long ownerUserId,
             long shopId)
     {
-        var shop =
+        var shops =
             await _unitOfWork.Shops
                 .FindAsync(x =>
                     x.Id == shopId &&
                     x.OwnerUserId == ownerUserId);
 
-        var entity = shop.FirstOrDefault();
+        var entity =
+            shops.FirstOrDefault();
 
         if (entity == null)
         {
@@ -182,6 +211,7 @@ public class ShopService : IShopService
 
     // =====================================================
     // UPDATE SHOP
+    // SELLER ONLY
     // =====================================================
 
     public async Task<ShopResponseDTO?>
@@ -202,30 +232,35 @@ public class ShopService : IShopService
                 "Tên Shop không được để trống.");
         }
 
-        var shop =
+
+        var shops =
             await _unitOfWork.Shops
                 .FindAsync(x =>
                     x.Id == shopId &&
                     x.OwnerUserId == ownerUserId);
 
-        var entity = shop.FirstOrDefault();
+        var entity =
+            shops.FirstOrDefault();
 
         if (entity == null)
         {
             return null;
         }
 
+
         // =================================================
         // UPDATE NAME
         // =================================================
 
-        var name = request.Name.Trim();
+        var name =
+            request.Name.Trim();
 
         if (name.Length > 200)
         {
             throw new BadRequestException(
                 "Tên Shop không được vượt quá 200 ký tự.");
         }
+
 
         // =================================================
         // UPDATE SLUG
@@ -236,7 +271,8 @@ public class ShopService : IShopService
                 name,
                 StringComparison.OrdinalIgnoreCase))
         {
-            var baseSlug = GenerateSlug(name);
+            var baseSlug =
+                GenerateSlug(name);
 
             if (string.IsNullOrWhiteSpace(baseSlug))
             {
@@ -250,20 +286,25 @@ public class ShopService : IShopService
                     entity.Id);
         }
 
-        entity.Name = name;
+
+        entity.Name =
+            name;
 
         entity.Description =
-            string.IsNullOrWhiteSpace(request.Description)
+            string.IsNullOrWhiteSpace(
+                request.Description)
                 ? null
                 : request.Description.Trim();
 
         entity.LogoUrl =
-            string.IsNullOrWhiteSpace(request.LogoUrl)
+            string.IsNullOrWhiteSpace(
+                request.LogoUrl)
                 ? null
                 : request.LogoUrl.Trim();
 
         entity.UpdatedAt =
             DateTime.UtcNow;
+
 
         _unitOfWork.Shops
             .Update(entity);
@@ -271,7 +312,165 @@ public class ShopService : IShopService
         await _unitOfWork
             .SaveChangesAsync();
 
+
         return MapToResponseDTO(entity);
+    }
+
+
+    // =====================================================
+    // ADMIN - GET PENDING SHOPS
+    // =====================================================
+
+    public async Task<IEnumerable<ShopResponseDTO>>
+        GetPendingAsync()
+    {
+        var shops =
+            await _unitOfWork.Shops
+                .FindAsync(x =>
+                    x.Status == "pending");
+
+        return shops
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(MapToResponseDTO)
+            .ToList();
+    }
+
+
+    // =====================================================
+    // ADMIN - APPROVE SHOP
+    // =====================================================
+
+    public async Task<ShopResponseDTO?>
+        ApproveAsync(
+            long shopId)
+    {
+        // -------------------------------------------------
+        // VALIDATE SHOP ID
+        // -------------------------------------------------
+
+        if (shopId <= 0)
+        {
+            throw new BadRequestException(
+                "ShopId không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // GET SHOP
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork.Shops
+                .GetByIdAsync(shopId);
+
+        if (shop == null)
+        {
+            return null;
+        }
+
+
+        // -------------------------------------------------
+        // ONLY PENDING CAN BE APPROVED
+        // -------------------------------------------------
+
+        if (shop.Status != "pending")
+        {
+            throw new BadRequestException(
+                $"Shop {shopId} không ở trạng thái pending.");
+        }
+
+
+        // -------------------------------------------------
+        // APPROVE
+        // -------------------------------------------------
+
+        shop.Status =
+            "approved";
+
+        shop.ApprovedAt =
+            DateTime.UtcNow;
+
+        shop.UpdatedAt =
+            DateTime.UtcNow;
+
+
+        _unitOfWork.Shops
+            .Update(shop);
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        return MapToResponseDTO(shop);
+    }
+
+
+    // =====================================================
+    // ADMIN - REJECT SHOP
+    // =====================================================
+
+    public async Task<ShopResponseDTO?>
+        RejectAsync(
+            long shopId)
+    {
+        // -------------------------------------------------
+        // VALIDATE SHOP ID
+        // -------------------------------------------------
+
+        if (shopId <= 0)
+        {
+            throw new BadRequestException(
+                "ShopId không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // GET SHOP
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork.Shops
+                .GetByIdAsync(shopId);
+
+        if (shop == null)
+        {
+            return null;
+        }
+
+
+        // -------------------------------------------------
+        // ONLY PENDING CAN BE REJECTED
+        // -------------------------------------------------
+
+        if (shop.Status != "pending")
+        {
+            throw new BadRequestException(
+                $"Shop {shopId} không ở trạng thái pending.");
+        }
+
+
+        // -------------------------------------------------
+        // REJECT
+        // -------------------------------------------------
+
+        shop.Status =
+            "rejected";
+
+        shop.ApprovedAt =
+            null;
+
+        shop.UpdatedAt =
+            DateTime.UtcNow;
+
+
+        _unitOfWork.Shops
+            .Update(shop);
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        return MapToResponseDTO(shop);
     }
 
 
@@ -284,9 +483,11 @@ public class ShopService : IShopService
             string baseSlug,
             long? ignoreShopId = null)
     {
-        var slug = baseSlug;
+        var slug =
+            baseSlug;
 
-        var counter = 2;
+        var counter =
+            2;
 
         while (true)
         {
@@ -294,8 +495,10 @@ public class ShopService : IShopService
                 await _unitOfWork.Shops
                     .FindAsync(x =>
                         x.Slug == slug &&
-                        (!ignoreShopId.HasValue ||
-                         x.Id != ignoreShopId.Value));
+                        (
+                            !ignoreShopId.HasValue ||
+                            x.Id != ignoreShopId.Value
+                        ));
 
             if (!existing.Any())
             {
@@ -322,9 +525,12 @@ public class ShopService : IShopService
             return string.Empty;
         }
 
-        text = text.Trim().ToLowerInvariant();
+        text =
+            text.Trim()
+                .ToLowerInvariant();
 
-        text = RemoveVietnameseCharacters(text);
+        text =
+            RemoveVietnameseCharacters(text);
 
         text =
             Regex.Replace(
@@ -368,26 +574,33 @@ public class ShopService : IShopService
             var unicodeCategory =
                 System.Globalization
                     .CharUnicodeInfo
-                    .GetUnicodeCategory(character);
+                    .GetUnicodeCategory(
+                        character);
 
             if (unicodeCategory !=
                 System.Globalization
                     .UnicodeCategory
                     .NonSpacingMark)
             {
-                builder.Append(character);
+                builder.Append(
+                    character);
             }
         }
 
         var result =
-            builder.ToString()
+            builder
+                .ToString()
                 .Normalize(
                     NormalizationForm.FormC);
 
         result =
             result
-                .Replace("đ", "d")
-                .Replace("Đ", "d");
+                .Replace(
+                    "đ",
+                    "d")
+                .Replace(
+                    "Đ",
+                    "d");
 
         return result;
     }
@@ -403,7 +616,8 @@ public class ShopService : IShopService
     {
         return new ShopResponseDTO
         {
-            Id = shop.Id,
+            Id =
+                shop.Id,
 
             OwnerUserId =
                 shop.OwnerUserId,

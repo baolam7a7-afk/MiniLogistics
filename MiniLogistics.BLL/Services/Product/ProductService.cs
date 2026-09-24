@@ -18,6 +18,7 @@ public class ProductService : IProductService
 
     // =====================================================
     // GET ALL
+    // PUBLIC
     // =====================================================
 
     public async Task<IEnumerable<ProductResponseDTO>> GetAllAsync()
@@ -31,6 +32,7 @@ public class ProductService : IProductService
 
     // =====================================================
     // GET BY ID
+    // PUBLIC
     // =====================================================
 
     public async Task<ProductResponseDTO?> GetByIdAsync(long id)
@@ -49,36 +51,34 @@ public class ProductService : IProductService
 
     // =====================================================
     // GET BY CATEGORY
+    // PUBLIC
     // =====================================================
 
     public async Task<IEnumerable<ProductResponseDTO>>
         GetByCategoryAsync(long categoryId)
     {
         // -------------------------------------------------
-        // CHECK CATEGORY
+        // 1. CHECK CATEGORY
         // -------------------------------------------------
 
         var categoryExists =
             await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == categoryId
-            );
+                c => c.Id == categoryId);
 
         if (!categoryExists)
         {
             throw new NotFoundException(
-                "Category không tồn tại."
-            );
+                "Category không tồn tại.");
         }
 
 
         // -------------------------------------------------
-        // GET PRODUCTS
+        // 2. GET PRODUCTS
         // -------------------------------------------------
 
         var products =
             await _unitOfWork.Products.FindAsync(
-                p => p.CategoryId == categoryId
-            );
+                p => p.CategoryId == categoryId);
 
         return products.Select(MapToDTO);
     }
@@ -86,35 +86,34 @@ public class ProductService : IProductService
 
     // =====================================================
     // SEARCH
+    // PUBLIC
     // =====================================================
 
     public async Task<IEnumerable<ProductResponseDTO>>
         SearchAsync(string keyword)
     {
         // -------------------------------------------------
-        // VALIDATE KEYWORD
+        // 1. VALIDATE KEYWORD
         // -------------------------------------------------
 
         if (string.IsNullOrWhiteSpace(keyword))
         {
             throw new BadRequestException(
-                "Keyword không được để trống."
-            );
+                "Keyword không được để trống.");
         }
 
         keyword = keyword.Trim();
 
 
         // -------------------------------------------------
-        // SEARCH
+        // 2. SEARCH
         // -------------------------------------------------
 
         var products =
             await _unitOfWork.Products.FindAsync(
                 p =>
                     p.Name.Contains(keyword) ||
-                    p.Slug.Contains(keyword)
-            );
+                    p.Slug.Contains(keyword));
 
         return products.Select(MapToDTO);
     }
@@ -122,54 +121,73 @@ public class ProductService : IProductService
 
     // =====================================================
     // CREATE
+    // SELLER
     // =====================================================
 
     public async Task<ProductResponseDTO>
-        CreateAsync(CreateProductDTO request)
+        CreateAsync(
+            long userId,
+            CreateProductDTO request)
     {
         // -------------------------------------------------
-        // 1. VALIDATE NAME
+        // 1. VALIDATE REQUEST
+        // -------------------------------------------------
+
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+
+        // -------------------------------------------------
+        // 2. CHECK SHOP
+        // -------------------------------------------------
+
+        await GetApprovedOwnedShopAsync(
+            userId,
+            request.ShopId);
+
+
+        // -------------------------------------------------
+        // 3. VALIDATE NAME
         // -------------------------------------------------
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new BadRequestException(
-                "Tên Product không được để trống."
-            );
+                "Tên Product không được để trống.");
         }
 
 
         // -------------------------------------------------
-        // 2. VALIDATE SLUG
+        // 4. VALIDATE SLUG
         // -------------------------------------------------
 
         if (string.IsNullOrWhiteSpace(request.Slug))
         {
             throw new BadRequestException(
-                "Slug không được để trống."
-            );
+                "Slug không được để trống.");
         }
 
 
         // -------------------------------------------------
-        // 3. CHECK CATEGORY
+        // 5. CHECK CATEGORY
         // -------------------------------------------------
 
         var categoryExists =
             await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == request.CategoryId
-            );
+                c => c.Id == request.CategoryId);
 
         if (!categoryExists)
         {
             throw new NotFoundException(
-                "Category không tồn tại."
-            );
+                "Category không tồn tại.");
         }
 
 
         // -------------------------------------------------
-        // 4. CHECK DUPLICATE SLUG
+        // 6. CHECK DUPLICATE SLUG
         // -------------------------------------------------
 
         var slug =
@@ -179,19 +197,17 @@ public class ProductService : IProductService
 
         var slugExists =
             await _unitOfWork.Products.AnyAsync(
-                p => p.Slug == slug
-            );
+                p => p.Slug == slug);
 
         if (slugExists)
         {
             throw new BadRequestException(
-                $"Slug '{slug}' đã tồn tại."
-            );
+                $"Slug '{slug}' đã tồn tại.");
         }
 
 
         // -------------------------------------------------
-        // 5. CREATE PRODUCT
+        // 7. CREATE PRODUCT
         // -------------------------------------------------
 
         var product = new ProductEntity
@@ -219,21 +235,21 @@ public class ProductService : IProductService
 
 
         // -------------------------------------------------
-        // 6. ADD
+        // 8. ADD PRODUCT
         // -------------------------------------------------
 
         await _unitOfWork.Products.AddAsync(product);
 
 
         // -------------------------------------------------
-        // 7. SAVE
+        // 9. SAVE
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         // -------------------------------------------------
-        // 8. RETURN
+        // 10. RETURN
         // -------------------------------------------------
 
         return MapToDTO(product);
@@ -242,15 +258,28 @@ public class ProductService : IProductService
 
     // =====================================================
     // UPDATE
+    // SELLER
     // =====================================================
 
     public async Task<ProductResponseDTO?>
         UpdateAsync(
+            long userId,
             long id,
             UpdateProductDTO request)
     {
         // -------------------------------------------------
-        // 1. FIND PRODUCT
+        // 1. VALIDATE REQUEST
+        // -------------------------------------------------
+
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+
+        // -------------------------------------------------
+        // 2. FIND PRODUCT
         // -------------------------------------------------
 
         var product =
@@ -263,48 +292,59 @@ public class ProductService : IProductService
 
 
         // -------------------------------------------------
-        // 2. VALIDATE NAME
+        // 3. CHECK SHOP
+        // -------------------------------------------------
+        //
+        // Shop trong request phải:
+        // - tồn tại
+        // - thuộc Seller hiện tại
+        // - đã được Admin approve
+        //
+
+        await GetApprovedOwnedShopAsync(
+            userId,
+            request.ShopId);
+
+
+        // -------------------------------------------------
+        // 4. VALIDATE NAME
         // -------------------------------------------------
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new BadRequestException(
-                "Tên Product không được để trống."
-            );
+                "Tên Product không được để trống.");
         }
 
 
         // -------------------------------------------------
-        // 3. VALIDATE SLUG
+        // 5. VALIDATE SLUG
         // -------------------------------------------------
 
         if (string.IsNullOrWhiteSpace(request.Slug))
         {
             throw new BadRequestException(
-                "Slug không được để trống."
-            );
+                "Slug không được để trống.");
         }
 
 
         // -------------------------------------------------
-        // 4. CHECK CATEGORY
+        // 6. CHECK CATEGORY
         // -------------------------------------------------
 
         var categoryExists =
             await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == request.CategoryId
-            );
+                c => c.Id == request.CategoryId);
 
         if (!categoryExists)
         {
             throw new NotFoundException(
-                "Category không tồn tại."
-            );
+                "Category không tồn tại.");
         }
 
 
         // -------------------------------------------------
-        // 5. CHECK DUPLICATE SLUG
+        // 7. CHECK DUPLICATE SLUG
         // -------------------------------------------------
 
         var slug =
@@ -316,19 +356,17 @@ public class ProductService : IProductService
             await _unitOfWork.Products.AnyAsync(
                 p =>
                     p.Slug == slug &&
-                    p.Id != id
-            );
+                    p.Id != id);
 
         if (slugExists)
         {
             throw new BadRequestException(
-                $"Slug '{slug}' đã tồn tại."
-            );
+                $"Slug '{slug}' đã tồn tại.");
         }
 
 
         // -------------------------------------------------
-        // 6. UPDATE PRODUCT
+        // 8. UPDATE PRODUCT
         // -------------------------------------------------
 
         product.ShopId =
@@ -358,21 +396,21 @@ public class ProductService : IProductService
 
 
         // -------------------------------------------------
-        // 7. UPDATE
+        // 9. UPDATE REPOSITORY
         // -------------------------------------------------
 
         _unitOfWork.Products.Update(product);
 
 
         // -------------------------------------------------
-        // 8. SAVE
+        // 10. SAVE
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         // -------------------------------------------------
-        // 9. RETURN
+        // 11. RETURN
         // -------------------------------------------------
 
         return MapToDTO(product);
@@ -381,9 +419,13 @@ public class ProductService : IProductService
 
     // =====================================================
     // DELETE
+    // SELLER
     // =====================================================
 
-    public async Task<bool> DeleteAsync(long id)
+    public async Task<bool>
+        DeleteAsync(
+            long userId,
+            long id)
     {
         // -------------------------------------------------
         // 1. FIND PRODUCT
@@ -399,37 +441,135 @@ public class ProductService : IProductService
 
 
         // -------------------------------------------------
-        // 2. CHECK PRODUCT VARIANT
+        // 2. CHECK SHOP
+        // -------------------------------------------------
+        //
+        // Product đang thuộc Shop nào thì Shop đó phải:
+        // - tồn tại
+        // - thuộc Seller hiện tại
+        // - approved
+        //
+
+        await GetApprovedOwnedShopAsync(
+            userId,
+            product.ShopId);
+
+
+        // -------------------------------------------------
+        // 3. CHECK PRODUCT VARIANT
         // -------------------------------------------------
 
         var hasVariants =
             await _unitOfWork.ProductVariants.AnyAsync(
-                v => v.ProductId == id
-            );
+                v => v.ProductId == id);
 
         if (hasVariants)
         {
             throw new BadRequestException(
-                "Không thể xóa Product đang có ProductVariant."
-            );
+                "Không thể xóa Product đang có ProductVariant.");
         }
 
 
         // -------------------------------------------------
-        // 3. DELETE
+        // 4. DELETE
         // -------------------------------------------------
 
         _unitOfWork.Products.Delete(product);
 
 
         // -------------------------------------------------
-        // 4. SAVE
+        // 5. SAVE
         // -------------------------------------------------
 
         await _unitOfWork.SaveChangesAsync();
 
 
         return true;
+    }
+
+
+    // =====================================================
+    // CHECK SHOP
+    //
+    // Shop phải:
+    // 1. Tồn tại
+    // 2. Thuộc Seller hiện tại
+    // 3. Đã được Admin approve
+    // =====================================================
+
+    private async Task<MiniLogistics.DAL.Models.Shop>
+        GetApprovedOwnedShopAsync(
+            long userId,
+            long shopId)
+    {
+        // -------------------------------------------------
+        // 1. VALIDATE USER ID
+        // -------------------------------------------------
+
+        if (userId <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // 2. VALIDATE SHOP ID
+        // -------------------------------------------------
+
+        if (shopId <= 0)
+        {
+            throw new BadRequestException(
+                "ShopId không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // 3. FIND SHOP
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork.Shops.GetByIdAsync(
+                shopId);
+
+        if (shop == null)
+        {
+            throw new NotFoundException(
+                $"Shop {shopId} không tồn tại.");
+        }
+
+
+        // -------------------------------------------------
+        // 4. CHECK OWNER
+        // -------------------------------------------------
+
+        if (shop.OwnerUserId != userId)
+        {
+            throw new ForbiddenException(
+                "Bạn không có quyền thao tác với Shop này.");
+        }
+
+
+        // -------------------------------------------------
+        // 5. CHECK APPROVAL
+        // -------------------------------------------------
+
+        if (!string.Equals(
+                shop.Status?.Trim(),
+                "approved",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException(
+                $"Shop chưa được Admin duyệt. " +
+                $"Trạng thái hiện tại: '{shop.Status}'.");
+        }
+
+
+        // -------------------------------------------------
+        // 6. RETURN SHOP
+        // -------------------------------------------------
+
+        return shop;
     }
 
 
