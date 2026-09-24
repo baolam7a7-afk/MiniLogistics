@@ -10,11 +10,13 @@ using MiniLogistics.API.Middleware;
 using MiniLogistics.BLL.DTOs.Auth;
 
 using MiniLogistics.BLL.Services;
+using MiniLogistics.BLL.Services.User;
 using MiniLogistics.BLL.Services.Auth;
 using MiniLogistics.BLL.Services.Cart;
 using MiniLogistics.BLL.Services.Inventory;
 using MiniLogistics.BLL.Services.Order;
 using MiniLogistics.BLL.Services.Payment;
+using MiniLogistics.BLL.Services.PayoutRequest;
 using MiniLogistics.BLL.Services.Product;
 using MiniLogistics.BLL.Services.ProductImage;
 using MiniLogistics.BLL.Services.Review;
@@ -28,6 +30,8 @@ using MiniLogistics.BLL.Services.ReportSnapshot;
 using MiniLogistics.BLL.Services.Address;
 using MiniLogistics.BLL.Services.Shop;
 using MiniLogistics.BLL.Services.Voucher;
+using MiniLogistics.BLL.Services.SellerDashboard;
+using MiniLogistics.BLL.Services.AdminDashboard;
 
 // =====================================================
 // GROUP A
@@ -123,6 +127,14 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
 builder.Services.AddScoped<
     IAuthService,
     AuthService>();
+
+builder.Services.AddScoped<
+    IAdminDashboardService,
+    AdminDashboardService>();
+
+builder.Services.AddScoped<
+    ISellerDashboardService,
+    SellerDashboardService>();
 
 
 // =====================================================
@@ -223,7 +235,9 @@ builder.Services.AddScoped<
     IPaymentService,
     PaymentService>();
 
-
+builder.Services.AddScoped<
+    IPayoutRequestService,
+    PayoutRequestService>();
 // =====================================================
 // 16. VOUCHER
 // =====================================================
@@ -341,7 +355,13 @@ builder.Services.AddScoped<
     IShopWalletTransactionService,
     ShopWalletTransactionService>();
 
+// =====================================================
+// 28. ADMIN USER MANAGEMENT
+// =====================================================
 
+builder.Services.AddScoped<
+    IUserService,
+    UserService>();
 // =====================================================
 // 28. JWT AUTHENTICATION
 // =====================================================
