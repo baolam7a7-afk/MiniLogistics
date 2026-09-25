@@ -121,6 +121,14 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
 
 
 // =====================================================
+// 3.1 GOOGLE AUTHENTICATION SETTINGS
+// =====================================================
+
+builder.Services.Configure<GoogleSettings>(
+    builder.Configuration.GetSection("Google"));
+
+
+// =====================================================
 // 4. AUTH SERVICE
 // =====================================================
 

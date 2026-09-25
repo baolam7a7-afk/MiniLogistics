@@ -1,8 +1,7 @@
 using System.Security.Claims;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shop;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.BLL.Services.Shop;
@@ -15,17 +14,120 @@ public class ShopController : ControllerBase
 {
     private readonly IShopService _shopService;
 
-    public ShopController(
-        IShopService shopService)
+    public ShopController(IShopService shopService)
     {
-        _shopService =
-            shopService;
+        _shopService = shopService;
     }
 
 
     // =====================================================
-    // CREATE SHOP
-    // SELLER ONLY
+    // ADMIN - GET ALL SHOPS
+    // =====================================================
+
+    [HttpGet]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<PagedResponseDTO<ShopResponseDTO>>>
+        GetAll(
+            [FromQuery] ShopPaginationRequestDTO request)
+    {
+        var result =
+            await _shopService.GetAllAsync(request);
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // ADMIN - GET PENDING SHOPS
+    // =====================================================
+
+    [HttpGet("pending")]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<IEnumerable<ShopResponseDTO>>>
+        GetPending()
+    {
+        var result =
+            await _shopService.GetPendingAsync();
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // ADMIN - APPROVE SHOP
+    // =====================================================
+
+    [HttpPut("{id:long}/approve")]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<ShopResponseDTO>>
+        Approve(long id)
+    {
+        var result =
+            await _shopService.ApproveAsync(id);
+
+        if (result == null)
+        {
+            return NotFound(new
+            {
+                message = "Không tìm thấy Shop."
+            });
+        }
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // ADMIN - REJECT SHOP
+    // =====================================================
+
+    [HttpPut("{id:long}/reject")]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<ShopResponseDTO>>
+        Reject(long id)
+    {
+        var result =
+            await _shopService.RejectAsync(id);
+
+        if (result == null)
+        {
+            return NotFound(new
+            {
+                message = "Không tìm thấy Shop."
+            });
+        }
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // GET SHOP BY ID
+    // PUBLIC
+    // =====================================================
+
+    [HttpGet("{id:long}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ShopResponseDTO>>
+        GetById(long id)
+    {
+        var result =
+            await _shopService.GetByIdAsync(id);
+
+        if (result == null)
+        {
+            return NotFound(new
+            {
+                message = "Không tìm thấy Shop."
+            });
+        }
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SELLER - CREATE SHOP
     // =====================================================
 
     [HttpPost]
@@ -38,62 +140,64 @@ public class ShopController : ControllerBase
             GetCurrentUserId();
 
         var result =
-            await _shopService
-                .CreateAsync(
-                    userId,
-                    request);
+            await _shopService.CreateAsync(
+                userId,
+                request);
 
-        return Ok(result);
+        return CreatedAtAction(
+            nameof(GetById),
+            new
+            {
+                id = result.Id
+            },
+            result);
     }
 
 
     // =====================================================
-    // GET MY SHOPS
-    // SELLER ONLY
+    // SELLER - GET MY SHOPS
     // =====================================================
 
     [HttpGet("my")]
     [Authorize(Roles = "seller")]
-    public async Task<
-        ActionResult<IEnumerable<ShopResponseDTO>>>
+    public async Task<ActionResult<IEnumerable<ShopResponseDTO>>>
         GetMyShops()
     {
         var userId =
             GetCurrentUserId();
 
         var result =
-            await _shopService
-                .GetMyShopsAsync(
-                    userId);
+            await _shopService.GetMyShopsAsync(
+                userId);
 
         return Ok(result);
     }
 
 
     // =====================================================
-    // GET MY SHOP BY ID
-    // SELLER ONLY
+    // SELLER - GET MY SHOP BY ID
     // =====================================================
 
-    [HttpGet("my/{shopId:long}")]
+    [HttpGet("my/{id:long}")]
     [Authorize(Roles = "seller")]
     public async Task<ActionResult<ShopResponseDTO>>
-        GetMyShopById(
-            long shopId)
+        GetMyShopById(long id)
     {
         var userId =
             GetCurrentUserId();
 
         var result =
-            await _shopService
-                .GetMyShopByIdAsync(
-                    userId,
-                    shopId);
+            await _shopService.GetMyShopByIdAsync(
+                userId,
+                id);
 
         if (result == null)
         {
-            throw new NotFoundException(
-                $"Shop {shopId} không tồn tại hoặc không thuộc Seller này.");
+            return NotFound(new
+            {
+                message =
+                    "Không tìm thấy Shop hoặc Shop không thuộc quyền sở hữu của bạn."
+            });
         }
 
         return Ok(result);
@@ -101,125 +205,32 @@ public class ShopController : ControllerBase
 
 
     // =====================================================
-    // GET SHOP BY ID
-    // COMMON
+    // SELLER - UPDATE MY SHOP
     // =====================================================
 
-    [HttpGet("{shopId:long}")]
-    [Authorize]
-    public async Task<ActionResult<ShopResponseDTO>>
-        GetById(
-            long shopId)
-    {
-        var result =
-            await _shopService
-                .GetByIdAsync(
-                    shopId);
-
-        if (result == null)
-        {
-            throw new NotFoundException(
-                $"Shop {shopId} không tồn tại.");
-        }
-
-        return Ok(result);
-    }
-
-
-    // =====================================================
-    // UPDATE SHOP
-    // SELLER ONLY
-    // =====================================================
-
-    [HttpPut("{shopId:long}")]
+    [HttpPut("{id:long}")]
     [Authorize(Roles = "seller")]
     public async Task<ActionResult<ShopResponseDTO>>
         Update(
-            long shopId,
+            long id,
             [FromBody] UpdateShopDTO request)
     {
         var userId =
             GetCurrentUserId();
 
         var result =
-            await _shopService
-                .UpdateAsync(
-                    userId,
-                    shopId,
-                    request);
+            await _shopService.UpdateAsync(
+                userId,
+                id,
+                request);
 
         if (result == null)
         {
-            throw new NotFoundException(
-                $"Shop {shopId} không tồn tại hoặc không thuộc Seller này.");
-        }
-
-        return Ok(result);
-    }
-
-
-    // =====================================================
-    // ADMIN - GET PENDING SHOPS
-    // =====================================================
-
-    [HttpGet("admin/pending")]
-    [Authorize(Roles = "admin")]
-    public async Task<
-        ActionResult<IEnumerable<ShopResponseDTO>>>
-        GetPending()
-    {
-        var result =
-            await _shopService
-                .GetPendingAsync();
-
-        return Ok(result);
-    }
-
-
-    // =====================================================
-    // ADMIN - APPROVE SHOP
-    // =====================================================
-
-    [HttpPost("admin/approve/{shopId:long}")]
-    [Authorize(Roles = "admin")]
-    public async Task<ActionResult<ShopResponseDTO>>
-        Approve(
-            long shopId)
-    {
-        var result =
-            await _shopService
-                .ApproveAsync(
-                    shopId);
-
-        if (result == null)
-        {
-            throw new NotFoundException(
-                $"Shop {shopId} không tồn tại.");
-        }
-
-        return Ok(result);
-    }
-
-
-    // =====================================================
-    // ADMIN - REJECT SHOP
-    // =====================================================
-
-    [HttpPost("admin/reject/{shopId:long}")]
-    [Authorize(Roles = "admin")]
-    public async Task<ActionResult<ShopResponseDTO>>
-        Reject(
-            long shopId)
-    {
-        var result =
-            await _shopService
-                .RejectAsync(
-                    shopId);
-
-        if (result == null)
-        {
-            throw new NotFoundException(
-                $"Shop {shopId} không tồn tại.");
+            return NotFound(new
+            {
+                message =
+                    "Không tìm thấy Shop hoặc Shop không thuộc quyền sở hữu của bạn."
+            });
         }
 
         return Ok(result);
@@ -232,24 +243,18 @@ public class ShopController : ControllerBase
 
     private long GetCurrentUserId()
     {
-        var claim =
-            User.FindFirst(
+        var userId =
+            User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
 
-        if (claim == null)
-        {
-            throw new UnauthorizedException(
-                "Không xác định được User.");
-        }
-
         if (!long.TryParse(
-                claim.Value,
-                out var userId))
+                userId,
+                out var parsedUserId))
         {
             throw new UnauthorizedException(
-                "UserId không hợp lệ.");
+                "Token không chứa UserId hợp lệ.");
         }
 
-        return userId;
+        return parsedUserId;
     }
 }

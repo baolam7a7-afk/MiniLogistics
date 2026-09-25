@@ -3,7 +3,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Product;
+using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.BLL.Services.Product;
 
 namespace MiniLogistics.API.Controllers;
@@ -20,66 +22,92 @@ public class ProductController : ControllerBase
         _productService = productService;
     }
 
-    // ==========================================
+
+    // =====================================================
     // GET ALL
     // PUBLIC
-    // ==========================================
+    // GET: /api/products
+    // =====================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<PagedResponseDTO<ProductResponseDTO>>>
+        GetAll(
+            [FromQuery] ProductPaginationRequestDTO request)
     {
         var products =
-            await _productService.GetAllAsync();
+            await _productService
+                .GetAllAsync(request);
 
         return Ok(products);
     }
 
-    // ==========================================
+
+    // =====================================================
     // GET BY ID
     // PUBLIC
-    // ==========================================
+    // GET: /api/products/{id}
+    // =====================================================
 
     [HttpGet("{id:long}")]
-    public async Task<IActionResult> GetById(long id)
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<ProductResponseDTO>>
+        GetById(
+            long id)
     {
         var product =
-            await _productService.GetByIdAsync(id);
+            await _productService
+                .GetByIdAsync(id);
 
         if (product == null)
         {
             return NotFound(new
             {
-                message = "Product không tồn tại."
+                message =
+                    "Product không tồn tại."
             });
         }
 
         return Ok(product);
     }
 
-    // ==========================================
+
+    // =====================================================
     // GET BY CATEGORY
     // PUBLIC
-    // ==========================================
+    // GET: /api/products/category/{categoryId}
+    // =====================================================
 
     [HttpGet("category/{categoryId:long}")]
-    public async Task<IActionResult> GetByCategory(
-        long categoryId)
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<IEnumerable<ProductResponseDTO>>>
+        GetByCategory(
+            long categoryId)
     {
         var products =
             await _productService
-                .GetByCategoryAsync(categoryId);
+                .GetByCategoryAsync(
+                    categoryId);
 
         return Ok(products);
     }
 
-    // ==========================================
+
+    // =====================================================
     // SEARCH
     // PUBLIC
-    // ==========================================
+    // GET: /api/products/search?keyword=...
+    // =====================================================
 
     [HttpGet("search")]
-    public async Task<IActionResult> Search(
-        [FromQuery] string keyword)
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<IEnumerable<ProductResponseDTO>>>
+        Search(
+            [FromQuery] string keyword)
     {
         var products =
             await _productService
@@ -88,93 +116,113 @@ public class ProductController : ControllerBase
         return Ok(products);
     }
 
-    // ==========================================
+
+    // =====================================================
     // CREATE
     // SELLER ONLY
-    // ==========================================
+    // POST: /api/products
+    // =====================================================
 
     [HttpPost]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateProductDTO request)
+    public async Task<
+        ActionResult<ProductResponseDTO>>
+        Create(
+            [FromBody] CreateProductDTO request)
     {
         var userId =
             GetCurrentUserId();
 
         var product =
-            await _productService.CreateAsync(
-                userId,
-                request);
+            await _productService
+                .CreateAsync(
+                    userId,
+                    request);
 
         return CreatedAtAction(
             nameof(GetById),
-            new { id = product.Id },
+            new
+            {
+                id = product.Id
+            },
             product);
     }
 
-    // ==========================================
+
+    // =====================================================
     // UPDATE
     // SELLER ONLY
-    // ==========================================
+    // PUT: /api/products/{id}
+    // =====================================================
 
     [HttpPut("{id:long}")]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> Update(
-        long id,
-        [FromBody] UpdateProductDTO request)
+    public async Task<
+        ActionResult<ProductResponseDTO>>
+        Update(
+            long id,
+            [FromBody] UpdateProductDTO request)
     {
         var userId =
             GetCurrentUserId();
 
         var product =
-            await _productService.UpdateAsync(
-                userId,
-                id,
-                request);
+            await _productService
+                .UpdateAsync(
+                    userId,
+                    id,
+                    request);
 
         if (product == null)
         {
             return NotFound(new
             {
-                message = "Product không tồn tại."
+                message =
+                    "Product không tồn tại."
             });
         }
 
         return Ok(product);
     }
 
-    // ==========================================
+
+    // =====================================================
     // DELETE
     // SELLER ONLY
-    // ==========================================
+    // DELETE: /api/products/{id}
+    // =====================================================
 
     [HttpDelete("{id:long}")]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> Delete(
-        long id)
+    public async Task<IActionResult>
+        Delete(
+            long id)
     {
         var userId =
             GetCurrentUserId();
 
         var result =
-            await _productService.DeleteAsync(
-                userId,
-                id);
+            await _productService
+                .DeleteAsync(
+                    userId,
+                    id);
 
         if (!result)
         {
             return NotFound(new
             {
-                message = "Product không tồn tại."
+                message =
+                    "Product không tồn tại."
             });
         }
 
         return NoContent();
     }
 
-    // ==========================================
+
+    // =====================================================
     // GET CURRENT USER ID
-    // ==========================================
+    // =====================================================
 
     private long GetCurrentUserId()
     {
@@ -182,9 +230,10 @@ public class ProductController : ControllerBase
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
 
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(
+                userId))
         {
-            throw new UnauthorizedAccessException(
+            throw new UnauthorizedException(
                 "User ID không tồn tại trong JWT.");
         }
 
@@ -192,7 +241,7 @@ public class ProductController : ControllerBase
                 userId,
                 out var parsedUserId))
         {
-            throw new UnauthorizedAccessException(
+            throw new UnauthorizedException(
                 "User ID trong JWT không hợp lệ.");
         }
 

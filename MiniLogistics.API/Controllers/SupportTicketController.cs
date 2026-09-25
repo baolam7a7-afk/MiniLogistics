@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.SupportTicket;
 using MiniLogistics.BLL.Services.SupportTicket;
 
@@ -71,16 +72,22 @@ public class SupportTicketController : ControllerBase
 
     // =========================================================
     // GET: api/support-tickets/my
+    // PAGINATION
     // =========================================================
 
     [HttpGet("my")]
     [Authorize]
-    public async Task<IActionResult> GetMyTickets()
+    public async Task<
+        ActionResult<PagedResponseDTO<SupportTicketResponseDTO>>>
+        GetMyTickets(
+            [FromQuery] SupportTicketPaginationRequestDTO request)
     {
         var userId = GetUserId();
 
         var result =
-            await _service.GetMyTicketsAsync(userId);
+            await _service.GetMyTicketsAsync(
+                userId,
+                request);
 
         return Ok(result);
     }
@@ -89,14 +96,18 @@ public class SupportTicketController : ControllerBase
     // =========================================================
     // GET: api/support-tickets
     // ADMIN ONLY
+    // PAGINATION
     // =========================================================
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<
+        ActionResult<PagedResponseDTO<SupportTicketResponseDTO>>>
+        GetAll(
+            [FromQuery] SupportTicketPaginationRequestDTO request)
     {
         var result =
-            await _service.GetAllAsync();
+            await _service.GetAllAsync(request);
 
         return Ok(result);
     }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.User;
 using MiniLogistics.BLL.Services.User;
 
@@ -23,23 +24,43 @@ public class UserController : ControllerBase
         _userService = userService;
     }
 
+
     // =====================================================
-    // GET ALL USERS
-    // GET: /api/users
+    // GET ALL USERS - PAGINATION
+    //
+    // GET:
+    // /api/users?page=1&pageSize=10
+    //
+    // Có thể filter:
+    // /api/users?page=1&pageSize=10&search=customer
+    //
+    // /api/users?page=1&pageSize=10&role=seller
+    //
+    // /api/users?page=1&pageSize=10&status=active
+    //
+    // /api/users?page=1&pageSize=10
+    //     &search=customer
+    //     &role=customer
+    //     &status=active
     // =====================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] UserPaginationRequestDTO request)
     {
         var result =
-            await _userService.GetAllAsync();
+            await _userService.GetAllAsync(
+                request);
 
         return Ok(result);
     }
 
+
     // =====================================================
     // GET USER BY ID
-    // GET: /api/users/{id}
+    //
+    // GET:
+    // /api/users/{id}
     // =====================================================
 
     [HttpGet("{id:long}")]
@@ -57,9 +78,12 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // LOCK USER
-    // PUT: /api/users/{id}/lock
+    //
+    // PUT:
+    // /api/users/{id}/lock
     // =====================================================
 
     [HttpPut("{id:long}/lock")]
@@ -72,9 +96,12 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // UNLOCK USER
-    // PUT: /api/users/{id}/unlock
+    //
+    // PUT:
+    // /api/users/{id}/unlock
     // =====================================================
 
     [HttpPut("{id:long}/unlock")]
@@ -87,9 +114,12 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // UPDATE ROLE
-    // PUT: /api/users/{id}/role
+    //
+    // PUT:
+    // /api/users/{id}/role
     // =====================================================
 
     [HttpPut("{id:long}/role")]

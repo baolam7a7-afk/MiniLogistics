@@ -16,31 +16,33 @@ public class InventoryController : ControllerBase
     public InventoryController(
         IInventoryService inventoryService)
     {
-        _inventoryService =
-            inventoryService;
+        _inventoryService = inventoryService;
     }
+
 
     // =====================================================
     // GET ALL
+    // PAGINATION
     // =====================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] InventoryPaginationRequestDTO request)
     {
         var result =
-            await _inventoryService.GetAllAsync();
+            await _inventoryService.GetAllAsync(request);
 
         return Ok(result);
     }
+
 
     // =====================================================
     // GET BY VARIANT
     // =====================================================
 
     [HttpGet("variant/{productVariantId:long}")]
-    public async Task<IActionResult>
-        GetByVariantId(
-            long productVariantId)
+    public async Task<IActionResult> GetByVariantId(
+        long productVariantId)
     {
         var result =
             await _inventoryService
@@ -50,17 +52,16 @@ public class InventoryController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // INCREASE
     // =====================================================
 
     [HttpPost(
         "variant/{productVariantId:long}/increase")]
-    public async Task<IActionResult>
-        Increase(
-            long productVariantId,
-            [FromBody]
-            IncreaseInventoryDTO request)
+    public async Task<IActionResult> Increase(
+        long productVariantId,
+        [FromBody] IncreaseInventoryDTO request)
     {
         var result =
             await _inventoryService
@@ -71,17 +72,16 @@ public class InventoryController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // DECREASE
     // =====================================================
 
     [HttpPost(
         "variant/{productVariantId:long}/decrease")]
-    public async Task<IActionResult>
-        Decrease(
-            long productVariantId,
-            [FromBody]
-            DecreaseInventoryDTO request)
+    public async Task<IActionResult> Decrease(
+        long productVariantId,
+        [FromBody] DecreaseInventoryDTO request)
     {
         var result =
             await _inventoryService
@@ -92,23 +92,68 @@ public class InventoryController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // ADJUST
     // =====================================================
 
     [HttpPut(
         "variant/{productVariantId:long}/adjust")]
-    public async Task<IActionResult>
-        Adjust(
-            long productVariantId,
-            [FromBody]
-            AdjustInventoryDTO request)
+    public async Task<IActionResult> Adjust(
+        long productVariantId,
+        [FromBody] AdjustInventoryDTO request)
     {
         var result =
             await _inventoryService
                 .AdjustAsync(
                     productVariantId,
                     request);
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // RESERVE
+    // =====================================================
+
+    [HttpPost(
+        "variant/{productVariantId:long}/reserve")]
+    public async Task<IActionResult> Reserve(
+        long productVariantId,
+        [FromBody] InventoryQuantityDTO request)
+    {
+        await _inventoryService.ReserveAsync(
+            productVariantId,
+            request.Quantity);
+
+        var result =
+            await _inventoryService
+                .GetByVariantIdAsync(
+                    productVariantId);
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // RELEASE
+    // =====================================================
+
+    [HttpPost(
+        "variant/{productVariantId:long}/release")]
+    public async Task<IActionResult> Release(
+        long productVariantId,
+        [FromBody] InventoryQuantityDTO request)
+    {
+        await _inventoryService.ReleaseAsync(
+            productVariantId,
+            request.Quantity);
+
+        var result =
+            await _inventoryService
+                .GetByVariantIdAsync(
+                    productVariantId);
 
         return Ok(result);
     }

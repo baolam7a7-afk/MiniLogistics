@@ -11,18 +11,15 @@ namespace MiniLogistics.API.Controllers;
 [ApiController]
 [Route("api/refunds")]
 [Authorize]
-public class RefundTransactionsController
-    : ControllerBase
+public class RefundTransactionsController : ControllerBase
 {
-    private readonly IRefundTransactionService
-        _service;
+    private readonly IRefundTransactionService _service;
 
     public RefundTransactionsController(
         IRefundTransactionService service)
     {
         _service = service;
     }
-
 
     // =====================================================
     // CREATE
@@ -32,22 +29,18 @@ public class RefundTransactionsController
     [HttpPost]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> Create(
-        [FromBody]
-        CreateRefundTransactionDTO request)
+        [FromBody] CreateRefundTransactionDTO request)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        var result =
-            await _service.CreateAsync(
-                userId,
-                request);
+        var result = await _service.CreateAsync(
+            userId,
+            request);
 
         return StatusCode(
             StatusCodes.Status201Created,
             result);
     }
-
 
     // =====================================================
     // GET MY REFUNDS
@@ -56,18 +49,17 @@ public class RefundTransactionsController
 
     [HttpGet("my")]
     [Authorize(Roles = "customer")]
-    public async Task<IActionResult> GetMyRefunds()
+    public async Task<IActionResult> GetMyRefunds(
+        [FromQuery] RefundPaginationRequestDTO request)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        var result =
-            await _service
-                .GetMyRefundsAsync(userId);
+        var result = await _service.GetMyRefundsAsync(
+            userId,
+            request);
 
         return Ok(result);
     }
-
 
     // =====================================================
     // GET ALL
@@ -76,15 +68,14 @@ public class RefundTransactionsController
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] RefundPaginationRequestDTO request)
     {
-        var result =
-            await _service
-                .GetAllAsync();
+        var result = await _service.GetAllAsync(
+            request);
 
         return Ok(result);
     }
-
 
     // =====================================================
     // GET BY ID
@@ -96,22 +87,18 @@ public class RefundTransactionsController
     public async Task<IActionResult> GetById(
         long id)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        var role =
-            User.FindFirstValue(
-                ClaimTypes.Role);
+        var role = User.FindFirstValue(
+            ClaimTypes.Role);
 
-        var result =
-            await _service.GetByIdAsync(
-                userId,
-                role ?? string.Empty,
-                id);
+        var result = await _service.GetByIdAsync(
+            userId,
+            role ?? string.Empty,
+            id);
 
         return Ok(result);
     }
-
 
     // =====================================================
     // COMPLETE
@@ -123,17 +110,14 @@ public class RefundTransactionsController
     public async Task<IActionResult> Complete(
         long id)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        var result =
-            await _service.CompleteAsync(
-                userId,
-                id);
+        var result = await _service.CompleteAsync(
+            userId,
+            id);
 
         return Ok(result);
     }
-
 
     // =====================================================
     // FAIL
@@ -145,17 +129,14 @@ public class RefundTransactionsController
     public async Task<IActionResult> Fail(
         long id)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        var result =
-            await _service.FailAsync(
-                userId,
-                id);
+        var result = await _service.FailAsync(
+            userId,
+            id);
 
         return Ok(result);
     }
-
 
     // =====================================================
     // GET USER ID
@@ -163,9 +144,8 @@ public class RefundTransactionsController
 
     private long GetCurrentUserId()
     {
-        var claim =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
+        var claim = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
 
         if (!long.TryParse(
                 claim,

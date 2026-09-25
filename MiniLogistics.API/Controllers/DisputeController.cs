@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Dispute;
 using MiniLogistics.BLL.Services.Dispute;
 
@@ -70,16 +71,22 @@ public class DisputeController : ControllerBase
 
     // =========================================================
     // GET: api/disputes/my
+    // PAGINATION
     // =========================================================
 
     [HttpGet("my")]
     [Authorize]
-    public async Task<IActionResult> GetMyDisputes()
+    public async Task<
+        ActionResult<PagedResponseDTO<DisputeResponseDTO>>>
+        GetMyDisputes(
+            [FromQuery] DisputePaginationRequestDTO request)
     {
         var userId = GetUserId();
 
         var result =
-            await _service.GetMyDisputesAsync(userId);
+            await _service.GetMyDisputesAsync(
+                userId,
+                request);
 
         return Ok(result);
     }
@@ -88,14 +95,19 @@ public class DisputeController : ControllerBase
     // =========================================================
     // GET: api/disputes
     // ADMIN ONLY
+    // PAGINATION
     // =========================================================
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<
+        ActionResult<PagedResponseDTO<DisputeResponseDTO>>>
+        GetAll(
+            [FromQuery] DisputePaginationRequestDTO request)
     {
         var result =
-            await _service.GetAllAsync();
+            await _service.GetAllAsync(
+                request);
 
         return Ok(result);
     }

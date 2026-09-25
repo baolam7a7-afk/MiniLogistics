@@ -15,7 +15,6 @@ public class OrderController : ControllerBase
 {
     private readonly IOrderService _orderService;
 
-
     public OrderController(
         IOrderService orderService)
     {
@@ -58,14 +57,16 @@ public class OrderController : ControllerBase
 
     [HttpGet("my")]
     [Authorize(Roles = "customer")]
-    public async Task<IActionResult> GetMyOrders()
+    public async Task<IActionResult> GetMyOrders(
+        [FromQuery] OrderPaginationRequestDTO request)
     {
         long customerId =
             GetCurrentUserId();
 
         var result =
-            await _orderService
-                .GetMyOrdersAsync(customerId);
+            await _orderService.GetMyOrdersAsync(
+                customerId,
+                request);
 
         return Ok(result);
     }
@@ -73,6 +74,7 @@ public class OrderController : ControllerBase
 
     // =====================================================
     // GET BY ID
+    // CUSTOMER / SELLER / ADMIN
     // =====================================================
 
     [HttpGet("{id:long}")]
@@ -87,11 +89,10 @@ public class OrderController : ControllerBase
             GetCurrentRole();
 
         var result =
-            await _orderService
-                .GetByIdAsync(
-                    id,
-                    userId,
-                    role);
+            await _orderService.GetByIdAsync(
+                id,
+                userId,
+                role);
 
         return Ok(result);
     }
@@ -104,11 +105,12 @@ public class OrderController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] OrderPaginationRequestDTO request)
     {
         var result =
-            await _orderService
-                .GetAllAsync();
+            await _orderService.GetAllAsync(
+                request);
 
         return Ok(result);
     }
@@ -121,15 +123,16 @@ public class OrderController : ControllerBase
 
     [HttpGet("shop")]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> GetShopOrders()
+    public async Task<IActionResult> GetShopOrders(
+        [FromQuery] OrderPaginationRequestDTO request)
     {
         long sellerUserId =
             GetCurrentUserId();
 
         var result =
-            await _orderService
-                .GetByShopOwnerAsync(
-                    sellerUserId);
+            await _orderService.GetByShopOwnerAsync(
+                sellerUserId,
+                request);
 
         return Ok(result);
     }
@@ -149,10 +152,9 @@ public class OrderController : ControllerBase
             GetCurrentUserId();
 
         var result =
-            await _orderService
-                .CancelAsync(
-                    id,
-                    customerId);
+            await _orderService.CancelAsync(
+                id,
+                customerId);
 
         return Ok(result);
     }
@@ -176,12 +178,11 @@ public class OrderController : ControllerBase
             GetCurrentRole();
 
         var result =
-            await _orderService
-                .UpdateStatusAsync(
-                    id,
-                    userId,
-                    role,
-                    request);
+            await _orderService.UpdateStatusAsync(
+                id,
+                userId,
+                role,
+                request);
 
         return Ok(result);
     }
@@ -197,7 +198,9 @@ public class OrderController : ControllerBase
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
 
-        if (!long.TryParse(value, out long userId))
+        if (!long.TryParse(
+                value,
+                out long userId))
         {
             throw new UnauthorizedAccessException(
                 "Không xác định được User ID.");

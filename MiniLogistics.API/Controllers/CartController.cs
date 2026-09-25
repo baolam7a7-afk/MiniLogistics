@@ -30,7 +30,7 @@ public class CartController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetMyCart()
     {
-        long userId = GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _cartService.GetMyCartAsync(userId);
@@ -48,7 +48,7 @@ public class CartController : ControllerBase
     public async Task<IActionResult> AddToCart(
         [FromBody] AddToCartDTO request)
     {
-        long userId = GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _cartService.AddToCartAsync(
@@ -69,7 +69,7 @@ public class CartController : ControllerBase
         long cartItemId,
         [FromBody] UpdateCartItemDTO request)
     {
-        long userId = GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _cartService.UpdateCartItemAsync(
@@ -90,7 +90,7 @@ public class CartController : ControllerBase
     public async Task<IActionResult> RemoveCartItem(
         long cartItemId)
     {
-        long userId = GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         await _cartService.RemoveCartItemAsync(
             userId,
@@ -98,7 +98,8 @@ public class CartController : ControllerBase
 
         return Ok(new
         {
-            message = "Đã xóa sản phẩm khỏi giỏ hàng."
+            message =
+                "Đã xóa sản phẩm khỏi giỏ hàng."
         });
     }
 
@@ -111,13 +112,15 @@ public class CartController : ControllerBase
     [HttpDelete]
     public async Task<IActionResult> ClearCart()
     {
-        long userId = GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
-        await _cartService.ClearCartAsync(userId);
+        await _cartService.ClearCartAsync(
+            userId);
 
         return Ok(new
         {
-            message = "Đã xóa toàn bộ giỏ hàng."
+            message =
+                "Đã xóa toàn bộ giỏ hàng."
         });
     }
 
@@ -132,7 +135,6 @@ public class CartController : ControllerBase
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
 
-
         if (string.IsNullOrWhiteSpace(
             userIdValue))
         {
@@ -140,15 +142,13 @@ public class CartController : ControllerBase
                 "Không xác định được UserId từ JWT.");
         }
 
-
         if (!long.TryParse(
             userIdValue,
-            out long userId))
+            out var userId))
         {
             throw new UnauthorizedAccessException(
                 "UserId trong JWT không hợp lệ.");
         }
-
 
         return userId;
     }

@@ -2,8 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MiniLogistics.BLL.DTOs.ReturnRequest;
-using MiniLogistics.BLL.Services.ReturnRequest;
 using MiniLogistics.BLL.Exceptions;
+using MiniLogistics.BLL.Services.ReturnRequest;
 
 namespace MiniLogistics.API.Controllers;
 
@@ -32,10 +32,9 @@ public class ReturnRequestController : ControllerBase
     {
         var userId = GetUserId();
 
-        var result =
-            await _service.CreateAsync(
-                userId,
-                request);
+        var result = await _service.CreateAsync(
+            userId,
+            request);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -50,13 +49,14 @@ public class ReturnRequestController : ControllerBase
 
     [HttpGet("my")]
     [Authorize(Roles = "customer")]
-    public async Task<IActionResult> GetMyRequests()
+    public async Task<IActionResult> GetMyRequests(
+        [FromQuery] ReturnRequestPaginationRequestDTO request)
     {
         var userId = GetUserId();
 
-        var result =
-            await _service.GetMyRequestsAsync(
-                userId);
+        var result = await _service.GetMyRequestsAsync(
+            userId,
+            request);
 
         return Ok(result);
     }
@@ -75,11 +75,10 @@ public class ReturnRequestController : ControllerBase
 
         var role = GetRole();
 
-        var result =
-            await _service.GetByIdAsync(
-                userId,
-                role,
-                id);
+        var result = await _service.GetByIdAsync(
+            userId,
+            role,
+            id);
 
         if (result == null)
         {
@@ -96,13 +95,14 @@ public class ReturnRequestController : ControllerBase
 
     [HttpGet("shop")]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> GetShopRequests()
+    public async Task<IActionResult> GetShopRequests(
+        [FromQuery] ReturnRequestPaginationRequestDTO request)
     {
         var sellerId = GetUserId();
 
-        var result =
-            await _service.GetShopRequestsAsync(
-                sellerId);
+        var result = await _service.GetShopRequestsAsync(
+            sellerId,
+            request);
 
         return Ok(result);
     }
@@ -114,10 +114,10 @@ public class ReturnRequestController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] ReturnRequestPaginationRequestDTO request)
     {
-        var result =
-            await _service.GetAllAsync();
+        var result = await _service.GetAllAsync(request);
 
         return Ok(result);
     }
@@ -136,11 +136,10 @@ public class ReturnRequestController : ControllerBase
 
         var role = GetRole();
 
-        var result =
-            await _service.ApproveAsync(
-                userId,
-                role,
-                id);
+        var result = await _service.ApproveAsync(
+            userId,
+            role,
+            id);
 
         return Ok(result);
     }
@@ -159,11 +158,10 @@ public class ReturnRequestController : ControllerBase
 
         var role = GetRole();
 
-        var result =
-            await _service.RejectAsync(
-                userId,
-                role,
-                id);
+        var result = await _service.RejectAsync(
+            userId,
+            role,
+            id);
 
         return Ok(result);
     }
@@ -174,9 +172,8 @@ public class ReturnRequestController : ControllerBase
 
     private long GetUserId()
     {
-        var claim =
-            User.FindFirst(
-                ClaimTypes.NameIdentifier);
+        var claim = User.FindFirst(
+            ClaimTypes.NameIdentifier);
 
         if (claim == null)
         {

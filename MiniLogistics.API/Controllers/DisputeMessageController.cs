@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.DisputeMessage;
 using MiniLogistics.BLL.Services.DisputeMessage;
 
@@ -73,13 +74,18 @@ public class DisputeMessageController : ControllerBase
 
 
     // =========================================================
-    // GET: api/dispute-messages/dispute/{disputeId}
+    // GET:
+    // api/dispute-messages/dispute/{disputeId}
+    // PAGINATION
     // =========================================================
 
     [HttpGet("dispute/{disputeId:long}")]
     [Authorize]
-    public async Task<IActionResult> GetByDisputeId(
-        long disputeId)
+    public async Task<
+        ActionResult<PagedResponseDTO<DisputeMessageResponseDTO>>>
+        GetByDisputeId(
+            long disputeId,
+            [FromQuery] DisputeMessagePaginationRequestDTO request)
     {
         var userId = GetUserId();
 
@@ -89,7 +95,8 @@ public class DisputeMessageController : ControllerBase
             await _service.GetByDisputeIdAsync(
                 userId,
                 role,
-                disputeId);
+                disputeId,
+                request);
 
         return Ok(result);
     }

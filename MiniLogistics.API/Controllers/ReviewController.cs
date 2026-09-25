@@ -29,8 +29,7 @@ public class ReviewController : ControllerBase
     public async Task<IActionResult> Create(
         [FromBody] CreateReviewDTO request)
     {
-        long customerId =
-            GetUserId();
+        long customerId = GetUserId();
 
         var result =
             await _reviewService.CreateAsync(
@@ -67,18 +66,20 @@ public class ReviewController : ControllerBase
 
     // =====================================================
     // GET REVIEWS BY PRODUCT
-    // PUBLIC
+    // PUBLIC + PAGINATION
     // =====================================================
 
     [HttpGet("product/{productId:long}")]
     [AllowAnonymous]
-    public async Task<IActionResult>
-        GetByProduct(
-            long productId)
+    public async Task<IActionResult> GetByProduct(
+        long productId,
+        [FromQuery] ReviewPaginationRequestDTO request)
     {
         var result =
             await _reviewService
-                .GetByProductIdAsync(productId);
+                .GetByProductIdAsync(
+                    productId,
+                    request);
 
         return Ok(result);
     }
@@ -86,20 +87,21 @@ public class ReviewController : ControllerBase
 
     // =====================================================
     // GET MY REVIEWS
-    // CUSTOMER
+    // CUSTOMER + PAGINATION
     // =====================================================
 
     [HttpGet("my")]
     [Authorize(Roles = "customer")]
-    public async Task<IActionResult>
-        GetMyReviews()
+    public async Task<IActionResult> GetMyReviews(
+        [FromQuery] ReviewPaginationRequestDTO request)
     {
-        long customerId =
-            GetUserId();
+        long customerId = GetUserId();
 
         var result =
             await _reviewService
-                .GetMyReviewsAsync(customerId);
+                .GetMyReviewsAsync(
+                    customerId,
+                    request);
 
         return Ok(result);
     }
@@ -116,8 +118,7 @@ public class ReviewController : ControllerBase
         long id,
         [FromBody] UpdateReviewDTO request)
     {
-        long customerId =
-            GetUserId();
+        long customerId = GetUserId();
 
         var result =
             await _reviewService.UpdateAsync(
@@ -139,8 +140,7 @@ public class ReviewController : ControllerBase
     public async Task<IActionResult> Delete(
         long id)
     {
-        long customerId =
-            GetUserId();
+        long customerId = GetUserId();
 
         await _reviewService.DeleteAsync(
             customerId,

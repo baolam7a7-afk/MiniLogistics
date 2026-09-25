@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using MiniLogistics.BLL.DTOs.Category;
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.Services;
 
 namespace MiniLogistics.API.Controllers;
@@ -11,7 +13,6 @@ public class CategoryController : ControllerBase
 {
     private readonly ICategoryService _categoryService;
 
-
     public CategoryController(
         ICategoryService categoryService)
     {
@@ -21,13 +22,19 @@ public class CategoryController : ControllerBase
 
     // =====================================================
     // GET ALL
+    // GET: /api/categories
     // =====================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<PagedResponseDTO<CategoryResponseDTO>>>
+        GetAll(
+            [FromQuery] CategoryPaginationRequestDTO request)
     {
         var categories =
-            await _categoryService.GetAllAsync();
+            await _categoryService
+                .GetAllAsync(request);
 
         return Ok(categories);
     }
@@ -35,20 +42,26 @@ public class CategoryController : ControllerBase
 
     // =====================================================
     // GET BY ID
+    // GET: /api/categories/{id}
     // =====================================================
 
     [HttpGet("{id:long}")]
-    public async Task<IActionResult> GetById(
-        long id)
+    [AllowAnonymous]
+    public async Task<
+        ActionResult<CategoryResponseDTO>>
+        GetById(
+            long id)
     {
         var category =
-            await _categoryService.GetByIdAsync(id);
+            await _categoryService
+                .GetByIdAsync(id);
 
         if (category == null)
         {
             return NotFound(new
             {
-                message = "Category không tồn tại."
+                message =
+                    "Category không tồn tại."
             });
         }
 
@@ -58,16 +71,20 @@ public class CategoryController : ControllerBase
 
     // =====================================================
     // CREATE
+    // ADMIN ONLY
+    // POST: /api/categories
     // =====================================================
 
     [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateCategoryDTO request)
+    [Authorize(Roles = "admin")]
+    public async Task<
+        ActionResult<CategoryResponseDTO>>
+        Create(
+            [FromBody] CreateCategoryDTO request)
     {
         var category =
-            await _categoryService.CreateAsync(
-                request
-            );
+            await _categoryService
+                .CreateAsync(request);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -77,31 +94,36 @@ public class CategoryController : ControllerBase
                 id = category.Id
             },
 
-            category
-        );
+            category);
     }
 
 
     // =====================================================
     // UPDATE
+    // ADMIN ONLY
+    // PUT: /api/categories/{id}
     // =====================================================
 
     [HttpPut("{id:long}")]
-    public async Task<IActionResult> Update(
-        long id,
-        [FromBody] UpdateCategoryDTO request)
+    [Authorize(Roles = "admin")]
+    public async Task<
+        ActionResult<CategoryResponseDTO>>
+        Update(
+            long id,
+            [FromBody] UpdateCategoryDTO request)
     {
         var category =
-            await _categoryService.UpdateAsync(
-                id,
-                request
-            );
+            await _categoryService
+                .UpdateAsync(
+                    id,
+                    request);
 
         if (category == null)
         {
             return NotFound(new
             {
-                message = "Category không tồn tại."
+                message =
+                    "Category không tồn tại."
             });
         }
 
@@ -111,20 +133,26 @@ public class CategoryController : ControllerBase
 
     // =====================================================
     // DELETE
+    // ADMIN ONLY
+    // DELETE: /api/categories/{id}
     // =====================================================
 
     [HttpDelete("{id:long}")]
-    public async Task<IActionResult> Delete(
-        long id)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult>
+        Delete(
+            long id)
     {
         var result =
-            await _categoryService.DeleteAsync(id);
+            await _categoryService
+                .DeleteAsync(id);
 
         if (!result)
         {
             return NotFound(new
             {
-                message = "Category không tồn tại."
+                message =
+                    "Category không tồn tại."
             });
         }
 

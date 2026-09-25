@@ -12,27 +12,28 @@ namespace MiniLogistics.API.Controllers;
 [Route("api/product-variants")]
 public class ProductVariantController : ControllerBase
 {
-    private readonly IProductVariantService
-        _productVariantService;
+    private readonly IProductVariantService _productVariantService;
 
     public ProductVariantController(
         IProductVariantService productVariantService)
     {
-        _productVariantService =
-            productVariantService;
+        _productVariantService = productVariantService;
     }
 
 
     // =====================================================
     // GET ALL
     // PUBLIC
+    // PAGINATION
     // =====================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] ProductVariantPaginationRequestDTO request)
     {
         var result =
-            await _productVariantService.GetAllAsync();
+            await _productVariantService.GetAllAsync(request);
 
         return Ok(result);
     }
@@ -44,13 +45,11 @@ public class ProductVariantController : ControllerBase
     // =====================================================
 
     [HttpGet("{id:long}")]
-    public async Task<IActionResult> GetById(
-        long id)
+    [AllowAnonymous]
+    public async Task<IActionResult> GetById(long id)
     {
         var result =
-            await _productVariantService.GetByIdAsync(
-                id
-            );
+            await _productVariantService.GetByIdAsync(id);
 
         if (result == null)
         {
@@ -67,6 +66,7 @@ public class ProductVariantController : ControllerBase
     // =====================================================
 
     [HttpGet("product/{productId:long}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetByProductId(
         long productId)
     {
@@ -88,14 +88,12 @@ public class ProductVariantController : ControllerBase
     public async Task<IActionResult> Create(
         [FromBody] CreateProductVariantDTO request)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _productVariantService.CreateAsync(
                 userId,
-                request
-            );
+                request);
 
         return Ok(result);
     }
@@ -112,15 +110,13 @@ public class ProductVariantController : ControllerBase
         long id,
         [FromBody] UpdateProductVariantDTO request)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _productVariantService.UpdateAsync(
                 userId,
                 id,
-                request
-            );
+                request);
 
         if (result == null)
         {
@@ -138,17 +134,14 @@ public class ProductVariantController : ControllerBase
 
     [Authorize(Roles = "seller")]
     [HttpDelete("{id:long}")]
-    public async Task<IActionResult> Delete(
-        long id)
+    public async Task<IActionResult> Delete(long id)
     {
-        var userId =
-            GetCurrentUserId();
+        var userId = GetCurrentUserId();
 
         var result =
             await _productVariantService.DeleteAsync(
                 userId,
-                id
-            );
+                id);
 
         if (!result)
         {
@@ -167,16 +160,14 @@ public class ProductVariantController : ControllerBase
     {
         var userIdClaim =
             User.FindFirstValue(
-                ClaimTypes.NameIdentifier
-            );
+                ClaimTypes.NameIdentifier);
 
         if (!long.TryParse(
                 userIdClaim,
                 out var userId))
         {
             throw new UnauthorizedAccessException(
-                "Không xác định được UserId."
-            );
+                "Không xác định được UserId.");
         }
 
         return userId;

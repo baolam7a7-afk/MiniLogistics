@@ -1,6 +1,8 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using MiniLogistics.BLL.DTOs.Voucher;
 using MiniLogistics.BLL.Services.Voucher;
 
@@ -19,22 +21,27 @@ public class VoucherController : ControllerBase
         _service = service;
     }
 
+
     // =====================================================
     // GET ALL
+    // PUBLIC
     // =====================================================
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] VoucherPaginationRequestDTO request)
     {
         var result =
-            await _service.GetAllAsync();
+            await _service.GetAllAsync(request);
 
         return Ok(result);
     }
 
+
     // =====================================================
     // GET BY ID
+    // PUBLIC
     // =====================================================
 
     [HttpGet("{id:long}")]
@@ -53,23 +60,30 @@ public class VoucherController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // GET BY SHOP
+    // PUBLIC
     // =====================================================
 
     [HttpGet("shop/{shopId:long}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetByShop(
-        long shopId)
+        long shopId,
+        [FromQuery] VoucherPaginationRequestDTO request)
     {
         var result =
-            await _service.GetByShopIdAsync(shopId);
+            await _service.GetByShopIdAsync(
+                shopId,
+                request);
 
         return Ok(result);
     }
 
+
     // =====================================================
     // GET BY CODE
+    // PUBLIC
     // =====================================================
 
     [HttpGet("code/{code}")]
@@ -88,8 +102,10 @@ public class VoucherController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // VALIDATE
+    // PUBLIC
     // =====================================================
 
     [HttpGet("validate")]
@@ -108,8 +124,10 @@ public class VoucherController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // CREATE
+    // ADMIN / SELLER
     // =====================================================
 
     [HttpPost]
@@ -117,10 +135,10 @@ public class VoucherController : ControllerBase
     public async Task<IActionResult> Create(
         [FromBody] CreateVoucherDTO request)
     {
-        var userId =
+        long userId =
             GetCurrentUserId();
 
-        var role =
+        string role =
             GetCurrentRole();
 
         var result =
@@ -132,8 +150,10 @@ public class VoucherController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // UPDATE
+    // ADMIN / SELLER
     // =====================================================
 
     [HttpPut("{id:long}")]
@@ -142,10 +162,10 @@ public class VoucherController : ControllerBase
         long id,
         [FromBody] UpdateVoucherDTO request)
     {
-        var userId =
+        long userId =
             GetCurrentUserId();
 
-        var role =
+        string role =
             GetCurrentRole();
 
         var result =
@@ -158,8 +178,10 @@ public class VoucherController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
     // DELETE
+    // ADMIN / SELLER
     // =====================================================
 
     [HttpDelete("{id:long}")]
@@ -167,10 +189,10 @@ public class VoucherController : ControllerBase
     public async Task<IActionResult> Delete(
         long id)
     {
-        var userId =
+        long userId =
             GetCurrentUserId();
 
-        var role =
+        string role =
             GetCurrentRole();
 
         await _service.DeleteAsync(
@@ -180,6 +202,7 @@ public class VoucherController : ControllerBase
 
         return NoContent();
     }
+
 
     // =====================================================
     // CLAIMS
@@ -192,8 +215,8 @@ public class VoucherController : ControllerBase
                 ClaimTypes.NameIdentifier);
 
         if (!long.TryParse(
-            value,
-            out long userId))
+                value,
+                out long userId))
         {
             throw new UnauthorizedAccessException(
                 "Không xác định được User ID.");
@@ -201,6 +224,7 @@ public class VoucherController : ControllerBase
 
         return userId;
     }
+
 
     private string GetCurrentRole()
     {

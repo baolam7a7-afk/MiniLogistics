@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.SupportMessage;
 using MiniLogistics.BLL.Services.SupportMessage;
 
@@ -73,13 +74,18 @@ public class SupportMessageController : ControllerBase
 
 
     // =========================================================
-    // GET: api/support-messages/ticket/{ticketId}
+    // GET:
+    // api/support-messages/ticket/{ticketId}
+    // PAGINATION
     // =========================================================
 
     [HttpGet("ticket/{ticketId:long}")]
     [Authorize]
-    public async Task<IActionResult> GetByTicketId(
-        long ticketId)
+    public async Task<
+        ActionResult<PagedResponseDTO<SupportMessageResponseDTO>>>
+        GetByTicketId(
+            long ticketId,
+            [FromQuery] SupportMessagePaginationRequestDTO request)
     {
         var userId = GetUserId();
 
@@ -89,7 +95,8 @@ public class SupportMessageController : ControllerBase
             await _service.GetByTicketIdAsync(
                 userId,
                 role,
-                ticketId);
+                ticketId,
+                request);
 
         return Ok(result);
     }

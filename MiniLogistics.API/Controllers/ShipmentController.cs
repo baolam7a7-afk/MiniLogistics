@@ -22,6 +22,7 @@ public class ShipmentController : ControllerBase
             shipmentService;
     }
 
+
     // =====================================================
     // CREATE SHIPMENT
     // ADMIN / SELLER
@@ -48,30 +49,36 @@ public class ShipmentController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
-    // GET ALL
+    // GET ALL SHIPMENTS
     // ADMIN
+    // PAGINATION
     // =====================================================
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] ShipmentPaginationRequestDTO request)
     {
         var result =
             await _shipmentService
-                .GetAllAsync();
+                .GetAllAsync(request);
 
         return Ok(result);
     }
 
+
     // =====================================================
     // GET MY SHIPMENTS
     // SHIPPER
+    // PAGINATION
     // =====================================================
 
     [HttpGet("my")]
     [Authorize(Roles = "shipper")]
-    public async Task<IActionResult> GetMy()
+    public async Task<IActionResult> GetMy(
+        [FromQuery] ShipmentPaginationRequestDTO request)
     {
         long shipperUserId =
             GetCurrentUserId();
@@ -79,13 +86,16 @@ public class ShipmentController : ControllerBase
         var result =
             await _shipmentService
                 .GetMyShipmentsAsync(
-                    shipperUserId);
+                    shipperUserId,
+                    request);
 
         return Ok(result);
     }
 
+
     // =====================================================
-    // GET BY ID
+    // GET SHIPMENT BY ID
+    // ADMIN / SELLER / SHIPPER
     // =====================================================
 
     [HttpGet("{id:long}")]
@@ -108,6 +118,7 @@ public class ShipmentController : ControllerBase
 
         return Ok(result);
     }
+
 
     // =====================================================
     // ASSIGN SHIPPER
@@ -137,8 +148,9 @@ public class ShipmentController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
-    // UPDATE STATUS
+    // UPDATE SHIPMENT STATUS
     // SHIPPER
     // =====================================================
 
@@ -161,8 +173,9 @@ public class ShipmentController : ControllerBase
         return Ok(result);
     }
 
+
     // =====================================================
-    // CURRENT USER
+    // GET CURRENT USER ID
     // =====================================================
 
     private long GetCurrentUserId()
@@ -181,6 +194,11 @@ public class ShipmentController : ControllerBase
 
         return userId;
     }
+
+
+    // =====================================================
+    // GET CURRENT ROLE
+    // =====================================================
 
     private string GetCurrentRole()
     {

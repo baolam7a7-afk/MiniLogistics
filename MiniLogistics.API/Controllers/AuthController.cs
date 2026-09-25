@@ -17,10 +17,12 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+
     // =====================================================
     // REGISTER
     // POST: api/auth/register
     // =====================================================
+
     [HttpPost("register")]
     [AllowAnonymous]
     public async Task<IActionResult> Register(
@@ -42,10 +44,12 @@ public class AuthController : ControllerBase
         }
     }
 
+
     // =====================================================
     // LOGIN
     // POST: api/auth/login
     // =====================================================
+
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login(
@@ -67,10 +71,39 @@ public class AuthController : ControllerBase
         }
     }
 
+
     // =====================================================
-    // REFRESH
+    // GOOGLE LOGIN
+    // POST: api/auth/google
+    // =====================================================
+
+    [HttpPost("google")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleLogin(
+        [FromBody] GoogleLoginRequestDTO request)
+    {
+        try
+        {
+            var result =
+                await _authService.GoogleLoginAsync(request);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Unauthorized(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+
+    // =====================================================
+    // REFRESH TOKEN
     // POST: api/auth/refresh
     // =====================================================
+
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<IActionResult> RefreshToken(
@@ -92,10 +125,12 @@ public class AuthController : ControllerBase
         }
     }
 
+
     // =====================================================
     // LOGOUT
     // POST: api/auth/logout
     // =====================================================
+
     [HttpPost("logout")]
     [AllowAnonymous]
     public async Task<IActionResult> Logout(
@@ -108,6 +143,120 @@ public class AuthController : ControllerBase
             return Ok(new
             {
                 message = "Đăng xuất thành công."
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+
+    // =====================================================
+    // FORGOT PASSWORD
+    // POST: api/auth/forgot-password
+    // =====================================================
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(
+        [FromBody] ForgotPasswordRequestDTO request)
+    {
+        try
+        {
+            var resetToken =
+                await _authService.ForgotPasswordAsync(request);
+
+            return Ok(new
+            {
+                message = "Tạo Reset Password Token thành công.",
+
+                // DEVELOPMENT / SWAGGER ONLY
+                // Production sẽ gửi token qua Email
+                resetToken = resetToken
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+
+    // =====================================================
+    // RESET PASSWORD
+    // POST: api/auth/reset-password
+    // =====================================================
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] ResetPasswordRequestDTO request)
+    {
+        try
+        {
+            await _authService.ResetPasswordAsync(request);
+
+            return Ok(new
+            {
+                message = "Đặt lại mật khẩu thành công."
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+    // =====================================================
+    // CHANGE PASSWORD
+    // POST: api/auth/change-password
+    // =====================================================
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] ChangePasswordRequestDTO request)
+    {
+        try
+        {
+            var userIdClaim =
+                User.FindFirst(
+                    System.Security.Claims.ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Không xác định được User."
+                });
+            }
+
+            if (!long.TryParse(
+                    userIdClaim.Value,
+                    out long userId))
+            {
+                return Unauthorized(new
+                {
+                    message = "UserId trong JWT không hợp lệ."
+                });
+            }
+
+            await _authService.ChangePasswordAsync(
+                userId,
+                request);
+
+            return Ok(new
+            {
+                message = "Đổi mật khẩu thành công."
             });
         }
         catch (Exception ex)

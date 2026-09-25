@@ -43,27 +43,33 @@ public class PayoutRequestController : ControllerBase
 
     [HttpGet("my/{shopId:long}")]
     [Authorize(Roles = "seller")]
-    public async Task<IActionResult> GetMy(long shopId)
+    public async Task<IActionResult> GetMy(
+        long shopId,
+        [FromQuery] PayoutRequestPaginationRequestDTO request)
     {
         var userId = GetUserId();
 
         var result = await _payoutRequestService
-            .GetMyAsync(userId, shopId);
+            .GetMyAsync(
+                userId,
+                shopId,
+                request);
 
         return Ok(result);
     }
 
 
     // =====================================================
-    // ADMIN - GET ALL
+    // ADMIN - GET ALL PAYOUT REQUESTS
     // =====================================================
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] PayoutRequestPaginationRequestDTO request)
     {
         var result = await _payoutRequestService
-            .GetAllAsync();
+            .GetAllAsync(request);
 
         return Ok(result);
     }
@@ -103,7 +109,9 @@ public class PayoutRequestController : ControllerBase
         var adminUserId = GetUserId();
 
         var result = await _payoutRequestService
-            .ApproveAsync(adminUserId, id);
+            .ApproveAsync(
+                adminUserId,
+                id);
 
         return Ok(result);
     }
@@ -120,7 +128,9 @@ public class PayoutRequestController : ControllerBase
         var adminUserId = GetUserId();
 
         var result = await _payoutRequestService
-            .RejectAsync(adminUserId, id);
+            .RejectAsync(
+                adminUserId,
+                id);
 
         return Ok(result);
     }
@@ -133,9 +143,12 @@ public class PayoutRequestController : ControllerBase
     private long GetUserId()
     {
         var userIdClaim =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
 
-        if (!long.TryParse(userIdClaim, out var userId))
+        if (!long.TryParse(
+                userIdClaim,
+                out var userId))
         {
             throw new UnauthorizedAccessException(
                 "Không xác định được User ID từ JWT.");

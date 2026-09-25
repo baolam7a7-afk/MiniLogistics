@@ -18,8 +18,7 @@ public class PaymentController : ControllerBase
     public PaymentController(
         IPaymentService paymentService)
     {
-        _paymentService =
-            paymentService;
+        _paymentService = paymentService;
     }
 
 
@@ -30,11 +29,11 @@ public class PaymentController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] PaymentPaginationRequestDTO request)
     {
         var result =
-            await _paymentService
-                .GetAllAsync();
+            await _paymentService.GetAllAsync(request);
 
         return Ok(result);
     }
@@ -47,15 +46,15 @@ public class PaymentController : ControllerBase
 
     [HttpGet("my")]
     [Authorize(Roles = "customer")]
-    public async Task<IActionResult> GetMy()
+    public async Task<IActionResult> GetMy(
+        [FromQuery] PaymentPaginationRequestDTO request)
     {
-        long customerId =
-            GetCurrentUserId();
+        long customerId = GetCurrentUserId();
 
         var result =
-            await _paymentService
-                .GetMyPaymentsAsync(
-                    customerId);
+            await _paymentService.GetMyPaymentsAsync(
+                customerId,
+                request);
 
         return Ok(result);
     }
@@ -63,26 +62,23 @@ public class PaymentController : ControllerBase
 
     // =====================================================
     // GET BY ID
+    // CUSTOMER / SELLER / ADMIN
     // =====================================================
 
     [HttpGet("{id:long}")]
-    [Authorize(
-        Roles = "customer,seller,admin")]
+    [Authorize(Roles = "customer,seller,admin")]
     public async Task<IActionResult> GetById(
         long id)
     {
-        long userId =
-            GetCurrentUserId();
+        long userId = GetCurrentUserId();
 
-        string role =
-            GetCurrentRole();
+        string role = GetCurrentRole();
 
         var result =
-            await _paymentService
-                .GetByIdAsync(
-                    id,
-                    userId,
-                    role);
+            await _paymentService.GetByIdAsync(
+                id,
+                userId,
+                role);
 
         return Ok(result);
     }
@@ -90,26 +86,23 @@ public class PaymentController : ControllerBase
 
     // =====================================================
     // GET BY ORDER
+    // CUSTOMER / SELLER / ADMIN
     // =====================================================
 
     [HttpGet("order/{orderId:long}")]
-    [Authorize(
-        Roles = "customer,seller,admin")]
+    [Authorize(Roles = "customer,seller,admin")]
     public async Task<IActionResult> GetByOrder(
         long orderId)
     {
-        long userId =
-            GetCurrentUserId();
+        long userId = GetCurrentUserId();
 
-        string role =
-            GetCurrentRole();
+        string role = GetCurrentRole();
 
         var result =
-            await _paymentService
-                .GetByOrderIdAsync(
-                    orderId,
-                    userId,
-                    role);
+            await _paymentService.GetByOrderIdAsync(
+                orderId,
+                userId,
+                role);
 
         return Ok(result);
     }
@@ -127,10 +120,9 @@ public class PaymentController : ControllerBase
         [FromBody] UpdatePaymentStatusDTO request)
     {
         var result =
-            await _paymentService
-                .UpdateStatusAsync(
-                    id,
-                    request);
+            await _paymentService.UpdateStatusAsync(
+                id,
+                request);
 
         return Ok(result);
     }
