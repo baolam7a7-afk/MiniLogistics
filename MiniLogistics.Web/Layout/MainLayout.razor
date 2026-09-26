@@ -1,242 +1,111 @@
 ﻿@inherits LayoutComponentBase
 
-@implements IDisposable
+<div class="app-layout">
 
-@using MiniLogistics.Web.Services.Auth
-
-@inject AuthStateService AuthState
-@inject TokenStorageService TokenStorage
-@inject NavigationManager Navigation
-
-
-<div class="app-shell">
-
-    <!-- ========================= -->
     <!-- SIDEBAR -->
-    <!-- ========================= -->
-
-    <aside class="sidebar">
-
-        <!-- LOGO -->
+    <aside class="app-sidebar">
 
         <div class="sidebar-brand">
-
-            <div class="brand-icon">
-                🚚
-            </div>
-
-            <div>
-                <div class="brand-title">
-                    MiniLogistics
-                </div>
-
-                <div class="brand-subtitle">
-                    MANAGEMENT SYSTEM
-                </div>
-            </div>
-
+            <span class="sidebar-brand-icon">M</span>
+            <span>MiniLogistics</span>
         </div>
 
+        <nav class="sidebar-nav">
 
-        <!-- MENU -->
-
-        <nav class="sidebar-menu">
-
-            <div class="menu-section">
-                MAIN
+            <div class="sidebar-section-title">
+                MENU
             </div>
 
-
-            <NavLink href="/customer/dashboard"
-                     class="menu-item"
-                     Match="NavLinkMatch.All">
-
-                <span class="menu-icon">🏠</span>
-
+            <a href="/" class="sidebar-link active">
+                <span class="sidebar-icon">🏠</span>
                 <span>Dashboard</span>
+            </a>
 
-            </NavLink>
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">📦</span>
+                <span>Products</span>
+            </a>
 
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">🛒</span>
+                <span>Orders</span>
+            </a>
 
-            <NavLink href="/customer/products"
-                     class="menu-item">
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">🛍️</span>
+                <span>Cart</span>
+            </a>
 
-                <span class="menu-icon">🛍️</span>
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">📍</span>
+                <span>Addresses</span>
+            </a>
 
-                <span>Sản phẩm</span>
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">⭐</span>
+                <span>Reviews</span>
+            </a>
 
-            </NavLink>
+            <div class="sidebar-divider"></div>
 
-
-            <NavLink href="/customer/cart"
-                     class="menu-item">
-
-                <span class="menu-icon">🛒</span>
-
-                <span>Giỏ hàng</span>
-
-            </NavLink>
-
-
-            <NavLink href="/customer/orders"
-                     class="menu-item">
-
-                <span class="menu-icon">📦</span>
-
-                <span>Đơn hàng</span>
-
-            </NavLink>
-
-
-            <NavLink href="/customer/addresses"
-                     class="menu-item">
-
-                <span class="menu-icon">📍</span>
-
-                <span>Địa chỉ</span>
-
-            </NavLink>
-
-
-            <div class="menu-section">
-                ACCOUNT
+            <div class="sidebar-section-title">
+                SYSTEM
             </div>
 
-
-            <NavLink href="/change-password"
-                     class="menu-item">
-
-                <span class="menu-icon">🔐</span>
-
-                <span>Đổi mật khẩu</span>
-
-            </NavLink>
+            <a href="#" class="sidebar-link">
+                <span class="sidebar-icon">⚙️</span>
+                <span>Settings</span>
+            </a>
 
         </nav>
 
+        <div class="sidebar-footer">
 
-        <!-- SIDEBAR BOTTOM -->
-
-        <div class="sidebar-bottom">
-
-            @if (AuthState.IsAuthenticated)
-            {
-                <div class="sidebar-user">
-
-                    <div class="user-avatar">
-
-                        @GetAvatarLetter()
-
-                    </div>
-
-
-                    <div class="user-details">
-
-                        <div class="user-name">
-
-                            @(string.IsNullOrWhiteSpace(AuthState.FullName)
-                                ? AuthState.Email
-                                : AuthState.FullName)
-
-                        </div>
-
-                        <div class="user-email">
-
-                            @AuthState.Email
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <button class="logout-button"
-                        @onclick="LogoutAsync">
-
-                    <span>🚪</span>
-
-                    <span>Đăng xuất</span>
-
-                </button>
-            }
+            <button class="sidebar-logout">
+                <span>🚪</span>
+                <span>Logout</span>
+            </button>
 
         </div>
 
     </aside>
 
 
-    <!-- ========================= -->
-    <!-- MAIN AREA -->
-    <!-- ========================= -->
+    <!-- MAIN -->
+    <main class="app-main">
 
-    <main class="main-area">
+        <!-- HEADER -->
+        <header class="app-header">
 
-
-        <!-- TOP BAR -->
-
-        <header class="topbar">
-
-            <div class="topbar-left">
-
-                <div class="page-title">
-
-                    MiniLogistics
-
+            <div class="header-left">
+                <div class="header-title">
+                    Dashboard
                 </div>
-
             </div>
 
+            <div class="header-right">
 
-            <div class="topbar-right">
+                <button class="header-icon-button">
+                    🔔
+                </button>
 
-                @if (AuthState.IsAuthenticated)
-                {
-                    <div class="role-badge">
+                <div class="header-user">
 
-                        @string.Join(", ", AuthState.Roles)
-
+                    <div class="header-avatar">
+                        U
                     </div>
 
-
-                    <div class="top-user">
-
-                        <div class="top-avatar">
-
-                            @GetAvatarLetter()
-
+                    <div class="header-user-info">
+                        <div class="header-user-name">
+                            User
                         </div>
 
-
-                        <div class="top-user-info">
-
-                            <span class="top-user-name">
-
-                                @(string.IsNullOrWhiteSpace(AuthState.FullName)
-                                    ? AuthState.Email
-                                    : AuthState.FullName)
-
-                            </span>
-
-                            <span class="top-user-role">
-
-                                Customer
-
-                            </span>
-
+                        <div class="header-user-role">
+                            Customer
                         </div>
-
                     </div>
-                }
-                else
-                {
-                    <button class="login-button"
-                            @onclick="GoToLogin">
 
-                        Đăng nhập
-
-                    </button>
-                }
+                </div>
 
             </div>
 
@@ -244,112 +113,12 @@
 
 
         <!-- CONTENT -->
+        <section class="app-content">
 
-        <section class="content-area">
-
-            @if (!_initialized)
-            {
-                <div class="loading-container">
-
-                    <div class="loading-spinner"></div>
-
-                    <p>Đang tải...</p>
-
-                </div>
-            }
-            else
-            {
-                @Body
-            }
+            @Body
 
         </section>
-
-
-        <!-- FOOTER -->
-
-        <footer class="app-footer">
-
-            <span>
-                © 2026 MiniLogistics
-            </span>
-
-            <span>
-                Logistics Management System
-            </span>
-
-        </footer>
 
     </main>
 
 </div>
-
-
-@code {
-
-    private bool _initialized;
-
-
-    protected override async Task OnInitializedAsync()
-    {
-        AuthState.AuthenticationStateChanged +=
-            OnAuthenticationStateChanged;
-
-        await AuthState.InitializeAsync();
-
-        _initialized = true;
-    }
-
-
-    private void OnAuthenticationStateChanged()
-    {
-        InvokeAsync(StateHasChanged);
-    }
-
-
-    private async Task LogoutAsync()
-    {
-        await TokenStorage.RemoveAuthAsync();
-
-        AuthState.Clear();
-
-        Navigation.NavigateTo(
-            "/login",
-            forceLoad: true);
-    }
-
-
-    private void GoToLogin()
-    {
-        Navigation.NavigateTo("/login");
-    }
-
-
-    private string GetAvatarLetter()
-    {
-        if (!string.IsNullOrWhiteSpace(AuthState.FullName))
-        {
-            return AuthState.FullName
-                .Trim()
-                .Substring(0, 1)
-                .ToUpper();
-        }
-
-        if (!string.IsNullOrWhiteSpace(AuthState.Email))
-        {
-            return AuthState.Email
-                .Trim()
-                .Substring(0, 1)
-                .ToUpper();
-        }
-
-        return "U";
-    }
-
-
-    public void Dispose()
-    {
-        AuthState.AuthenticationStateChanged -=
-            OnAuthenticationStateChanged;
-    }
-
-}

@@ -1,0 +1,46 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using MiniLogistics.Web.Layout
+
+<Router AppAssembly="@typeof(Program).Assembly">
+
+    <Found Context="routeData">
+
+        <RouteView
+            RouteData="@routeData"
+            DefaultLayout="@typeof(MainLayout)" />
+
+        <FocusOnNavigate
+            RouteData="@routeData"
+            Selector="h1" />
+
+    </Found>
+
+    <NotFound>
+
+        <PageTitle>Không tìm thấy trang</PageTitle>
+
+        <LayoutView Layout="@typeof(MainLayout)">
+
+            <div class="page">
+
+                <div class="app-card">
+
+                    <h1>404</h1>
+
+                    <p>
+                        Xin lỗi, trang bạn yêu cầu không tồn tại.
+                    </p>
+
+                    <a href="/">
+                        Về trang chủ
+                    </a>
+
+                </div>
+
+            </div>
+
+        </LayoutView>
+
+    </NotFound>
+
+</Router>

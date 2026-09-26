@@ -1,0 +1,556 @@
+@page "/register"
+@layout AuthLayout
+
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Đăng ký - MiniLogistics</PageTitle>
+
+<div class="register-page">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <div class="register-header">
+
+        <h1>Create an account</h1>
+
+        <p>
+            Tạo tài khoản MiniLogistics của bạn
+        </p>
+
+    </div>
+
+
+    <!-- =====================================================
+         ERROR MESSAGE
+         ===================================================== -->
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-alert auth-alert-error">
+            @errorMessage
+        </div>
+    }
+
+
+    <!-- =====================================================
+         SUCCESS MESSAGE
+         ===================================================== -->
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="auth-alert auth-alert-success">
+            @successMessage
+        </div>
+    }
+
+
+    <!-- =====================================================
+         REGISTER FORM
+         ===================================================== -->
+
+    <EditForm Model="@registerModel"
+              OnSubmit="@HandleRegister">
+
+
+        <!-- =================================================
+             FULL NAME
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Họ và tên
+            </label>
+
+            <InputText
+                @bind-Value="registerModel.FullName"
+                class="auth-input"
+                placeholder="Nhập họ và tên" />
+
+        </div>
+
+
+        <!-- =================================================
+             EMAIL
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Email
+            </label>
+
+            <InputText
+                @bind-Value="registerModel.Email"
+                type="email"
+                class="auth-input"
+                placeholder="example@gmail.com" />
+
+        </div>
+
+
+        <!-- =================================================
+             PHONE
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Số điện thoại
+            </label>
+
+            <InputText
+                @bind-Value="registerModel.Phone"
+                type="tel"
+                class="auth-input"
+                placeholder="Nhập số điện thoại" />
+
+        </div>
+
+
+        <!-- =================================================
+             PASSWORD
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Mật khẩu
+            </label>
+
+            <div class="password-wrapper">
+
+                <InputText
+                    @bind-Value="registerModel.Password"
+                    type="@passwordInputType"
+                    class="auth-input"
+                    placeholder="Ít nhất 8 ký tự" />
+
+                <button
+                    type="button"
+                    class="password-toggle"
+                    @onclick="TogglePassword">
+
+                    @(showPassword ? "Ẩn" : "Hiện")
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             CONFIRM PASSWORD
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Xác nhận mật khẩu
+            </label>
+
+            <div class="password-wrapper">
+
+                <InputText
+                    @bind-Value="registerModel.ConfirmPassword"
+                    type="@confirmPasswordInputType"
+                    class="auth-input"
+                    placeholder="Nhập lại mật khẩu" />
+
+                <button
+                    type="button"
+                    class="password-toggle"
+                    @onclick="ToggleConfirmPassword">
+
+                    @(showConfirmPassword ? "Ẩn" : "Hiện")
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             ROLE
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Loại tài khoản
+            </label>
+
+            <InputSelect
+                @bind-Value="registerModel.Role"
+                class="auth-input">
+
+                <option value="customer">
+                    Customer
+                </option>
+
+                <option value="seller">
+                    Seller
+                </option>
+
+                <option value="shipper">
+                    Shipper
+                </option>
+
+            </InputSelect>
+
+        </div>
+
+
+        <!-- =================================================
+             REGISTER BUTTON
+             ================================================= -->
+
+        <button
+            type="submit"
+            class="auth-submit"
+            disabled="@isLoading">
+
+            @if (isLoading)
+            {
+                <span>
+                    Đang tạo tài khoản...
+                </span>
+            }
+            else
+            {
+                <span>
+                    ĐĂNG KÝ
+                </span>
+            }
+
+        </button>
+
+    </EditForm>
+
+
+    <!-- =====================================================
+         DIVIDER
+         ===================================================== -->
+
+    <div class="auth-divider">
+
+        <span>
+            hoặc
+        </span>
+
+    </div>
+
+
+    <!-- =====================================================
+         GOOGLE LOGIN
+         ===================================================== -->
+
+    <button
+        type="button"
+        class="google-button"
+        @onclick="GoToLogin">
+
+        <span class="google-icon">
+            G
+        </span>
+
+        <span>
+            Đăng nhập bằng Google
+        </span>
+
+    </button>
+
+
+    <!-- =====================================================
+         LOGIN
+         ===================================================== -->
+
+    <div class="auth-register">
+
+        <span>
+            Đã có tài khoản?
+        </span>
+
+        <a href="/login">
+            Đăng nhập
+        </a>
+
+    </div>
+
+</div>
+
+
+@code {
+
+    // =========================================================
+    // MODEL
+    // =========================================================
+
+    private RegisterRequest registerModel = new();
+
+
+    // =========================================================
+    // STATE
+    // =========================================================
+
+    private bool isLoading;
+
+    private bool showPassword;
+
+    private bool showConfirmPassword;
+
+
+    // =========================================================
+    // MESSAGE
+    // =========================================================
+
+    private string? errorMessage;
+
+    private string? successMessage;
+
+
+    // =========================================================
+    // PASSWORD TYPE
+    // =========================================================
+
+    private string passwordInputType =>
+        showPassword
+            ? "text"
+            : "password";
+
+
+    private string confirmPasswordInputType =>
+        showConfirmPassword
+            ? "text"
+            : "password";
+
+
+    // =========================================================
+    // TOGGLE PASSWORD
+    // =========================================================
+
+    private void TogglePassword()
+    {
+        showPassword =
+            !showPassword;
+    }
+
+
+    // =========================================================
+    // TOGGLE CONFIRM PASSWORD
+    // =========================================================
+
+    private void ToggleConfirmPassword()
+    {
+        showConfirmPassword =
+            !showConfirmPassword;
+    }
+
+
+    // =========================================================
+    // GO LOGIN
+    // =========================================================
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo(
+            "/login");
+    }
+
+
+    // =========================================================
+    // REGISTER
+    // =========================================================
+
+    private async Task HandleRegister()
+    {
+        // =====================================================
+        // PREVENT DOUBLE CLICK
+        // =====================================================
+
+        if (isLoading)
+            return;
+
+
+        // =====================================================
+        // CLEAR OLD MESSAGE
+        // =====================================================
+
+        errorMessage = null;
+
+        successMessage = null;
+
+
+        // =====================================================
+        // VALIDATE FULL NAME
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(
+                registerModel.FullName))
+        {
+            errorMessage =
+                "Vui lòng nhập họ và tên.";
+
+            return;
+        }
+
+
+        // =====================================================
+        // VALIDATE EMAIL
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(
+                registerModel.Email))
+        {
+            errorMessage =
+                "Vui lòng nhập email.";
+
+            return;
+        }
+
+
+        // =====================================================
+        // VALIDATE PHONE
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(
+                registerModel.Phone))
+        {
+            errorMessage =
+                "Vui lòng nhập số điện thoại.";
+
+            return;
+        }
+
+
+        // =====================================================
+        // VALIDATE PASSWORD
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(
+                registerModel.Password))
+        {
+            errorMessage =
+                "Vui lòng nhập mật khẩu.";
+
+            return;
+        }
+
+
+        // Backend yêu cầu tối thiểu 8 ký tự
+
+        if (registerModel.Password.Length < 8)
+        {
+            errorMessage =
+                "Mật khẩu phải có ít nhất 8 ký tự.";
+
+            return;
+        }
+
+
+        // =====================================================
+        // VALIDATE CONFIRM PASSWORD
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(
+                registerModel.ConfirmPassword))
+        {
+            errorMessage =
+                "Vui lòng xác nhận mật khẩu.";
+
+            return;
+        }
+
+
+        if (registerModel.Password !=
+            registerModel.ConfirmPassword)
+        {
+            errorMessage =
+                "Mật khẩu xác nhận không khớp.";
+
+            return;
+        }
+
+
+        // =====================================================
+        // START LOADING
+        // =====================================================
+
+        isLoading = true;
+
+
+        try
+        {
+            // =================================================
+            // CALL REGISTER API
+            // =================================================
+
+            var result =
+                await AuthService.RegisterAsync(
+                    registerModel);
+
+
+            // =================================================
+            // REGISTER FAILED
+            // =================================================
+
+            if (result == null)
+            {
+                errorMessage =
+                    "Đăng ký thất bại. " +
+                    "Email hoặc thông tin tài khoản " +
+                    "có thể đã tồn tại.";
+
+                return;
+            }
+
+
+            // =================================================
+            // REGISTER SUCCESS
+            // =================================================
+
+            successMessage =
+                "Đăng ký tài khoản thành công!";
+
+
+            // =================================================
+            // HƯỚNG B
+            //
+            // REGISTER
+            //     ↓
+            // LOGIN
+            //
+            // KHÔNG LƯU TOKEN Ở ĐÂY
+            // =================================================
+
+
+            // =================================================
+            // NAVIGATE TO LOGIN
+            // =================================================
+
+            Navigation.NavigateTo(
+                "/login?registered=true",
+                forceLoad: true);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Không thể kết nối đến máy chủ. " +
+                "Vui lòng kiểm tra API.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Đăng ký thất bại: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

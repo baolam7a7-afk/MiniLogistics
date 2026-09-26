@@ -1,18 +1,41 @@
-﻿@using MiniLogistics.Web.Shared
+﻿<!DOCTYPE html>
 
-<AuthInitializer />
+<html lang="en">
 
-<Router AppAssembly="@typeof(App).Assembly"
-        NotFoundPage="typeof(Pages.NotFound)">
+<head>
 
-    <Found Context="routeData">
+    <meta charset="utf-8" />
 
-        <RouteView RouteData="@routeData"
-                   DefaultLayout="@typeof(MainLayout)" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
 
-        <FocusOnNavigate RouteData="@routeData"
-                         Selector="h1" />
+    <base href="/" />
 
-    </Found>
+    <!-- Theme -->
+    <link rel="stylesheet" href="css/theme.css" />
 
-</Router>
+    <!-- Global -->
+    <link rel="stylesheet" href="css/app.css" />
+
+    <!-- Layout -->
+    <link rel="stylesheet" href="css/layout.css" />
+
+    <!-- Components -->
+    <link rel="stylesheet" href="css/components.css" />
+
+    <!-- Pages -->
+    <link rel="stylesheet" href="css/pages.css" />
+
+    <HeadOutlet />
+
+</head>
+
+<body>
+
+    <Routes />
+
+    <script src="_framework/blazor.webassembly.js"></script>
+
+</body>
+
+</html>

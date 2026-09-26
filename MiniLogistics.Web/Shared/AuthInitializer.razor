@@ -1,9 +1,0 @@
-@using MiniLogistics.Web.Services
-@inject AuthStateService AuthStateService
-
-@code {
-    protected override async Task OnInitializedAsync()
-    {
-        await AuthStateService.InitializeAsync();
-    }
-}

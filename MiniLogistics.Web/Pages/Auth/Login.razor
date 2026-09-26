@@ -1,0 +1,469 @@
+@page "/login"
+@layout AuthLayout
+
+
+@inject AuthService AuthService
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Đăng nhập - MiniLogistics</PageTitle>
+
+<div class="login-page">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <div class="login-header">
+
+        <h1>Welcome back</h1>
+
+        <p>
+            Đăng nhập vào tài khoản MiniLogistics
+        </p>
+
+    </div>
+
+
+    <!-- =====================================================
+         REGISTER SUCCESS MESSAGE
+         ===================================================== -->
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="auth-alert auth-alert-success">
+
+            @successMessage
+
+        </div>
+    }
+
+
+    <!-- =====================================================
+         ERROR MESSAGE
+         ===================================================== -->
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-alert auth-alert-error">
+
+            @errorMessage
+
+        </div>
+    }
+
+
+    <!-- =====================================================
+         LOGIN FORM
+         ===================================================== -->
+
+    <EditForm Model="@loginModel" OnValidSubmit="@HandleLogin">
+
+        <DataAnnotationsValidator />
+
+
+        <!-- =================================================
+             EMAIL
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <label>
+                Email
+            </label>
+
+            <InputText @bind-Value="loginModel.Email" type="email" class="auth-input"
+                       placeholder="Nhập email của bạn" />
+
+        </div>
+
+
+        <!-- =================================================
+             PASSWORD
+             ================================================= -->
+
+        <div class="auth-field">
+
+            <div class="auth-label-row">
+
+                <label>
+                    Mật khẩu
+                </label>
+
+                <a href="/forgot-password">
+                    Quên mật khẩu?
+                </a>
+
+            </div>
+
+
+            <div class="password-wrapper">
+
+                <InputText @bind-Value="loginModel.Password" type="@passwordInputType" class="auth-input"
+                           placeholder="Nhập mật khẩu" />
+
+
+                <button type="button" class="password-toggle" @onclick="TogglePassword">
+
+                    @(showPassword ? "Ẩn" : "Hiện")
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             LOGIN BUTTON
+             ================================================= -->
+
+        <button type="submit" class="auth-submit" disabled="@isLoading">
+
+            @if (isLoading)
+            {
+                <span>
+                    Đang đăng nhập...
+                </span>
+            }
+            else
+            {
+                <span>
+                    ĐĂNG NHẬP
+                </span>
+            }
+
+        </button>
+
+    </EditForm>
+
+
+    <!-- =====================================================
+         DIVIDER
+         ===================================================== -->
+
+    <div class="auth-divider">
+
+        <span>
+            hoặc
+        </span>
+
+    </div>
+
+
+    <!-- =====================================================
+         GOOGLE LOGIN
+         ===================================================== -->
+
+    <button type="button" class="google-button" @onclick="HandleGoogleLogin">
+
+        <span class="google-icon">
+            G
+        </span>
+
+        <span>
+            Đăng nhập bằng Google
+        </span>
+
+    </button>
+
+
+    <!-- =====================================================
+         REGISTER
+         ===================================================== -->
+
+    <div class="auth-register">
+
+        <span>
+            Chưa có tài khoản?
+        </span>
+
+        <a href="/register">
+            Đăng ký ngay
+        </a>
+
+    </div>
+
+</div>
+
+
+@code {
+
+    // =========================================================
+    // MODEL
+    // =========================================================
+
+    private LoginRequest loginModel = new();
+
+
+    // =========================================================
+    // STATE
+    // =========================================================
+
+    private bool isLoading;
+
+    private bool showPassword;
+
+
+    // =========================================================
+    // MESSAGES
+    // =========================================================
+
+    private string? errorMessage;
+
+    private string? successMessage;
+
+
+    // =========================================================
+    // PASSWORD INPUT TYPE
+    // =========================================================
+
+    private string passwordInputType =>
+        showPassword
+            ? "text"
+            : "password";
+
+
+    // =========================================================
+    // INITIALIZE
+    // =========================================================
+
+    protected override void OnInitialized()
+    {
+        CheckRegisterSuccessMessage();
+    }
+
+
+    // =========================================================
+    // CHECK ?registered=true
+    // =========================================================
+
+    private void CheckRegisterSuccessMessage()
+    {
+        var uri =
+            Navigation.ToAbsoluteUri(
+                Navigation.Uri);
+
+        var query =
+            uri.Query;
+
+        if (query.Contains(
+                "registered=true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            successMessage =
+                "Đăng ký tài khoản thành công. " +
+                "Vui lòng đăng nhập để tiếp tục.";
+        }
+    }
+
+
+    // =========================================================
+    // TOGGLE PASSWORD
+    // =========================================================
+
+    private void TogglePassword()
+    {
+        showPassword =
+            !showPassword;
+    }
+
+
+    // =========================================================
+    // LOGIN
+    // =========================================================
+
+    private async Task HandleLogin()
+    {
+        // Prevent double click
+        if (isLoading)
+            return;
+
+
+        // Clear old messages
+        errorMessage = null;
+
+        successMessage = null;
+
+
+        // Start loading
+        isLoading = true;
+
+
+        try
+        {
+            // =================================================
+            // CALL LOGIN API
+            // =================================================
+
+            var result =
+                await AuthService.LoginAsync(
+                    loginModel);
+
+
+            // =================================================
+            // LOGIN FAILED
+            // =================================================
+
+            if (result == null)
+            {
+                errorMessage =
+                    "Email hoặc mật khẩu không chính xác.";
+
+                return;
+            }
+
+
+            // =================================================
+            // SAVE ACCESS TOKEN + REFRESH TOKEN
+            // =================================================
+
+            await TokenStorage.SetTokensAsync(
+                result.AccessToken,
+                result.RefreshToken);
+
+
+            // =================================================
+            // SAVE AUTH STATE
+            // =================================================
+
+            AuthState.SetUser(result);
+
+
+            // =================================================
+            // NAVIGATE BY ROLE
+            // =================================================
+
+            NavigateByRole(
+                result.Roles);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Không thể kết nối đến máy chủ. " +
+                "Vui lòng kiểm tra API.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Đăng nhập thất bại: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    // =========================================================
+    // GOOGLE LOGIN
+    // =========================================================
+
+    private async Task HandleGoogleLogin()
+    {
+        errorMessage = null;
+
+        successMessage = null;
+
+
+        /*
+         * Google Identity Services sẽ được
+         * tích hợp ở bước Google Login.
+         *
+         * Backend:
+         *
+         * POST /api/auth/google
+         *
+         * đã có sẵn.
+         *
+         * Frontend cần lấy Google ID Token
+         * rồi gửi token đó về Backend.
+         */
+
+        await Task.CompletedTask;
+
+
+        errorMessage =
+            "Google Login sẽ được kết nối ở bước tiếp theo.";
+    }
+
+
+    // =========================================================
+    // NAVIGATE BY ROLE
+    // =========================================================
+
+    private void NavigateByRole(
+        List<string> roles)
+    {
+        // =====================================================
+        // Không có role
+        // =====================================================
+
+        if (roles == null ||
+            roles.Count == 0)
+        {
+            Navigation.NavigateTo("/");
+
+            return;
+        }
+
+
+        // =====================================================
+        // Lấy role đầu tiên
+        // =====================================================
+
+        var role =
+            roles
+                .FirstOrDefault()?
+                .Trim()
+                .ToLowerInvariant();
+
+
+        // =====================================================
+        // NAVIGATE
+        // =====================================================
+
+        switch (role)
+        {
+            case "admin":
+
+                Navigation.NavigateTo(
+                    "/admin");
+
+                break;
+
+
+            case "seller":
+
+                Navigation.NavigateTo(
+                    "/seller");
+
+                break;
+
+
+            case "shipper":
+
+                Navigation.NavigateTo(
+                    "/shipper");
+
+                break;
+
+
+            case "customer":
+
+                Navigation.NavigateTo(
+                    "/");
+
+                break;
+
+
+            default:
+
+                Navigation.NavigateTo(
+                    "/");
+
+                break;
+        }
+    }
+}
