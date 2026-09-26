@@ -1,5 +1,7 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shipment;
 using MiniLogistics.BLL.Exceptions;
+
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.UnitOfWork;
 
@@ -12,10 +14,12 @@ public class ShipmentService : IShipmentService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public ShipmentService(IUnitOfWork unitOfWork)
+    public ShipmentService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
+
 
     // =====================================================
     // CREATE SHIPMENT
@@ -61,8 +65,10 @@ public class ShipmentService : IShipmentService
 
         var existing =
             await _unitOfWork.Shipments
-                .FindAsync(x =>
-                    x.OrderId == order.Id);
+                .FindAsync(
+                    x =>
+                        x.OrderId ==
+                        order.Id);
 
         if (existing.Any())
         {
@@ -70,14 +76,18 @@ public class ShipmentService : IShipmentService
                 "Order này đã có Shipment.");
         }
 
-        // Seller chỉ được thao tác Order của Shop mình
+        // =================================================
+        // SELLER CHỈ ĐƯỢC THAO TÁC ORDER CỦA SHOP MÌNH
+        // =================================================
+
         if (actorRole == "seller")
         {
             bool ownsShop =
                 await _unitOfWork.Shops
-                    .AnyAsync(x =>
-                        x.Id == order.ShopId &&
-                        x.OwnerUserId == actorUserId);
+                    .AnyAsync(
+                        x =>
+                            x.Id == order.ShopId &&
+                            x.OwnerUserId == actorUserId);
 
             if (!ownsShop)
             {
@@ -86,26 +96,39 @@ public class ShipmentService : IShipmentService
             }
         }
 
-        var shipment = new ShipmentModel
-        {
-            OrderId = order.Id,
+        // =================================================
+        // CREATE SHIPMENT
+        // =================================================
 
-            ShipperUserId = null,
+        var shipment =
+            new ShipmentModel
+            {
+                OrderId =
+                    order.Id,
 
-            Status = "created",
+                ShipperUserId =
+                    null,
 
-            CodAmount =
-                order.PaymentMethod == "cod"
-                    ? order.Total
-                    : 0m,
+                Status =
+                    "created",
 
-            CreatedAt = DateTime.UtcNow
-        };
+                CodAmount =
+                    order.PaymentMethod == "cod"
+                        ? order.Total
+                        : 0m,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
 
         await _unitOfWork.Shipments
             .AddAsync(shipment);
 
         await _unitOfWork.SaveChangesAsync();
+
+        // =================================================
+        // GENERATE TRACKING CODE
+        // =================================================
 
         shipment.TrackingCode =
             $"SHP-{DateTime.UtcNow:yyyyMMddHHmmss}-{shipment.Id}";
@@ -116,25 +139,36 @@ public class ShipmentService : IShipmentService
         _unitOfWork.Shipments
             .Update(shipment);
 
+        // =================================================
+        // CREATE SHIPMENT EVENT
+        // =================================================
+
         await _unitOfWork.ShipmentEvents
             .AddAsync(
                 new ShipmentEventModel
                 {
-                    ShipmentId = shipment.Id,
+                    ShipmentId =
+                        shipment.Id,
 
-                    Status = "created",
+                    Status =
+                        "created",
 
-                    Location = null,
+                    Location =
+                        null,
 
-                    Note = "Shipment được tạo.",
+                    Note =
+                        "Shipment được tạo.",
 
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt =
+                        DateTime.UtcNow
                 });
 
         await _unitOfWork.SaveChangesAsync();
 
-        return await BuildResponse(shipment);
+        return await BuildResponse(
+            shipment);
     }
+
 
     // =====================================================
     // ASSIGN SHIPPER
@@ -164,6 +198,10 @@ public class ShipmentService : IShipmentService
                 "ShipperUserId không hợp lệ.");
         }
 
+        // =================================================
+        // GET SHIPMENT
+        // =================================================
+
         var shipment =
             await _unitOfWork.Shipments
                 .GetByIdAsync(shipmentId);
@@ -173,6 +211,10 @@ public class ShipmentService : IShipmentService
             throw new NotFoundException(
                 "Shipment không tồn tại.");
         }
+
+        // =================================================
+        // CHECK STATUS
+        // =================================================
 
         if (shipment.Status == "delivered")
         {
@@ -186,9 +228,14 @@ public class ShipmentService : IShipmentService
                 "Shipment đã cancelled.");
         }
 
+        // =================================================
+        // GET ORDER
+        // =================================================
+
         var order =
             await _unitOfWork.Orders
-                .GetByIdAsync(shipment.OrderId);
+                .GetByIdAsync(
+                    shipment.OrderId);
 
         if (order == null)
         {
@@ -196,14 +243,18 @@ public class ShipmentService : IShipmentService
                 "Order của Shipment không tồn tại.");
         }
 
-        // Seller chỉ được assign Shipment thuộc Shop của mình
+        // =================================================
+        // SELLER CHECK SHOP
+        // =================================================
+
         if (actorRole == "seller")
         {
             bool ownsShop =
                 await _unitOfWork.Shops
-                    .AnyAsync(x =>
-                        x.Id == order.ShopId &&
-                        x.OwnerUserId == actorUserId);
+                    .AnyAsync(
+                        x =>
+                            x.Id == order.ShopId &&
+                            x.OwnerUserId == actorUserId);
 
             if (!ownsShop)
             {
@@ -212,9 +263,14 @@ public class ShipmentService : IShipmentService
             }
         }
 
+        // =================================================
+        // GET SHIPPER
+        // =================================================
+
         var shipper =
             await _unitOfWork.Users
-                .GetByIdAsync(request.ShipperUserId);
+                .GetByIdAsync(
+                    request.ShipperUserId);
 
         if (shipper == null)
         {
@@ -222,20 +278,33 @@ public class ShipmentService : IShipmentService
                 "Shipper không tồn tại.");
         }
 
+        // =================================================
+        // CHECK SHIPPER ACTIVE
+        // =================================================
+
         if (shipper.Status != "active")
         {
             throw new BadRequestException(
                 "Tài khoản Shipper không hoạt động.");
         }
 
+        // =================================================
+        // CHECK ROLE SHIPPER
+        // =================================================
+
         bool isShipper =
-            await IsShipperUser(shipper.Id);
+            await IsShipperUser(
+                shipper.Id);
 
         if (!isShipper)
         {
             throw new BadRequestException(
                 "User này không có role shipper.");
         }
+
+        // =================================================
+        // ASSIGN
+        // =================================================
 
         shipment.ShipperUserId =
             shipper.Id;
@@ -252,6 +321,10 @@ public class ShipmentService : IShipmentService
         _unitOfWork.Shipments
             .Update(shipment);
 
+        // =================================================
+        // CREATE EVENT
+        // =================================================
+
         await _unitOfWork.ShipmentEvents
             .AddAsync(
                 new ShipmentEventModel
@@ -262,7 +335,8 @@ public class ShipmentService : IShipmentService
                     Status =
                         "assigned",
 
-                    Location = null,
+                    Location =
+                        null,
 
                     Note =
                         $"Đã phân công Shipper {shipper.Id}.",
@@ -273,60 +347,353 @@ public class ShipmentService : IShipmentService
 
         await _unitOfWork.SaveChangesAsync();
 
-        return await BuildResponse(shipment);
+        return await BuildResponse(
+            shipment);
     }
+
 
     // =====================================================
     // GET ALL
     // ADMIN
+    // PAGINATION
     // =====================================================
 
-    public async Task<List<ShipmentResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<ShipmentResponseDTO>>
+        GetAllAsync(
+            ShipmentPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
+        // =================================================
+        // GET ALL SHIPMENTS
+        // =================================================
+
         var shipments =
             await _unitOfWork.Shipments
                 .GetAllAsync();
 
-        var result =
-            new List<ShipmentResponseDTO>();
+        IEnumerable<ShipmentModel> query =
+            shipments;
 
-        foreach (var shipment in shipments)
+        // =================================================
+        // SEARCH TRACKING CODE
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
         {
-            result.Add(
-                await BuildResponse(shipment));
+            string search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            query =
+                query.Where(
+                    x =>
+                        x.TrackingCode != null &&
+                        x.TrackingCode
+                            .ToLowerInvariant()
+                            .Contains(search));
         }
 
-        return result;
+        // =================================================
+        // FILTER STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            string status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            query =
+                query.Where(
+                    x =>
+                        x.Status != null &&
+                        x.Status
+                            .ToLowerInvariant()
+                            == status);
+        }
+
+        // =================================================
+        // FILTER ORDER ID
+        // =================================================
+
+        if (request.OrderId.HasValue)
+        {
+            long orderId =
+                request.OrderId.Value;
+
+            query =
+                query.Where(
+                    x =>
+                        x.OrderId == orderId);
+        }
+
+        // =================================================
+        // FILTER SHIPPER USER ID
+        // =================================================
+
+        if (request.ShipperUserId.HasValue)
+        {
+            long shipperUserId =
+                request.ShipperUserId.Value;
+
+            query =
+                query.Where(
+                    x =>
+                        x.ShipperUserId ==
+                        shipperUserId);
+        }
+
+        // =================================================
+        // TOTAL ITEMS
+        // =================================================
+
+        int totalItems =
+            query.Count();
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        query =
+            query.OrderByDescending(
+                x =>
+                    x.CreatedAt);
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var pagedShipments =
+            query
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        // =================================================
+        // BUILD RESPONSE
+        // =================================================
+
+        var items =
+            new List<ShipmentResponseDTO>();
+
+        foreach (var shipment
+                 in pagedShipments)
+        {
+            items.Add(
+                await BuildResponse(
+                    shipment));
+        }
+
+        // =================================================
+        // TOTAL PAGES
+        // =================================================
+
+        int totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        // =================================================
+        // RETURN
+        // =================================================
+
+        return new PagedResponseDTO<ShipmentResponseDTO>
+        {
+            Items =
+                items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
+
 
     // =====================================================
     // GET MY SHIPMENTS
     // SHIPPER
+    // PAGINATION
     // =====================================================
 
-    public async Task<List<ShipmentResponseDTO>>
-        GetMyShipmentsAsync(long shipperUserId)
+    public async Task<PagedResponseDTO<ShipmentResponseDTO>>
+        GetMyShipmentsAsync(
+            long shipperUserId,
+            ShipmentPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
+        // =================================================
+        // GET SHIPMENTS OF CURRENT SHIPPER
+        // =================================================
+
         var shipments =
             await _unitOfWork.Shipments
-                .FindAsync(x =>
-                    x.ShipperUserId == shipperUserId);
+                .FindAsync(
+                    x =>
+                        x.ShipperUserId ==
+                        shipperUserId);
 
-        var result =
-            new List<ShipmentResponseDTO>();
+        IEnumerable<ShipmentModel> query =
+            shipments;
 
-        foreach (var shipment in shipments)
+        // =================================================
+        // SEARCH TRACKING CODE
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
         {
-            result.Add(
-                await BuildResponse(shipment));
+            string search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            query =
+                query.Where(
+                    x =>
+                        x.TrackingCode != null &&
+                        x.TrackingCode
+                            .ToLowerInvariant()
+                            .Contains(search));
         }
 
-        return result;
+        // =================================================
+        // FILTER STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            string status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            query =
+                query.Where(
+                    x =>
+                        x.Status != null &&
+                        x.Status
+                            .ToLowerInvariant()
+                            == status);
+        }
+
+        // =================================================
+        // FILTER ORDER ID
+        // =================================================
+
+        if (request.OrderId.HasValue)
+        {
+            long orderId =
+                request.OrderId.Value;
+
+            query =
+                query.Where(
+                    x =>
+                        x.OrderId ==
+                        orderId);
+        }
+
+        // =================================================
+        // TOTAL ITEMS
+        // =================================================
+
+        int totalItems =
+            query.Count();
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        query =
+            query.OrderByDescending(
+                x =>
+                    x.CreatedAt);
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var pagedShipments =
+            query
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        // =================================================
+        // BUILD RESPONSE
+        // =================================================
+
+        var items =
+            new List<ShipmentResponseDTO>();
+
+        foreach (var shipment
+                 in pagedShipments)
+        {
+            items.Add(
+                await BuildResponse(
+                    shipment));
+        }
+
+        // =================================================
+        // TOTAL PAGES
+        // =================================================
+
+        int totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        // =================================================
+        // RETURN
+        // =================================================
+
+        return new PagedResponseDTO<ShipmentResponseDTO>
+        {
+            Items =
+                items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
+
 
     // =====================================================
     // GET BY ID
+    // ADMIN / SELLER / SHIPPER
     // =====================================================
 
     public async Task<ShipmentResponseDTO>
@@ -336,11 +703,17 @@ public class ShipmentService : IShipmentService
             string role)
     {
         role =
-            role.Trim().ToLowerInvariant();
+            role.Trim()
+                .ToLowerInvariant();
+
+        // =================================================
+        // GET SHIPMENT
+        // =================================================
 
         var shipment =
             await _unitOfWork.Shipments
-                .GetByIdAsync(shipmentId);
+                .GetByIdAsync(
+                    shipmentId);
 
         if (shipment == null)
         {
@@ -348,7 +721,11 @@ public class ShipmentService : IShipmentService
                 "Shipment không tồn tại.");
         }
 
-        // Shipper chỉ được xem Shipment của mình
+        // =================================================
+        // SHIPPER
+        // CHỈ ĐƯỢC XEM SHIPMENT CỦA MÌNH
+        // =================================================
+
         if (role == "shipper" &&
             shipment.ShipperUserId != userId)
         {
@@ -356,12 +733,17 @@ public class ShipmentService : IShipmentService
                 "Bạn không có quyền xem Shipment này.");
         }
 
-        // Seller chỉ được xem Shipment của Shop mình
+        // =================================================
+        // SELLER
+        // CHỈ ĐƯỢC XEM SHOP CỦA MÌNH
+        // =================================================
+
         if (role == "seller")
         {
             var order =
                 await _unitOfWork.Orders
-                    .GetByIdAsync(shipment.OrderId);
+                    .GetByIdAsync(
+                        shipment.OrderId);
 
             if (order == null)
             {
@@ -371,9 +753,12 @@ public class ShipmentService : IShipmentService
 
             bool ownsShop =
                 await _unitOfWork.Shops
-                    .AnyAsync(x =>
-                        x.Id == order.ShopId &&
-                        x.OwnerUserId == userId);
+                    .AnyAsync(
+                        x =>
+                            x.Id ==
+                                order.ShopId &&
+                            x.OwnerUserId ==
+                                userId);
 
             if (!ownsShop)
             {
@@ -382,8 +767,10 @@ public class ShipmentService : IShipmentService
             }
         }
 
-        return await BuildResponse(shipment);
+        return await BuildResponse(
+            shipment);
     }
+
 
     // =====================================================
     // UPDATE SHIPMENT STATUS
@@ -402,319 +789,333 @@ public class ShipmentService : IShipmentService
                 "Request không được null.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Status))
+        if (string.IsNullOrWhiteSpace(
+                request.Status))
         {
             throw new BadRequestException(
                 "Status không được để trống.");
         }
 
         // =================================================
-        // TOÀN BỘ LUỒNG UPDATE STATUS NẰM TRONG TRANSACTION
+        // TRANSACTION
         // =================================================
 
-        return await _unitOfWork.ExecuteInTransactionAsync(
-            async () =>
-            {
-                // =========================================
-                // GET SHIPMENT
-                // =========================================
-
-                var shipment =
-                    await _unitOfWork.Shipments
-                        .GetByIdAsync(shipmentId);
-
-                if (shipment == null)
+        return await _unitOfWork
+            .ExecuteInTransactionAsync(
+                async () =>
                 {
-                    throw new NotFoundException(
-                        "Shipment không tồn tại.");
-                }
-
-                // =========================================
-                // CHECK SHIPPER OWNERSHIP
-                // =========================================
-
-                if (shipment.ShipperUserId != shipperUserId)
-                {
-                    throw new ForbiddenException(
-                        "Bạn không được thao tác Shipment này.");
-                }
-
-                // =========================================
-                // NORMALIZE STATUS
-                // =========================================
-
-                string newStatus =
-                    request.Status
-                        .Trim()
-                        .ToLowerInvariant();
-
-                string oldShipmentStatus =
-                    shipment.Status
-                        .Trim()
-                        .ToLowerInvariant();
-
-                // =========================================
-                // VALIDATE TRANSITION
-                // =========================================
-
-                ValidateStatusTransition(
-                    oldShipmentStatus,
-                    newStatus);
-
-                // =========================================
-                // UPDATE SHIPMENT STATUS
-                // =========================================
-
-                shipment.Status =
-                    newStatus;
-
-                shipment.UpdatedAt =
-                    DateTime.UtcNow;
-
-                // =========================================
-                // PICKED UP
-                // =========================================
-
-                if (newStatus == "picked_up")
-                {
-                    shipment.PickedAt =
-                        DateTime.UtcNow;
-                }
-
-                // =========================================
-                // DELIVERED
-                // =========================================
-
-                if (newStatus == "delivered")
-                {
-                    shipment.DeliveredAt =
-                        DateTime.UtcNow;
-
                     // =====================================
-                    // GET ORDER
+                    // GET SHIPMENT
                     // =====================================
 
-                    var order =
-                        await _unitOfWork.Orders
+                    var shipment =
+                        await _unitOfWork.Shipments
                             .GetByIdAsync(
-                                shipment.OrderId);
+                                shipmentId);
 
-                    if (order == null)
+                    if (shipment == null)
                     {
                         throw new NotFoundException(
-                            "Order của Shipment không tồn tại.");
+                            "Shipment không tồn tại.");
                     }
 
                     // =====================================
-                    // ORDER MUST BE PROCESSING
+                    // CHECK OWNERSHIP
                     // =====================================
 
-                    string oldOrderStatus =
-                        order.Status
+                    if (shipment.ShipperUserId !=
+                        shipperUserId)
+                    {
+                        throw new ForbiddenException(
+                            "Bạn không được thao tác Shipment này.");
+                    }
+
+                    // =====================================
+                    // NORMALIZE STATUS
+                    // =====================================
+
+                    string newStatus =
+                        request.Status
                             .Trim()
                             .ToLowerInvariant();
 
-                    if (!string.Equals(
-                            oldOrderStatus,
-                            "processing",
-                            StringComparison.OrdinalIgnoreCase))
+                    string oldShipmentStatus =
+                        shipment.Status
+                            .Trim()
+                            .ToLowerInvariant();
+
+                    // =====================================
+                    // VALIDATE TRANSITION
+                    // =====================================
+
+                    ValidateStatusTransition(
+                        oldShipmentStatus,
+                        newStatus);
+
+                    // =====================================
+                    // UPDATE SHIPMENT STATUS
+                    // =====================================
+
+                    shipment.Status =
+                        newStatus;
+
+                    shipment.UpdatedAt =
+                        DateTime.UtcNow;
+
+                    // =====================================
+                    // PICKED UP
+                    // =====================================
+
+                    if (newStatus ==
+                        "picked_up")
                     {
-                        throw new BadRequestException(
-                            $"Order hiện tại đang ở trạng thái " +
-                            $"'{order.Status}', " +
-                            "không thể chuyển sang delivered.");
+                        shipment.PickedAt =
+                            DateTime.UtcNow;
                     }
 
                     // =====================================
-                    // UPDATE ORDER
+                    // DELIVERED
                     // =====================================
 
-                    order.Status =
-                        "delivered";
+                    if (newStatus ==
+                        "delivered")
+                    {
+                        shipment.DeliveredAt =
+                            DateTime.UtcNow;
 
-                    order.UpdatedAt =
-                        DateTime.UtcNow;
+                        // =================================
+                        // GET ORDER
+                        // =================================
 
-                    _unitOfWork.Orders
-                        .Update(order);
+                        var order =
+                            await _unitOfWork.Orders
+                                .GetByIdAsync(
+                                    shipment.OrderId);
 
-                    // =====================================
-                    // ORDER STATUS LOG
-                    // =====================================
+                        if (order == null)
+                        {
+                            throw new NotFoundException(
+                                "Order của Shipment không tồn tại.");
+                        }
 
-                    await _unitOfWork.OrderStatusLogs
-                        .AddAsync(
-                            new OrderStatusLog
+                        // =================================
+                        // ORDER MUST BE PROCESSING
+                        // =================================
+
+                        string oldOrderStatus =
+                            order.Status
+                                .Trim()
+                                .ToLowerInvariant();
+
+                        if (!string.Equals(
+                                oldOrderStatus,
+                                "processing",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new BadRequestException(
+                                $"Order hiện tại đang ở trạng thái " +
+                                $"'{order.Status}', " +
+                                "không thể chuyển sang delivered.");
+                        }
+
+                        // =================================
+                        // UPDATE ORDER
+                        // =================================
+
+                        order.Status =
+                            "delivered";
+
+                        order.UpdatedAt =
+                            DateTime.UtcNow;
+
+                        _unitOfWork.Orders
+                            .Update(order);
+
+                        // =================================
+                        // ORDER STATUS LOG
+                        // =================================
+
+                        await _unitOfWork
+                            .OrderStatusLogs
+                            .AddAsync(
+                                new OrderStatusLog
+                                {
+                                    OrderId =
+                                        order.Id,
+
+                                    FromStatus =
+                                        oldOrderStatus,
+
+                                    ToStatus =
+                                        "delivered",
+
+                                    Message =
+                                        "Shipment đã giao hàng thành công.",
+
+                                    CreatedByUserId =
+                                        shipperUserId,
+
+                                    CreatedAt =
+                                        DateTime.UtcNow
+                                });
+
+                        // =================================
+                        // COD PAYMENT
+                        // =================================
+
+                        if (string.Equals(
+                                order.PaymentMethod,
+                                "cod",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            var payments =
+                                await _unitOfWork
+                                    .PaymentTransactions
+                                    .FindAsync(
+                                        x =>
+                                            x.OrderId ==
+                                            order.Id);
+
+                            var payment =
+                                payments
+                                    .OrderByDescending(
+                                        x =>
+                                            x.CreatedAt)
+                                    .FirstOrDefault();
+
+                            // =============================
+                            // NO PAYMENT
+                            // =============================
+
+                            if (payment == null)
                             {
-                                OrderId =
-                                    order.Id,
+                                payment =
+                                    new PaymentTransaction
+                                    {
+                                        OrderId =
+                                            order.Id,
 
-                                FromStatus =
-                                    oldOrderStatus,
+                                        Provider =
+                                            null,
 
-                                ToStatus =
-                                    "delivered",
+                                        Method =
+                                            "cod",
 
-                                Message =
-                                    "Shipment đã giao hàng thành công.",
+                                        Amount =
+                                            order.Total,
 
-                                CreatedByUserId =
-                                    shipperUserId,
+                                        Status =
+                                            "paid",
+
+                                        ProviderTxnId =
+                                            null,
+
+                                        PaidAt =
+                                            DateTime.UtcNow,
+
+                                        CreatedAt =
+                                            DateTime.UtcNow
+                                    };
+
+                                await _unitOfWork
+                                    .PaymentTransactions
+                                    .AddAsync(
+                                        payment);
+                            }
+
+                            // =============================
+                            // PENDING → PAID
+                            // =============================
+
+                            else if (string.Equals(
+                                payment.Status,
+                                "pending",
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                payment.Status =
+                                    "paid";
+
+                                payment.PaidAt =
+                                    DateTime.UtcNow;
+
+                                _unitOfWork
+                                    .PaymentTransactions
+                                    .Update(
+                                        payment);
+                            }
+                        }
+                    }
+
+                    // =====================================
+                    // UPDATE SHIPMENT
+                    // =====================================
+
+                    _unitOfWork.Shipments
+                        .Update(shipment);
+
+                    // =====================================
+                    // SHIPMENT EVENT
+                    // =====================================
+
+                    await _unitOfWork
+                        .ShipmentEvents
+                        .AddAsync(
+                            new ShipmentEventModel
+                            {
+                                ShipmentId =
+                                    shipment.Id,
+
+                                Status =
+                                    newStatus,
+
+                                Location =
+                                    string.IsNullOrWhiteSpace(
+                                        request.Location)
+                                        ? null
+                                        : request.Location
+                                            .Trim(),
+
+                                Note =
+                                    string.IsNullOrWhiteSpace(
+                                        request.Note)
+                                        ? null
+                                        : request.Note
+                                            .Trim(),
 
                                 CreatedAt =
                                     DateTime.UtcNow
                             });
 
                     // =====================================
-                    // COD PAYMENT
+                    // SAVE
                     // =====================================
 
-                    if (string.Equals(
-                            order.PaymentMethod,
-                            "cod",
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        var payments =
-                            await _unitOfWork
-                                .PaymentTransactions
-                                .FindAsync(
-                                    x =>
-                                        x.OrderId ==
-                                        order.Id);
+                    await _unitOfWork
+                        .SaveChangesAsync();
 
-                        var payment =
-                            payments
-                                .OrderByDescending(
-                                    x => x.CreatedAt)
-                                .FirstOrDefault();
-
-                        // =================================
-                        // OLD ORDER WITHOUT PAYMENT
-                        // =================================
-
-                        if (payment == null)
-                        {
-                            payment =
-                                new PaymentTransaction
-                                {
-                                    OrderId =
-                                        order.Id,
-
-                                    Provider =
-                                        null,
-
-                                    Method =
-                                        "cod",
-
-                                    Amount =
-                                        order.Total,
-
-                                    Status =
-                                        "paid",
-
-                                    ProviderTxnId =
-                                        null,
-
-                                    PaidAt =
-                                        DateTime.UtcNow,
-
-                                    CreatedAt =
-                                        DateTime.UtcNow
-                                };
-
-                            await _unitOfWork
-                                .PaymentTransactions
-                                .AddAsync(payment);
-                        }
-
-                        // =================================
-                        // PENDING → PAID
-                        // =================================
-
-                        else if (string.Equals(
-                            payment.Status,
-                            "pending",
-                            StringComparison.OrdinalIgnoreCase))
-                        {
-                            payment.Status =
-                                "paid";
-
-                            payment.PaidAt =
-                                DateTime.UtcNow;
-
-                            _unitOfWork
-                                .PaymentTransactions
-                                .Update(payment);
-                        }
-                    }
-                }
-
-                // =========================================
-                // UPDATE SHIPMENT
-                // =========================================
-
-                _unitOfWork.Shipments
-                    .Update(shipment);
-
-                // =========================================
-                // SHIPMENT EVENT
-                // =========================================
-
-                await _unitOfWork.ShipmentEvents
-                    .AddAsync(
-                        new ShipmentEventModel
-                        {
-                            ShipmentId =
-                                shipment.Id,
-
-                            Status =
-                                newStatus,
-
-                            Location =
-                                string.IsNullOrWhiteSpace(
-                                    request.Location)
-                                    ? null
-                                    : request.Location.Trim(),
-
-                            Note =
-                                string.IsNullOrWhiteSpace(
-                                    request.Note)
-                                    ? null
-                                    : request.Note.Trim(),
-
-                            CreatedAt =
-                                DateTime.UtcNow
-                        });
-
-                // =========================================
-                // SAVE
-                // =========================================
-                //
-                // Save ở đây để BuildResponse có thể đọc
-                // ShipmentEvent vừa tạo.
-                //
-                // ExecuteInTransactionAsync bên ngoài sẽ
-                // SaveChanges thêm một lần nữa trước Commit.
-                // =========================================
-
-                await _unitOfWork.SaveChangesAsync();
-
-                return await BuildResponse(shipment);
-            });
+                    return await BuildResponse(
+                        shipment);
+                });
     }
+
 
     // =====================================================
     // CHECK USER HAS SHIPPER ROLE
     // =====================================================
 
-    private async Task<bool> IsShipperUser(long userId)
+    private async Task<bool>
+        IsShipperUser(
+            long userId)
     {
         var userRoles =
             await _unitOfWork.UserRoles
                 .FindAsync(
-                    x => x.UserId == userId);
+                    x =>
+                        x.UserId ==
+                        userId);
 
-        foreach (var userRole in userRoles)
+        foreach (var userRole
+                 in userRoles)
         {
             var role =
                 await _unitOfWork.Roles
@@ -734,6 +1135,7 @@ public class ShipmentService : IShipmentService
         return false;
     }
 
+
     // =====================================================
     // STATUS TRANSITION
     // =====================================================
@@ -752,30 +1154,50 @@ public class ShipmentService : IShipmentService
                 .Trim()
                 .ToLowerInvariant();
 
-        // created → assigned
-        if (currentStatus == "created" &&
-            newStatus == "assigned")
+        // =================================================
+        // CREATED → ASSIGNED
+        // =================================================
+
+        if (currentStatus ==
+                "created" &&
+            newStatus ==
+                "assigned")
         {
             return;
         }
 
-        // assigned → picked_up
-        if (currentStatus == "assigned" &&
-            newStatus == "picked_up")
+        // =================================================
+        // ASSIGNED → PICKED_UP
+        // =================================================
+
+        if (currentStatus ==
+                "assigned" &&
+            newStatus ==
+                "picked_up")
         {
             return;
         }
 
-        // picked_up → shipping
-        if (currentStatus == "picked_up" &&
-            newStatus == "shipping")
+        // =================================================
+        // PICKED_UP → SHIPPING
+        // =================================================
+
+        if (currentStatus ==
+                "picked_up" &&
+            newStatus ==
+                "shipping")
         {
             return;
         }
 
-        // shipping → delivered
-        if (currentStatus == "shipping" &&
-            newStatus == "delivered")
+        // =================================================
+        // SHIPPING → DELIVERED
+        // =================================================
+
+        if (currentStatus ==
+                "shipping" &&
+            newStatus ==
+                "delivered")
         {
             return;
         }
@@ -785,14 +1207,53 @@ public class ShipmentService : IShipmentService
             $"'{currentStatus}' sang '{newStatus}'.");
     }
 
+
+    // =====================================================
+    // VALIDATE PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        ShipmentPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Pagination request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize < 1)
+        {
+            throw new BadRequestException(
+                "PageSize phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize không được lớn hơn 100.");
+        }
+    }
+
+
     // =====================================================
     // BUILD RESPONSE
     // =====================================================
 
     private async Task<ShipmentResponseDTO>
-        BuildResponse(ShipmentModel shipment)
+        BuildResponse(
+            ShipmentModel shipment)
     {
         string? shipperName = null;
+
+        // =================================================
+        // GET SHIPPER NAME
+        // =================================================
 
         if (shipment.ShipperUserId.HasValue)
         {
@@ -805,10 +1266,20 @@ public class ShipmentService : IShipmentService
                 shipper?.FullName;
         }
 
+        // =================================================
+        // GET EVENTS
+        // =================================================
+
         var events =
             await _unitOfWork.ShipmentEvents
-                .FindAsync(x =>
-                    x.ShipmentId == shipment.Id);
+                .FindAsync(
+                    x =>
+                        x.ShipmentId ==
+                        shipment.Id);
+
+        // =================================================
+        // BUILD RESPONSE
+        // =================================================
 
         return new ShipmentResponseDTO
         {
@@ -850,7 +1321,9 @@ public class ShipmentService : IShipmentService
 
             Events =
                 events
-                    .OrderBy(x => x.CreatedAt)
+                    .OrderBy(
+                        x =>
+                            x.CreatedAt)
                     .Select(
                         x =>
                             new ShipmentEventResponseDTO

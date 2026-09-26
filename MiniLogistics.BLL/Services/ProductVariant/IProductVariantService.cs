@@ -1,17 +1,17 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.ProductVariant;
 
 namespace MiniLogistics.BLL.Services;
 
 public interface IProductVariantService
 {
-    Task<IEnumerable<ProductVariantResponseDTO>> GetAllAsync();
+    Task<PagedResponseDTO<ProductVariantResponseDTO>> GetAllAsync(
+        ProductVariantPaginationRequestDTO request);
 
-    Task<ProductVariantResponseDTO?> GetByIdAsync(
-        long id);
+    Task<ProductVariantResponseDTO?> GetByIdAsync(long id);
 
     Task<IEnumerable<ProductVariantResponseDTO>>
-        GetByProductIdAsync(
-            long productId);
+        GetByProductIdAsync(long productId);
 
     Task<ProductVariantResponseDTO>
         CreateAsync(

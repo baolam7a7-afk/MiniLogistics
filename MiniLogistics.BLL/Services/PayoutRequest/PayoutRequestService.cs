@@ -1,10 +1,16 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.PayoutRequest;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
 
-using PayoutRequestModel = MiniLogistics.DAL.Models.PayoutRequest;
-using ShopWalletModel = MiniLogistics.DAL.Models.ShopWallet;
-using ShopWalletTransactionModel = MiniLogistics.DAL.Models.ShopWalletTransaction;
+using PayoutRequestModel =
+    MiniLogistics.DAL.Models.PayoutRequest;
+
+using ShopWalletModel =
+    MiniLogistics.DAL.Models.ShopWallet;
+
+using ShopWalletTransactionModel =
+    MiniLogistics.DAL.Models.ShopWalletTransaction;
 
 namespace MiniLogistics.BLL.Services.PayoutRequest;
 
@@ -12,10 +18,12 @@ public class PayoutRequestService : IPayoutRequestService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public PayoutRequestService(IUnitOfWork unitOfWork)
+    public PayoutRequestService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
+
 
     // =====================================================
     // CREATE PAYOUT REQUEST - SELLER
@@ -49,23 +57,27 @@ public class PayoutRequestService : IPayoutRequestService
                 "Số tiền rút phải lớn hơn 0.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.BankAccountName))
+        if (string.IsNullOrWhiteSpace(
+                request.BankAccountName))
         {
             throw new BadRequestException(
                 "Tên chủ tài khoản không được để trống.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.BankAccountNumber))
+        if (string.IsNullOrWhiteSpace(
+                request.BankAccountNumber))
         {
             throw new BadRequestException(
                 "Số tài khoản không được để trống.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.BankName))
+        if (string.IsNullOrWhiteSpace(
+                request.BankName))
         {
             throw new BadRequestException(
                 "Tên ngân hàng không được để trống.");
         }
+
 
         // -------------------------------------------------
         // 1. Tìm Shop
@@ -80,6 +92,7 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Shop {request.ShopId} không tồn tại.");
         }
 
+
         // -------------------------------------------------
         // 2. Kiểm tra quyền sở hữu Shop
         // -------------------------------------------------
@@ -89,6 +102,7 @@ public class PayoutRequestService : IPayoutRequestService
             throw new ForbiddenException(
                 "Bạn không có quyền tạo yêu cầu rút tiền cho Shop này.");
         }
+
 
         // -------------------------------------------------
         // 3. Shop phải được Admin duyệt
@@ -103,12 +117,14 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Shop chưa được Admin duyệt. Trạng thái hiện tại: '{shop.Status}'.");
         }
 
+
         // -------------------------------------------------
         // 4. Tìm Wallet của Shop
         // -------------------------------------------------
 
         var wallets = await _unitOfWork.ShopWallets
-            .FindAsync(x => x.ShopId == request.ShopId);
+            .FindAsync(x =>
+                x.ShopId == request.ShopId);
 
         var wallet = wallets.FirstOrDefault();
 
@@ -117,6 +133,7 @@ public class PayoutRequestService : IPayoutRequestService
             throw new NotFoundException(
                 $"Shop {request.ShopId} chưa có Wallet.");
         }
+
 
         // -------------------------------------------------
         // 5. Kiểm tra số dư
@@ -128,14 +145,16 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Số dư Wallet không đủ. Số dư hiện tại: {wallet.Balance:N0}.");
         }
 
+
         // -------------------------------------------------
         // 6. Kiểm tra yêu cầu đang xử lý
         // -------------------------------------------------
 
-        var existingRequests = await _unitOfWork.PayoutRequests
-            .FindAsync(x =>
-                x.ShopId == request.ShopId &&
-                x.Status == "requested");
+        var existingRequests =
+            await _unitOfWork.PayoutRequests
+                .FindAsync(x =>
+                    x.ShopId == request.ShopId &&
+                    x.Status == "requested");
 
         if (existingRequests.Any())
         {
@@ -143,38 +162,42 @@ public class PayoutRequestService : IPayoutRequestService
                 "Shop đang có một yêu cầu rút tiền chưa được xử lý.");
         }
 
+
         // -------------------------------------------------
         // 7. Tạo PayoutRequest
         // -------------------------------------------------
 
-        var payoutRequest = new PayoutRequestModel
-        {
-            ShopId = request.ShopId,
+        var payoutRequest =
+            new PayoutRequestModel
+            {
+                ShopId = request.ShopId,
 
-            Amount = request.Amount,
+                Amount = request.Amount,
 
-            BankAccountName =
-                request.BankAccountName.Trim(),
+                BankAccountName =
+                    request.BankAccountName.Trim(),
 
-            BankAccountNumber =
-                request.BankAccountNumber.Trim(),
+                BankAccountNumber =
+                    request.BankAccountNumber.Trim(),
 
-            BankName =
-                request.BankName.Trim(),
+                BankName =
+                    request.BankName.Trim(),
 
-            Status = "requested",
+                Status = "requested",
 
-            RequestedAt = DateTime.UtcNow,
+                RequestedAt =
+                    DateTime.UtcNow,
 
-            ProcessedByUserId = null,
+                ProcessedByUserId = null,
 
-            ProcessedAt = null
-        };
+                ProcessedAt = null
+            };
 
         await _unitOfWork.PayoutRequests
             .AddAsync(payoutRequest);
 
         await _unitOfWork.SaveChangesAsync();
+
 
         // -------------------------------------------------
         // 8. Response
@@ -190,9 +213,12 @@ public class PayoutRequestService : IPayoutRequestService
     // GET MY PAYOUT REQUESTS - SELLER
     // =====================================================
 
-    public async Task<IEnumerable<PayoutRequestResponseDTO>> GetMyAsync(
-        long userId,
-        long shopId)
+    public async Task<
+        PagedResponseDTO<PayoutRequestResponseDTO>>
+        GetMyAsync(
+            long userId,
+            long shopId,
+            PayoutRequestPaginationRequestDTO request)
     {
         if (userId <= 0)
         {
@@ -205,6 +231,30 @@ public class PayoutRequestService : IPayoutRequestService
             throw new BadRequestException(
                 "ShopId không hợp lệ.");
         }
+
+        request ??=
+            new PayoutRequestPaginationRequestDTO();
+
+
+        // -------------------------------------------------
+        // Pagination validation
+        // -------------------------------------------------
+
+        if (request.Page <= 0)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize <= 0)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
 
         // -------------------------------------------------
         // 1. Tìm Shop
@@ -219,6 +269,7 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Shop {shopId} không tồn tại.");
         }
 
+
         // -------------------------------------------------
         // 2. Kiểm tra ownership
         // -------------------------------------------------
@@ -229,20 +280,131 @@ public class PayoutRequestService : IPayoutRequestService
                 "Bạn không có quyền xem yêu cầu rút tiền của Shop này.");
         }
 
+
         // -------------------------------------------------
-        // 3. Lấy các PayoutRequest
+        // 3. Lấy PayoutRequest
         // -------------------------------------------------
 
-        var requests = await _unitOfWork.PayoutRequests
-            .FindAsync(x => x.ShopId == shopId);
+        var requests =
+            await _unitOfWork.PayoutRequests
+                .FindAsync(x =>
+                    x.ShopId == shopId);
 
-        return requests
-            .OrderByDescending(x => x.RequestedAt)
-            .Select(x =>
-                MapToResponse(
-                    x,
-                    shop.Name))
-            .ToList();
+        var query = requests.AsEnumerable();
+
+
+        // -------------------------------------------------
+        // 4. Filter Status
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            var status =
+                request.Status.Trim();
+
+            query = query.Where(x =>
+                string.Equals(
+                    x.Status,
+                    status,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+
+        // -------------------------------------------------
+        // 5. Search
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            query = query.Where(x =>
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankAccountName)
+                    &&
+                    x.BankAccountName.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                ||
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankAccountNumber)
+                    &&
+                    x.BankAccountNumber.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                ||
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankName)
+                    &&
+                    x.BankName.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                ));
+        }
+
+
+        // -------------------------------------------------
+        // 6. Sort
+        // -------------------------------------------------
+
+        var ordered =
+            query
+                .OrderByDescending(
+                    x => x.RequestedAt)
+                .ToList();
+
+
+        // -------------------------------------------------
+        // 7. Pagination
+        // -------------------------------------------------
+
+        var totalItems =
+            ordered.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        var items =
+            ordered
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .Select(x =>
+                    MapToResponse(
+                        x,
+                        shop.Name))
+                .ToList();
+
+
+        return new PagedResponseDTO<
+            PayoutRequestResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -250,26 +412,190 @@ public class PayoutRequestService : IPayoutRequestService
     // GET ALL - ADMIN
     // =====================================================
 
-    public async Task<IEnumerable<PayoutRequestResponseDTO>> GetAllAsync()
+    public async Task<
+        PagedResponseDTO<PayoutRequestResponseDTO>>
+        GetAllAsync(
+            PayoutRequestPaginationRequestDTO request)
     {
-        var requests = await _unitOfWork.PayoutRequests
-            .GetAllAsync();
+        request ??=
+            new PayoutRequestPaginationRequestDTO();
 
-        var result = new List<PayoutRequestResponseDTO>();
 
-        foreach (var request in requests
-                     .OrderByDescending(x => x.RequestedAt))
+        // -------------------------------------------------
+        // Pagination validation
+        // -------------------------------------------------
+
+        if (request.Page <= 0)
         {
-            var shop = await _unitOfWork.Shops
-                .GetByIdAsync(request.ShopId);
+            request.Page = 1;
+        }
+
+        if (request.PageSize <= 0)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+
+        // -------------------------------------------------
+        // 1. Get all
+        // -------------------------------------------------
+
+        var requests =
+            await _unitOfWork.PayoutRequests
+                .GetAllAsync();
+
+        var query =
+            requests.AsEnumerable();
+
+
+        // -------------------------------------------------
+        // 2. Filter ShopId
+        // -------------------------------------------------
+
+        if (request.ShopId.HasValue)
+        {
+            query = query.Where(x =>
+                x.ShopId ==
+                request.ShopId.Value);
+        }
+
+
+        // -------------------------------------------------
+        // 3. Filter Status
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            var status =
+                request.Status.Trim();
+
+            query = query.Where(x =>
+                string.Equals(
+                    x.Status,
+                    status,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+
+        // -------------------------------------------------
+        // 4. Search
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            query = query.Where(x =>
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankAccountName)
+                    &&
+                    x.BankAccountName.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                ||
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankAccountNumber)
+                    &&
+                    x.BankAccountNumber.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                ||
+                (
+                    !string.IsNullOrWhiteSpace(
+                        x.BankName)
+                    &&
+                    x.BankName.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                ));
+        }
+
+
+        // -------------------------------------------------
+        // 5. Sort
+        // -------------------------------------------------
+
+        var ordered =
+            query
+                .OrderByDescending(
+                    x => x.RequestedAt)
+                .ToList();
+
+
+        // -------------------------------------------------
+        // 6. Pagination
+        // -------------------------------------------------
+
+        var totalItems =
+            ordered.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        var pageItems =
+            ordered
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+
+        // -------------------------------------------------
+        // 7. Map
+        // -------------------------------------------------
+
+        var result =
+            new List<PayoutRequestResponseDTO>();
+
+        foreach (var payoutRequest
+                 in pageItems)
+        {
+            var shop =
+                await _unitOfWork.Shops
+                    .GetByIdAsync(
+                        payoutRequest.ShopId);
 
             result.Add(
                 MapToResponse(
-                    request,
+                    payoutRequest,
                     shop?.Name));
         }
 
-        return result;
+
+        return new PagedResponseDTO<
+            PayoutRequestResponseDTO>
+        {
+            Items = result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -277,8 +603,10 @@ public class PayoutRequestService : IPayoutRequestService
     // GET BY ID - ADMIN
     // =====================================================
 
-    public async Task<PayoutRequestResponseDTO?> GetByIdAsync(
-        long payoutRequestId)
+    public async Task<
+        PayoutRequestResponseDTO?>
+        GetByIdAsync(
+            long payoutRequestId)
     {
         if (payoutRequestId <= 0)
         {
@@ -286,22 +614,37 @@ public class PayoutRequestService : IPayoutRequestService
                 "PayoutRequestId không hợp lệ.");
         }
 
-        var payoutRequest = await _unitOfWork.PayoutRequests
-            .GetByIdAsync(payoutRequestId);
+
+        // -------------------------------------------------
+        // 1. Tìm PayoutRequest
+        // -------------------------------------------------
+
+        var payoutRequest =
+            await _unitOfWork.PayoutRequests
+                .GetByIdAsync(
+                    payoutRequestId);
 
         if (payoutRequest == null)
         {
             return null;
         }
 
-        var shop = await _unitOfWork.Shops
-            .GetByIdAsync(payoutRequest.ShopId);
+
+        // -------------------------------------------------
+        // 2. Tìm Shop
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork.Shops
+                .GetByIdAsync(
+                    payoutRequest.ShopId);
 
         if (shop == null)
         {
             throw new NotFoundException(
                 $"Shop {payoutRequest.ShopId} không tồn tại.");
         }
+
 
         return MapToResponse(
             payoutRequest,
@@ -313,9 +656,11 @@ public class PayoutRequestService : IPayoutRequestService
     // APPROVE - ADMIN
     // =====================================================
 
-    public async Task<PayoutRequestResponseDTO> ApproveAsync(
-        long adminUserId,
-        long payoutRequestId)
+    public async Task<
+        PayoutRequestResponseDTO>
+        ApproveAsync(
+            long adminUserId,
+            long payoutRequestId)
     {
         if (adminUserId <= 0)
         {
@@ -329,136 +674,162 @@ public class PayoutRequestService : IPayoutRequestService
                 "PayoutRequestId không hợp lệ.");
         }
 
-        return await _unitOfWork.ExecuteInTransactionAsync(
-            async () =>
-            {
-                // -----------------------------------------
-                // 1. Tìm PayoutRequest
-                // -----------------------------------------
 
-                var payoutRequest =
-                    await _unitOfWork.PayoutRequests
-                        .GetByIdAsync(payoutRequestId);
-
-                if (payoutRequest == null)
+        return await _unitOfWork
+            .ExecuteInTransactionAsync(
+                async () =>
                 {
-                    throw new NotFoundException(
-                        $"PayoutRequest {payoutRequestId} không tồn tại.");
-                }
+                    // -----------------------------------------
+                    // 1. Tìm PayoutRequest
+                    // -----------------------------------------
 
-                // -----------------------------------------
-                // 2. Chỉ request = requested mới được approve
-                // -----------------------------------------
+                    var payoutRequest =
+                        await _unitOfWork
+                            .PayoutRequests
+                            .GetByIdAsync(
+                                payoutRequestId);
 
-                if (!string.Equals(
-                        payoutRequest.Status,
-                        "requested",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new BadRequestException(
-                        $"Không thể approve PayoutRequest đang ở trạng thái '{payoutRequest.Status}'.");
-                }
-
-                // -----------------------------------------
-                // 3. Tìm Shop
-                // -----------------------------------------
-
-                var shop = await _unitOfWork.Shops
-                    .GetByIdAsync(payoutRequest.ShopId);
-
-                if (shop == null)
-                {
-                    throw new NotFoundException(
-                        $"Shop {payoutRequest.ShopId} không tồn tại.");
-                }
-
-                // -----------------------------------------
-                // 4. Tìm Wallet
-                // -----------------------------------------
-
-                var wallets = await _unitOfWork.ShopWallets
-                    .FindAsync(x =>
-                        x.ShopId == payoutRequest.ShopId);
-
-                var wallet = wallets.FirstOrDefault();
-
-                if (wallet == null)
-                {
-                    throw new NotFoundException(
-                        $"Shop {payoutRequest.ShopId} chưa có Wallet.");
-                }
-
-                // -----------------------------------------
-                // 5. Kiểm tra Balance
-                // -----------------------------------------
-
-                if (payoutRequest.Amount > wallet.Balance)
-                {
-                    throw new BadRequestException(
-                        $"Số dư Wallet không đủ. Số dư hiện tại: {wallet.Balance:N0}.");
-                }
-
-                // -----------------------------------------
-                // 6. Trừ tiền Wallet
-                // -----------------------------------------
-
-                wallet.Balance -= payoutRequest.Amount;
-
-                wallet.UpdatedAt = DateTime.UtcNow;
-
-                _unitOfWork.ShopWallets
-                    .Update(wallet);
-
-                // -----------------------------------------
-                // 7. Tạo Wallet Transaction
-                // -----------------------------------------
-
-                var transaction =
-                    new ShopWalletTransactionModel
+                    if (payoutRequest == null)
                     {
-                        WalletId = wallet.Id,
+                        throw new NotFoundException(
+                            $"PayoutRequest {payoutRequestId} không tồn tại.");
+                    }
 
-                        OrderId = null,
 
-                        Type = "PAYOUT_DEBIT",
+                    // -----------------------------------------
+                    // 2. Chỉ requested mới được approve
+                    // -----------------------------------------
 
-                        Amount = payoutRequest.Amount,
+                    if (!string.Equals(
+                            payoutRequest.Status,
+                            "requested",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new BadRequestException(
+                            $"Không thể approve PayoutRequest đang ở trạng thái '{payoutRequest.Status}'.");
+                    }
 
-                        Description =
-                            $"Payout request #{payoutRequest.Id}",
 
-                        CreatedAt = DateTime.UtcNow
-                    };
+                    // -----------------------------------------
+                    // 3. Tìm Shop
+                    // -----------------------------------------
 
-                await _unitOfWork.ShopWalletTransactions
-                    .AddAsync(transaction);
+                    var shop =
+                        await _unitOfWork
+                            .Shops
+                            .GetByIdAsync(
+                                payoutRequest.ShopId);
 
-                // -----------------------------------------
-                // 8. Update PayoutRequest
-                // -----------------------------------------
+                    if (shop == null)
+                    {
+                        throw new NotFoundException(
+                            $"Shop {payoutRequest.ShopId} không tồn tại.");
+                    }
 
-                payoutRequest.Status = "approved";
 
-                payoutRequest.ProcessedByUserId =
-                    adminUserId;
+                    // -----------------------------------------
+                    // 4. Tìm Wallet
+                    // -----------------------------------------
 
-                payoutRequest.ProcessedAt =
-                    DateTime.UtcNow;
+                    var wallets =
+                        await _unitOfWork
+                            .ShopWallets
+                            .FindAsync(x =>
+                                x.ShopId ==
+                                payoutRequest.ShopId);
 
-                _unitOfWork.PayoutRequests
-                    .Update(payoutRequest);
+                    var wallet =
+                        wallets.FirstOrDefault();
 
-                // -----------------------------------------
-                // 9. Save
-                // -----------------------------------------
+                    if (wallet == null)
+                    {
+                        throw new NotFoundException(
+                            $"Shop {payoutRequest.ShopId} chưa có Wallet.");
+                    }
 
-                // ExecuteInTransactionAsync()
-                // sẽ SaveChanges + Commit transaction.
 
-                return MapToResponse(
-                    payoutRequest,
-                    shop.Name);
-            });
+                    // -----------------------------------------
+                    // 5. Kiểm tra Balance
+                    // -----------------------------------------
+
+                    if (payoutRequest.Amount >
+                        wallet.Balance)
+                    {
+                        throw new BadRequestException(
+                            $"Số dư Wallet không đủ. Số dư hiện tại: {wallet.Balance:N0}.");
+                    }
+
+
+                    // -----------------------------------------
+                    // 6. Trừ Wallet
+                    // -----------------------------------------
+
+                    wallet.Balance -=
+                        payoutRequest.Amount;
+
+                    wallet.UpdatedAt =
+                        DateTime.UtcNow;
+
+                    _unitOfWork.ShopWallets
+                        .Update(wallet);
+
+
+                    // -----------------------------------------
+                    // 7. Tạo Wallet Transaction
+                    // -----------------------------------------
+
+                    var transaction =
+                        new ShopWalletTransactionModel
+                        {
+                            WalletId =
+                                wallet.Id,
+
+                            OrderId =
+                                null,
+
+                            Type =
+                                "PAYOUT_DEBIT",
+
+                            Amount =
+                                payoutRequest.Amount,
+
+                            Description =
+                                $"Payout request #{payoutRequest.Id}",
+
+                            CreatedAt =
+                                DateTime.UtcNow
+                        };
+
+                    await _unitOfWork
+                        .ShopWalletTransactions
+                        .AddAsync(transaction);
+
+
+                    // -----------------------------------------
+                    // 8. Update PayoutRequest
+                    // -----------------------------------------
+
+                    payoutRequest.Status =
+                        "approved";
+
+                    payoutRequest.ProcessedByUserId =
+                        adminUserId;
+
+                    payoutRequest.ProcessedAt =
+                        DateTime.UtcNow;
+
+                    _unitOfWork.PayoutRequests
+                        .Update(payoutRequest);
+
+
+                    // -----------------------------------------
+                    // 9. Transaction sẽ Save + Commit
+                    // -----------------------------------------
+
+                    return MapToResponse(
+                        payoutRequest,
+                        shop.Name);
+                });
     }
 
 
@@ -466,9 +837,11 @@ public class PayoutRequestService : IPayoutRequestService
     // REJECT - ADMIN
     // =====================================================
 
-    public async Task<PayoutRequestResponseDTO> RejectAsync(
-        long adminUserId,
-        long payoutRequestId)
+    public async Task<
+        PayoutRequestResponseDTO>
+        RejectAsync(
+            long adminUserId,
+            long payoutRequestId)
     {
         if (adminUserId <= 0)
         {
@@ -482,9 +855,16 @@ public class PayoutRequestService : IPayoutRequestService
                 "PayoutRequestId không hợp lệ.");
         }
 
+
+        // -------------------------------------------------
+        // 1. Tìm PayoutRequest
+        // -------------------------------------------------
+
         var payoutRequest =
-            await _unitOfWork.PayoutRequests
-                .GetByIdAsync(payoutRequestId);
+            await _unitOfWork
+                .PayoutRequests
+                .GetByIdAsync(
+                    payoutRequestId);
 
         if (payoutRequest == null)
         {
@@ -492,8 +872,9 @@ public class PayoutRequestService : IPayoutRequestService
                 $"PayoutRequest {payoutRequestId} không tồn tại.");
         }
 
+
         // -------------------------------------------------
-        // Chỉ request = requested mới được reject
+        // 2. Chỉ requested mới được reject
         // -------------------------------------------------
 
         if (!string.Equals(
@@ -505,8 +886,16 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Không thể reject PayoutRequest đang ở trạng thái '{payoutRequest.Status}'.");
         }
 
-        var shop = await _unitOfWork.Shops
-            .GetByIdAsync(payoutRequest.ShopId);
+
+        // -------------------------------------------------
+        // 3. Tìm Shop
+        // -------------------------------------------------
+
+        var shop =
+            await _unitOfWork
+                .Shops
+                .GetByIdAsync(
+                    payoutRequest.ShopId);
 
         if (shop == null)
         {
@@ -514,11 +903,13 @@ public class PayoutRequestService : IPayoutRequestService
                 $"Shop {payoutRequest.ShopId} không tồn tại.");
         }
 
+
         // -------------------------------------------------
-        // Update status
+        // 4. Update status
         // -------------------------------------------------
 
-        payoutRequest.Status = "rejected";
+        payoutRequest.Status =
+            "rejected";
 
         payoutRequest.ProcessedByUserId =
             adminUserId;
@@ -529,7 +920,9 @@ public class PayoutRequestService : IPayoutRequestService
         _unitOfWork.PayoutRequests
             .Update(payoutRequest);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
+
 
         return MapToResponse(
             payoutRequest,
@@ -547,13 +940,17 @@ public class PayoutRequestService : IPayoutRequestService
     {
         return new PayoutRequestResponseDTO
         {
-            Id = payoutRequest.Id,
+            Id =
+                payoutRequest.Id,
 
-            ShopId = payoutRequest.ShopId,
+            ShopId =
+                payoutRequest.ShopId,
 
-            ShopName = shopName,
+            ShopName =
+                shopName,
 
-            Amount = payoutRequest.Amount,
+            Amount =
+                payoutRequest.Amount,
 
             BankAccountName =
                 payoutRequest.BankAccountName,

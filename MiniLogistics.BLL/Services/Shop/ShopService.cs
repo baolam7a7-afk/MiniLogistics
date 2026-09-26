@@ -1,6 +1,8 @@
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shop;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -41,8 +43,7 @@ public class ShopService : IShopService
                 "Tên Shop không được để trống.");
         }
 
-        var name =
-            request.Name.Trim();
+        var name = request.Name.Trim();
 
         if (name.Length > 200)
         {
@@ -318,6 +319,178 @@ public class ShopService : IShopService
 
 
     // =====================================================
+    // ADMIN - GET ALL SHOPS
+    // PAGINATION + SEARCH + STATUS
+    // =====================================================
+
+    public async Task<PagedResponseDTO<ShopResponseDTO>>
+        GetAllAsync(
+            ShopPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            request =
+                new ShopPaginationRequestDTO();
+        }
+
+
+        // =================================================
+        // VALIDATE PAGINATION
+        // =================================================
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+
+        var search =
+            request.Search?
+                .Trim()
+                .ToLower();
+
+        var status =
+            request.Status?
+                .Trim()
+                .ToLower();
+
+
+        // =================================================
+        // BUILD FILTER
+        // =================================================
+
+        Expression<Func<ShopModel, bool>>? predicate = null;
+
+
+        // -------------------------------------------------
+        // SEARCH + STATUS
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(search) &&
+            !string.IsNullOrWhiteSpace(status))
+        {
+            predicate =
+                shop =>
+                    (
+                        shop.Name
+                            .ToLower()
+                            .Contains(search) ||
+
+                        shop.Slug
+                            .ToLower()
+                            .Contains(search)
+                    )
+                    &&
+                    shop.Status
+                        .ToLower()
+                        .Equals(status);
+        }
+
+
+        // -------------------------------------------------
+        // SEARCH ONLY
+        // -------------------------------------------------
+
+        else if (!string.IsNullOrWhiteSpace(search))
+        {
+            predicate =
+                shop =>
+                    shop.Name
+                        .ToLower()
+                        .Contains(search) ||
+
+                    shop.Slug
+                        .ToLower()
+                        .Contains(search);
+        }
+
+
+        // -------------------------------------------------
+        // STATUS ONLY
+        // -------------------------------------------------
+
+        else if (!string.IsNullOrWhiteSpace(status))
+        {
+            predicate =
+                shop =>
+                    shop.Status
+                        .ToLower()
+                        .Equals(status);
+        }
+
+
+        // =================================================
+        // QUERY DATABASE
+        // =================================================
+
+        var result =
+            await _unitOfWork.Shops
+                .GetPagedAsync(
+                    request.Page,
+                    request.PageSize,
+                    predicate,
+                    query =>
+                        query.OrderByDescending(
+                            x => x.Id));
+
+
+        // =================================================
+        // MAP DATA
+        // =================================================
+
+        var items =
+            result.Items
+                .Select(MapToResponseDTO)
+                .ToList();
+
+
+        // =================================================
+        // CALCULATE TOTAL PAGES
+        // =================================================
+
+        var totalPages =
+            result.TotalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    result.TotalItems /
+                    (double)request.PageSize);
+
+
+        // =================================================
+        // RETURN
+        // =================================================
+
+        return new PagedResponseDTO<ShopResponseDTO>
+        {
+            Items =
+                items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                result.TotalItems,
+
+            TotalPages =
+                totalPages
+        };
+    }
+
+
+    // =====================================================
     // ADMIN - GET PENDING SHOPS
     // =====================================================
 
@@ -488,6 +661,7 @@ public class ShopService : IShopService
 
         var counter =
             2;
+
 
         while (true)
         {

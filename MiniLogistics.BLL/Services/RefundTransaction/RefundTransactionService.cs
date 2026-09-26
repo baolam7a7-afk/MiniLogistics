@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.RefundTransaction;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -18,7 +19,6 @@ public class RefundTransactionService
         _unitOfWork = unitOfWork;
     }
 
-
     // =====================================================
     // CREATE REFUND
     // =====================================================
@@ -34,7 +34,6 @@ public class RefundTransactionService
                 "Request không được null.");
         }
 
-
         // -------------------------------------------------
         // VALIDATE RETURN REQUEST ID
         // -------------------------------------------------
@@ -44,7 +43,6 @@ public class RefundTransactionService
             throw new BadRequestException(
                 "ReturnRequestId không hợp lệ.");
         }
-
 
         // -------------------------------------------------
         // VALIDATE AMOUNT
@@ -56,7 +54,6 @@ public class RefundTransactionService
                 "Amount phải lớn hơn 0.");
         }
 
-
         // -------------------------------------------------
         // VALIDATE METHOD
         // -------------------------------------------------
@@ -67,10 +64,9 @@ public class RefundTransactionService
                 "Method không được để trống.");
         }
 
-        var method =
-            request.Method
-                .Trim()
-                .ToLowerInvariant();
+        var method = request.Method
+            .Trim()
+            .ToLowerInvariant();
 
         var allowedMethods = new[]
         {
@@ -84,7 +80,6 @@ public class RefundTransactionService
             throw new BadRequestException(
                 "Method phải là original, wallet hoặc bank.");
         }
-
 
         // -------------------------------------------------
         // CHECK ADMIN
@@ -106,7 +101,6 @@ public class RefundTransactionService
                 "Tài khoản Admin không hoạt động.");
         }
 
-
         // -------------------------------------------------
         // GET RETURN REQUEST
         // -------------------------------------------------
@@ -121,7 +115,6 @@ public class RefundTransactionService
             throw new NotFoundException(
                 $"ReturnRequest {request.ReturnRequestId} không tồn tại.");
         }
-
 
         // -------------------------------------------------
         // RETURN REQUEST MUST BE APPROVED
@@ -139,7 +132,6 @@ public class RefundTransactionService
                 $"Trạng thái hiện tại: '{returnRequest.Status}'.");
         }
 
-
         // -------------------------------------------------
         // GET ORDER
         // -------------------------------------------------
@@ -155,7 +147,6 @@ public class RefundTransactionService
                 $"Order {returnRequest.OrderId} không tồn tại.");
         }
 
-
         // -------------------------------------------------
         // VALIDATE AMOUNT
         // -------------------------------------------------
@@ -165,7 +156,6 @@ public class RefundTransactionService
             throw new BadRequestException(
                 $"Amount không được lớn hơn Total của Order ({order.Total}).");
         }
-
 
         // -------------------------------------------------
         // CHECK EXISTING REFUND
@@ -189,7 +179,6 @@ public class RefundTransactionService
             throw new BadRequestException(
                 "ReturnRequest này đã có giao dịch hoàn tiền.");
         }
-
 
         // -------------------------------------------------
         // CREATE
@@ -217,30 +206,30 @@ public class RefundTransactionService
                     null
             };
 
-
         await _unitOfWork.RefundTransactions
             .AddAsync(refund);
 
-
         await _unitOfWork
             .SaveChangesAsync();
-
 
         return await BuildResponseAsync(
             refund,
             order);
     }
 
-
     // =====================================================
     // GET MY REFUNDS
+    // CUSTOMER
     // =====================================================
 
     public async Task<
-        IEnumerable<RefundTransactionResponseDTO>>
+        PagedResponseDTO<RefundTransactionResponseDTO>>
         GetMyRefundsAsync(
-            long customerId)
+            long customerId,
+            RefundPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
         var customer =
             await _unitOfWork.Users
                 .GetByIdAsync(customerId);
@@ -251,125 +240,70 @@ public class RefundTransactionService
                 $"User {customerId} không tồn tại.");
         }
 
-
         var returnRequests =
             await _unitOfWork.ReturnRequests
                 .FindAsync(
                     x =>
                         x.CustomerId
-                            == customerId);
-
+                        == customerId);
 
         if (!returnRequests.Any())
         {
-            return Enumerable.Empty<
-                RefundTransactionResponseDTO>();
+            return CreateEmptyResponse(request);
         }
-
 
         var returnRequestIds =
             returnRequests
                 .Select(x => x.Id)
                 .ToHashSet();
 
-
         var refunds =
             await _unitOfWork.RefundTransactions
                 .FindAsync(
                     x =>
-                        returnRequestIds
-                            .Contains(
-                                x.ReturnRequestId));
+                        returnRequestIds.Contains(
+                            x.ReturnRequestId));
 
-
-        var result =
-            new List<RefundTransactionResponseDTO>();
-
-
-        foreach (
-            var refund
-            in refunds.OrderByDescending(
-                x => x.CreatedAt))
-        {
-            var order =
-                await _unitOfWork.Orders
-                    .GetByIdAsync(
-                        returnRequests
-                            .First(x =>
-                                x.Id
-                                ==
-                                refund.ReturnRequestId)
-                            .OrderId);
-
-
-            if (order == null)
-                continue;
-
-
-            result.Add(
-                await BuildResponseAsync(
-                    refund,
-                    order));
-        }
-
-
-        return result;
+        return await BuildPagedResponseAsync(
+            refunds,
+            returnRequests,
+            request);
     }
 
-
     // =====================================================
-    // GET ALL - ADMIN
+    // GET ALL
+    // ADMIN
     // =====================================================
 
     public async Task<
-        IEnumerable<RefundTransactionResponseDTO>>
-        GetAllAsync()
+        PagedResponseDTO<RefundTransactionResponseDTO>>
+        GetAllAsync(
+            RefundPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
         var refunds =
             await _unitOfWork.RefundTransactions
                 .GetAllAsync();
 
-
-        var result =
-            new List<RefundTransactionResponseDTO>();
-
-
-        foreach (
-            var refund
-            in refunds.OrderByDescending(
-                x => x.CreatedAt))
+        if (!refunds.Any())
         {
-            var returnRequest =
-                await _unitOfWork.ReturnRequests
-                    .GetByIdAsync(
-                        refund.ReturnRequestId);
-
-            if (returnRequest == null)
-                continue;
-
-
-            var order =
-                await _unitOfWork.Orders
-                    .GetByIdAsync(
-                        returnRequest.OrderId);
-
-            if (order == null)
-                continue;
-
-
-            result.Add(
-                await BuildResponseAsync(
-                    refund,
-                    order));
+            return CreateEmptyResponse(request);
         }
 
+        var returnRequests =
+            await _unitOfWork.ReturnRequests
+                .GetAllAsync();
 
-        return result;
+        return await BuildPagedResponseAsync(
+            refunds,
+            returnRequests,
+            request);
     }
-
 
     // =====================================================
     // GET BY ID
+    // CUSTOMER / ADMIN
     // =====================================================
 
     public async Task<
@@ -385,7 +319,6 @@ public class RefundTransactionService
                 "RefundTransactionId không hợp lệ.");
         }
 
-
         var refund =
             await _unitOfWork.RefundTransactions
                 .GetByIdAsync(refundId);
@@ -395,7 +328,6 @@ public class RefundTransactionService
             throw new NotFoundException(
                 $"RefundTransaction {refundId} không tồn tại.");
         }
-
 
         var returnRequest =
             await _unitOfWork.ReturnRequests
@@ -408,11 +340,9 @@ public class RefundTransactionService
                 "ReturnRequest của RefundTransaction không tồn tại.");
         }
 
-
         role =
             role.Trim()
                 .ToLowerInvariant();
-
 
         // -------------------------------------------------
         // ADMIN
@@ -436,7 +366,6 @@ public class RefundTransactionService
                 adminOrder);
         }
 
-
         // -------------------------------------------------
         // CUSTOMER
         // -------------------------------------------------
@@ -450,7 +379,6 @@ public class RefundTransactionService
                     "Bạn không có quyền xem RefundTransaction này.");
             }
 
-
             var customerOrder =
                 await _unitOfWork.Orders
                     .GetByIdAsync(
@@ -462,17 +390,14 @@ public class RefundTransactionService
                     "Order của RefundTransaction không tồn tại.");
             }
 
-
             return await BuildResponseAsync(
                 refund,
                 customerOrder);
         }
 
-
         throw new ForbiddenException(
             "Bạn không có quyền xem RefundTransaction này.");
     }
-
 
     // =====================================================
     // COMPLETE
@@ -484,43 +409,23 @@ public class RefundTransactionService
             long adminUserId,
             long refundId)
     {
-        // =====================================================
-        // 1. LẤY REFUND
-        // =====================================================
-
         var refund =
             await GetRefundOrThrowAsync(
                 refundId);
 
-
-        // =====================================================
-        // 2. KIỂM TRA ADMIN
-        // =====================================================
-
         await ValidateAdminAsync(
             adminUserId);
-
-
-        // =====================================================
-        // 3. REFUND PHẢI ĐANG PENDING
-        // =====================================================
 
         var status =
             refund.Status
                 .Trim()
                 .ToLowerInvariant();
 
-
         if (status != "pending")
         {
             throw new BadRequestException(
                 $"Không thể complete RefundTransaction đang ở trạng thái '{refund.Status}'.");
         }
-
-
-        // =====================================================
-        // 4. LẤY RETURN REQUEST
-        // =====================================================
 
         var returnRequest =
             await _unitOfWork.ReturnRequests
@@ -533,11 +438,6 @@ public class RefundTransactionService
                 "ReturnRequest không tồn tại.");
         }
 
-
-        // =====================================================
-        // 5. LẤY ORDER
-        // =====================================================
-
         var order =
             await _unitOfWork.Orders
                 .GetByIdAsync(
@@ -548,11 +448,6 @@ public class RefundTransactionService
             throw new NotFoundException(
                 "Order không tồn tại.");
         }
-
-
-        // =====================================================
-        // 6. LẤY SHOP WALLET
-        // =====================================================
 
         var wallets =
             await _unitOfWork.ShopWallets
@@ -568,11 +463,6 @@ public class RefundTransactionService
                 $"Shop {order.ShopId} chưa có ShopWallet.");
         }
 
-
-        // =====================================================
-        // 7. KIỂM TRA SỐ DƯ
-        // =====================================================
-
         if (shopWallet.Balance < refund.Amount)
         {
             throw new BadRequestException(
@@ -581,16 +471,11 @@ public class RefundTransactionService
                 $"Refund: {refund.Amount}.");
         }
 
-
-        // =====================================================
-        // 8. THỰC HIỆN TOÀN BỘ TRONG 1 TRANSACTION
-        // =====================================================
-
         return await _unitOfWork.ExecuteInTransactionAsync(
             async () =>
             {
                 // ---------------------------------------------
-                // 8.1. TRỪ TIỀN SHOP WALLET
+                // TRỪ SHOP WALLET
                 // ---------------------------------------------
 
                 shopWallet.Balance -= refund.Amount;
@@ -599,9 +484,8 @@ public class RefundTransactionService
                 _unitOfWork.ShopWallets
                     .Update(shopWallet);
 
-
                 // ---------------------------------------------
-                // 8.2. TẠO WALLET TRANSACTION
+                // WALLET TRANSACTION
                 // ---------------------------------------------
 
                 var walletTransaction =
@@ -619,9 +503,8 @@ public class RefundTransactionService
                 await _unitOfWork.ShopWalletTransactions
                     .AddAsync(walletTransaction);
 
-
                 // ---------------------------------------------
-                // 8.3. COMPLETE REFUND
+                // COMPLETE REFUND
                 // ---------------------------------------------
 
                 refund.Status = "done";
@@ -630,22 +513,15 @@ public class RefundTransactionService
                 _unitOfWork.RefundTransactions
                     .Update(refund);
 
-
-                // ---------------------------------------------
-                // 8.4. TRẢ RESPONSE
-                // ---------------------------------------------
-
                 return await BuildResponseAsync(
                     refund,
                     order);
             });
     }
 
-
     // =====================================================
     // FAIL
     // =====================================================
-
 
     public async Task<
         RefundTransactionResponseDTO>
@@ -657,16 +533,13 @@ public class RefundTransactionService
             await GetRefundOrThrowAsync(
                 refundId);
 
-
         await ValidateAdminAsync(
             adminUserId);
-
 
         var status =
             refund.Status
                 .Trim()
                 .ToLowerInvariant();
-
 
         if (status != "pending")
         {
@@ -674,21 +547,17 @@ public class RefundTransactionService
                 $"Không thể fail RefundTransaction đang ở trạng thái '{refund.Status}'.");
         }
 
-
         refund.Status =
             "failed";
 
         refund.CompletedAt =
             DateTime.UtcNow;
 
-
         _unitOfWork.RefundTransactions
             .Update(refund);
 
-
         await _unitOfWork
             .SaveChangesAsync();
-
 
         var returnRequest =
             await _unitOfWork.ReturnRequests
@@ -701,7 +570,6 @@ public class RefundTransactionService
                 "ReturnRequest không tồn tại.");
         }
 
-
         var order =
             await _unitOfWork.Orders
                 .GetByIdAsync(
@@ -713,12 +581,265 @@ public class RefundTransactionService
                 "Order không tồn tại.");
         }
 
-
         return await BuildResponseAsync(
             refund,
             order);
     }
 
+    // =====================================================
+    // PAGINATION
+    // =====================================================
+
+    private async Task<
+        PagedResponseDTO<RefundTransactionResponseDTO>>
+        BuildPagedResponseAsync(
+            IEnumerable<RefundTransactionModel> refunds,
+            IEnumerable<MiniLogistics.DAL.Models.ReturnRequest> returnRequests,
+            RefundPaginationRequestDTO request)
+    {
+        ValidatePagination(request);
+
+        var returnRequestList =
+            returnRequests.ToList();
+
+        var result =
+            new List<RefundTransactionResponseDTO>();
+
+        foreach (
+            var refund
+            in refunds.OrderByDescending(
+                x => x.CreatedAt))
+        {
+            var returnRequest =
+                returnRequestList.FirstOrDefault(
+                    x =>
+                        x.Id
+                        == refund.ReturnRequestId);
+
+            if (returnRequest == null)
+            {
+                continue;
+            }
+
+            var order =
+                await _unitOfWork.Orders
+                    .GetByIdAsync(
+                        returnRequest.OrderId);
+
+            if (order == null)
+            {
+                continue;
+            }
+
+            result.Add(
+                await BuildResponseAsync(
+                    refund,
+                    order));
+        }
+
+        // =================================================
+        // STATUS FILTER
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            var status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            ValidateStatus(status);
+
+            result =
+                result
+                    .Where(
+                        x =>
+                            x.Status != null
+                            &&
+                            x.Status
+                                .Trim()
+                                .ToLowerInvariant()
+                            == status)
+                    .ToList();
+        }
+
+        // =================================================
+        // RETURN REQUEST FILTER
+        // =================================================
+
+        if (request.ReturnRequestId.HasValue)
+        {
+            result =
+                result
+                    .Where(
+                        x =>
+                            x.ReturnRequestId
+                            == request.ReturnRequestId.Value)
+                    .ToList();
+        }
+
+        // =================================================
+        // ORDER FILTER
+        // =================================================
+
+        if (request.OrderId.HasValue)
+        {
+            result =
+                result
+                    .Where(
+                        x =>
+                            x.OrderId
+                            == request.OrderId.Value)
+                    .ToList();
+        }
+
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            result =
+                result
+                    .Where(
+                        x =>
+                            (
+                                !string.IsNullOrWhiteSpace(
+                                    x.OrderCode)
+                                &&
+                                x.OrderCode.Contains(
+                                    search,
+                                    StringComparison.OrdinalIgnoreCase)
+                            )
+                            ||
+                            (
+                                !string.IsNullOrWhiteSpace(
+                                    x.CustomerEmail)
+                                &&
+                                x.CustomerEmail.Contains(
+                                    search,
+                                    StringComparison.OrdinalIgnoreCase)
+                            ))
+                    .ToList();
+        }
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var totalItems =
+            result.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        var items =
+            result
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<
+            RefundTransactionResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = totalItems,
+
+            TotalPages = totalPages
+        };
+    }
+
+    // =====================================================
+    // EMPTY RESPONSE
+    // =====================================================
+
+    private PagedResponseDTO<
+        RefundTransactionResponseDTO>
+        CreateEmptyResponse(
+            RefundPaginationRequestDTO request)
+    {
+        return new PagedResponseDTO<
+            RefundTransactionResponseDTO>
+        {
+            Items = new(),
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = 0,
+
+            TotalPages = 0
+        };
+    }
+
+    // =====================================================
+    // VALIDATE PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        RefundPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Pagination request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải >= 1.");
+        }
+
+        if (request.PageSize < 1 ||
+            request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize phải từ 1 đến 100.");
+        }
+    }
+
+    // =====================================================
+    // VALIDATE STATUS
+    // =====================================================
+
+    private void ValidateStatus(
+        string status)
+    {
+        var allowedStatuses =
+            new[]
+            {
+                "pending",
+                "done",
+                "failed"
+            };
+
+        if (!allowedStatuses.Contains(
+                status))
+        {
+            throw new BadRequestException(
+                "Status không hợp lệ. " +
+                "Chỉ chấp nhận: pending, done, failed.");
+        }
+    }
 
     // =====================================================
     // GET REFUND
@@ -735,7 +856,6 @@ public class RefundTransactionService
                 "RefundTransactionId không hợp lệ.");
         }
 
-
         var refund =
             await _unitOfWork.RefundTransactions
                 .GetByIdAsync(refundId);
@@ -746,10 +866,8 @@ public class RefundTransactionService
                 $"RefundTransaction {refundId} không tồn tại.");
         }
 
-
         return refund;
     }
-
 
     // =====================================================
     // VALIDATE ADMIN
@@ -775,7 +893,6 @@ public class RefundTransactionService
         }
     }
 
-
     // =====================================================
     // MAPPING
     // =====================================================
@@ -790,7 +907,6 @@ public class RefundTransactionService
             await _unitOfWork.Users
                 .GetByIdAsync(
                     order.CustomerId);
-
 
         return new RefundTransactionResponseDTO
         {

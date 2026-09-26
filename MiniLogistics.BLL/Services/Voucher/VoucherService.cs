@@ -1,8 +1,10 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Voucher;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
 
-using VoucherModel = MiniLogistics.DAL.Models.Voucher;
+using VoucherModel =
+    MiniLogistics.DAL.Models.Voucher;
 
 namespace MiniLogistics.BLL.Services.Voucher;
 
@@ -10,34 +12,147 @@ public class VoucherService : IVoucherService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public VoucherService(IUnitOfWork unitOfWork)
+    public VoucherService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
+
 
     // =====================================================
     // GET ALL
     // =====================================================
 
-    public async Task<IEnumerable<VoucherResponseDTO>> GetAllAsync()
+    public async Task<PagedResponseDTO<VoucherResponseDTO>>
+        GetAllAsync(
+            VoucherPaginationRequestDTO request)
     {
-        var vouchers =
-            await _unitOfWork.Vouchers.GetAllAsync();
+        ValidatePagination(request);
 
-        return vouchers
-            .OrderByDescending(x => x.Id)
-            .Select(MapToResponseDTO)
-            .ToList();
+        var vouchers =
+            await _unitOfWork.Vouchers
+                .GetAllAsync();
+
+        var result =
+            vouchers
+                .Select(MapToResponseDTO)
+                .ToList();
+
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result =
+                result
+                    .Where(x =>
+                        (!string.IsNullOrWhiteSpace(x.Code) &&
+                         x.Code
+                            .ToLowerInvariant()
+                            .Contains(search))
+                        ||
+                        (!string.IsNullOrWhiteSpace(x.Name) &&
+                         x.Name
+                            .ToLowerInvariant()
+                            .Contains(search)))
+                    .ToList();
+        }
+
+        // =================================================
+        // STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            var status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result =
+                result
+                    .Where(x =>
+                        x.Status
+                            .Equals(
+                                status,
+                                StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        }
+
+        // =================================================
+        // SCOPE
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Scope))
+        {
+            var scope =
+                request.Scope
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result =
+                result
+                    .Where(x =>
+                        x.Scope
+                            .Equals(
+                                scope,
+                                StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        }
+
+        // =================================================
+        // SHOP
+        // =================================================
+
+        if (request.ShopId.HasValue)
+        {
+            result =
+                result
+                    .Where(x =>
+                        x.ShopId ==
+                        request.ShopId.Value)
+                    .ToList();
+        }
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        result =
+            result
+                .OrderByDescending(x => x.Id)
+                .ToList();
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        return CreatePagedResponse(
+            result,
+            request);
     }
+
 
     // =====================================================
     // GET BY ID
     // =====================================================
 
-    public async Task<VoucherResponseDTO?> GetByIdAsync(long id)
+    public async Task<VoucherResponseDTO?>
+        GetByIdAsync(
+            long id)
     {
         var voucher =
-            await _unitOfWork.Vouchers.GetByIdAsync(id);
+            await _unitOfWork.Vouchers
+                .GetByIdAsync(id);
 
         if (voucher == null)
         {
@@ -47,29 +162,107 @@ public class VoucherService : IVoucherService
         return MapToResponseDTO(voucher);
     }
 
+
     // =====================================================
     // GET BY SHOP
     // =====================================================
 
-    public async Task<IEnumerable<VoucherResponseDTO>>
-        GetByShopIdAsync(long shopId)
+    public async Task<PagedResponseDTO<VoucherResponseDTO>>
+        GetByShopIdAsync(
+            long shopId,
+            VoucherPaginationRequestDTO request)
     {
-        var vouchers =
-            await _unitOfWork.Vouchers.FindAsync(
-                x => x.ShopId == shopId);
+        if (shopId <= 0)
+        {
+            throw new BadRequestException(
+                "ShopId không hợp lệ.");
+        }
 
-        return vouchers
-            .OrderByDescending(x => x.Id)
-            .Select(MapToResponseDTO)
-            .ToList();
+        ValidatePagination(request);
+
+        var vouchers =
+            await _unitOfWork.Vouchers
+                .FindAsync(
+                    x =>
+                        x.ShopId ==
+                        shopId);
+
+        var result =
+            vouchers
+                .Select(MapToResponseDTO)
+                .ToList();
+
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result =
+                result
+                    .Where(x =>
+                        (!string.IsNullOrWhiteSpace(x.Code) &&
+                         x.Code
+                            .ToLowerInvariant()
+                            .Contains(search))
+                        ||
+                        (!string.IsNullOrWhiteSpace(x.Name) &&
+                         x.Name
+                            .ToLowerInvariant()
+                            .Contains(search)))
+                    .ToList();
+        }
+
+        // =================================================
+        // STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Status))
+        {
+            var status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result =
+                result
+                    .Where(x =>
+                        x.Status
+                            .Equals(
+                                status,
+                                StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        }
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        result =
+            result
+                .OrderByDescending(x => x.Id)
+                .ToList();
+
+        return CreatePagedResponse(
+            result,
+            request);
     }
+
 
     // =====================================================
     // GET BY CODE
     // =====================================================
 
-    public async Task<VoucherResponseDTO?> GetByCodeAsync(
-        string code)
+    public async Task<VoucherResponseDTO?>
+        GetByCodeAsync(
+            string code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -77,11 +270,16 @@ public class VoucherService : IVoucherService
         }
 
         var normalizedCode =
-            code.Trim().ToUpperInvariant();
+            code
+                .Trim()
+                .ToUpperInvariant();
 
         var vouchers =
-            await _unitOfWork.Vouchers.FindAsync(
-                x => x.Code == normalizedCode);
+            await _unitOfWork.Vouchers
+                .FindAsync(
+                    x =>
+                        x.Code ==
+                        normalizedCode);
 
         var voucher =
             vouchers.FirstOrDefault();
@@ -94,35 +292,73 @@ public class VoucherService : IVoucherService
         return MapToResponseDTO(voucher);
     }
 
+
     // =====================================================
     // CREATE
     // =====================================================
 
-    public async Task<VoucherResponseDTO> CreateAsync(
-        long actorUserId,
-        string actorRole,
-        CreateVoucherDTO request)
+    public async Task<VoucherResponseDTO>
+        CreateAsync(
+            long actorUserId,
+            string actorRole,
+            CreateVoucherDTO request)
     {
         if (request == null)
         {
-            throw new ArgumentNullException(nameof(request));
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+        if (actorUserId <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ.");
         }
 
         actorRole =
-            actorRole.Trim().ToLowerInvariant();
+            actorRole
+                .Trim()
+                .ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(
+                request.Code))
+        {
+            throw new BadRequestException(
+                "Voucher Code không được để trống.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                request.Scope))
+        {
+            throw new BadRequestException(
+                "Scope không được để trống.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                request.DiscountType))
+        {
+            throw new BadRequestException(
+                "DiscountType không được để trống.");
+        }
 
         var scope =
-            request.Scope.Trim().ToLowerInvariant();
+            request.Scope
+                .Trim()
+                .ToLowerInvariant();
 
         var discountType =
-            request.DiscountType.Trim().ToLowerInvariant();
+            request.DiscountType
+                .Trim()
+                .ToLowerInvariant();
 
         var code =
-            request.Code.Trim().ToUpperInvariant();
+            request.Code
+                .Trim()
+                .ToUpperInvariant();
 
-        // -------------------------------------------------
-        // 1. Validate Scope
-        // -------------------------------------------------
+        // =================================================
+        // 1. SCOPE
+        // =================================================
 
         if (scope != "platform" &&
             scope != "shop")
@@ -131,9 +367,9 @@ public class VoucherService : IVoucherService
                 "Scope phải là platform hoặc shop.");
         }
 
-        // -------------------------------------------------
-        // 2. Validate DiscountType
-        // -------------------------------------------------
+        // =================================================
+        // 2. DISCOUNT TYPE
+        // =================================================
 
         if (discountType != "percent" &&
             discountType != "amount")
@@ -142,9 +378,9 @@ public class VoucherService : IVoucherService
                 "DiscountType phải là percent hoặc amount.");
         }
 
-        // -------------------------------------------------
-        // 3. Validate DiscountValue
-        // -------------------------------------------------
+        // =================================================
+        // 3. DISCOUNT VALUE
+        // =================================================
 
         if (request.DiscountValue <= 0)
         {
@@ -159,19 +395,20 @@ public class VoucherService : IVoucherService
                 "Voucher percent không được vượt quá 100.");
         }
 
-        // -------------------------------------------------
-        // 4. Validate thời gian
-        // -------------------------------------------------
+        // =================================================
+        // 4. TIME
+        // =================================================
 
-        if (request.EndAt <= request.StartAt)
+        if (request.EndAt <=
+            request.StartAt)
         {
             throw new BadRequestException(
                 "EndAt phải lớn hơn StartAt.");
         }
 
-        // -------------------------------------------------
-        // 5. Validate MinOrderValue
-        // -------------------------------------------------
+        // =================================================
+        // 5. MIN ORDER
+        // =================================================
 
         if (request.MinOrderValue < 0)
         {
@@ -179,9 +416,9 @@ public class VoucherService : IVoucherService
                 "MinOrderValue không được nhỏ hơn 0.");
         }
 
-        // -------------------------------------------------
-        // 6. Validate MaxDiscount
-        // -------------------------------------------------
+        // =================================================
+        // 6. MAX DISCOUNT
+        // =================================================
 
         if (request.MaxDiscount < 0)
         {
@@ -189,9 +426,9 @@ public class VoucherService : IVoucherService
                 "MaxDiscount không được nhỏ hơn 0.");
         }
 
-        // -------------------------------------------------
-        // 7. Validate Scope + Shop
-        // -------------------------------------------------
+        // =================================================
+        // 7. SCOPE + SHOP
+        // =================================================
 
         if (scope == "platform")
         {
@@ -229,13 +466,16 @@ public class VoucherService : IVoucherService
                 actorRole);
         }
 
-        // -------------------------------------------------
-        // 8. Kiểm tra Code trùng
-        // -------------------------------------------------
+        // =================================================
+        // 8. DUPLICATE CODE
+        // =================================================
 
         var existing =
-            await _unitOfWork.Vouchers.FindAsync(
-                x => x.Code == code);
+            await _unitOfWork.Vouchers
+                .FindAsync(
+                    x =>
+                        x.Code ==
+                        code);
 
         if (existing.Any())
         {
@@ -243,56 +483,94 @@ public class VoucherService : IVoucherService
                 $"Voucher Code '{code}' đã tồn tại.");
         }
 
-        // -------------------------------------------------
-        // 9. Create
-        // -------------------------------------------------
+        // =================================================
+        // 9. CREATE
+        // =================================================
 
-        var voucher = new VoucherModel
-        {
-            Scope = scope,
-            ShopId = request.ShopId,
-            Code = code,
-            Name = request.Name?.Trim(),
-            Description = request.Description?.Trim(),
-            DiscountType = discountType,
-            DiscountValue = request.DiscountValue,
-            MaxDiscount = request.MaxDiscount,
-            MinOrderValue = request.MinOrderValue,
-            UsageLimit = request.UsageLimit,
-            UsedCount = 0,
-            StartAt = request.StartAt,
-            EndAt = request.EndAt,
-            Status = "active",
-            CreatedAt = DateTime.UtcNow
-        };
+        var voucher =
+            new VoucherModel
+            {
+                Scope =
+                    scope,
 
-        await _unitOfWork.Vouchers.AddAsync(voucher);
+                ShopId =
+                    request.ShopId,
 
-        await _unitOfWork.SaveChangesAsync();
+                Code =
+                    code,
+
+                Name =
+                    request.Name?.Trim(),
+
+                Description =
+                    request.Description?.Trim(),
+
+                DiscountType =
+                    discountType,
+
+                DiscountValue =
+                    request.DiscountValue,
+
+                MaxDiscount =
+                    request.MaxDiscount,
+
+                MinOrderValue =
+                    request.MinOrderValue,
+
+                UsageLimit =
+                    request.UsageLimit,
+
+                UsedCount =
+                    0,
+
+                StartAt =
+                    request.StartAt,
+
+                EndAt =
+                    request.EndAt,
+
+                Status =
+                    "active",
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+        await _unitOfWork.Vouchers
+            .AddAsync(voucher);
+
+        await _unitOfWork
+            .SaveChangesAsync();
 
         return MapToResponseDTO(voucher);
     }
+
 
     // =====================================================
     // UPDATE
     // =====================================================
 
-    public async Task<VoucherResponseDTO> UpdateAsync(
-        long id,
-        long actorUserId,
-        string actorRole,
-        UpdateVoucherDTO request)
+    public async Task<VoucherResponseDTO>
+        UpdateAsync(
+            long id,
+            long actorUserId,
+            string actorRole,
+            UpdateVoucherDTO request)
     {
         if (request == null)
         {
-            throw new ArgumentNullException(nameof(request));
+            throw new BadRequestException(
+                "Request không được null.");
         }
 
         actorRole =
-            actorRole.Trim().ToLowerInvariant();
+            actorRole
+                .Trim()
+                .ToLowerInvariant();
 
         var voucher =
-            await _unitOfWork.Vouchers.GetByIdAsync(id);
+            await _unitOfWork.Vouchers
+                .GetByIdAsync(id);
 
         if (voucher == null)
         {
@@ -300,23 +578,26 @@ public class VoucherService : IVoucherService
                 $"Voucher {id} không tồn tại.");
         }
 
-        // -------------------------------------------------
-        // 1. Check quyền
-        // -------------------------------------------------
+        // =================================================
+        // CHECK ACCESS
+        // =================================================
 
         await CheckVoucherAccessAsync(
             voucher,
             actorUserId,
             actorRole);
 
-        // -------------------------------------------------
-        // 2. Scope
-        // -------------------------------------------------
+        // =================================================
+        // SCOPE
+        // =================================================
 
-        if (!string.IsNullOrWhiteSpace(request.Scope))
+        if (!string.IsNullOrWhiteSpace(
+                request.Scope))
         {
             var scope =
-                request.Scope.Trim().ToLowerInvariant();
+                request.Scope
+                    .Trim()
+                    .ToLowerInvariant();
 
             if (scope != "platform" &&
                 scope != "shop")
@@ -325,12 +606,22 @@ public class VoucherService : IVoucherService
                     "Scope phải là platform hoặc shop.");
             }
 
-            voucher.Scope = scope;
+            // Seller không được chuyển voucher
+            // sang platform
+            if (scope == "platform" &&
+                actorRole != "admin")
+            {
+                throw new ForbiddenException(
+                    "Seller không được quản lý Voucher platform.");
+            }
+
+            voucher.Scope =
+                scope;
         }
 
-        // -------------------------------------------------
-        // 3. ShopId
-        // -------------------------------------------------
+        // =================================================
+        // SHOP ID
+        // =================================================
 
         if (request.ShopId.HasValue)
         {
@@ -343,20 +634,24 @@ public class VoucherService : IVoucherService
                 request.ShopId.Value;
         }
 
-        // -------------------------------------------------
-        // 4. Code
-        // -------------------------------------------------
+        // =================================================
+        // CODE
+        // =================================================
 
-        if (!string.IsNullOrWhiteSpace(request.Code))
+        if (!string.IsNullOrWhiteSpace(
+                request.Code))
         {
             var code =
-                request.Code.Trim().ToUpperInvariant();
+                request.Code
+                    .Trim()
+                    .ToUpperInvariant();
 
             var duplicate =
-                await _unitOfWork.Vouchers.FindAsync(
-                    x =>
-                        x.Code == code
-                        && x.Id != id);
+                await _unitOfWork.Vouchers
+                    .FindAsync(
+                        x =>
+                            x.Code == code &&
+                            x.Id != id);
 
             if (duplicate.Any())
             {
@@ -364,12 +659,13 @@ public class VoucherService : IVoucherService
                     $"Voucher Code '{code}' đã tồn tại.");
             }
 
-            voucher.Code = code;
+            voucher.Code =
+                code;
         }
 
-        // -------------------------------------------------
-        // 5. Name
-        // -------------------------------------------------
+        // =================================================
+        // NAME
+        // =================================================
 
         if (request.Name != null)
         {
@@ -377,9 +673,9 @@ public class VoucherService : IVoucherService
                 request.Name.Trim();
         }
 
-        // -------------------------------------------------
-        // 6. Description
-        // -------------------------------------------------
+        // =================================================
+        // DESCRIPTION
+        // =================================================
 
         if (request.Description != null)
         {
@@ -387,12 +683,12 @@ public class VoucherService : IVoucherService
                 request.Description.Trim();
         }
 
-        // -------------------------------------------------
-        // 7. DiscountType
-        // -------------------------------------------------
+        // =================================================
+        // DISCOUNT TYPE
+        // =================================================
 
         if (!string.IsNullOrWhiteSpace(
-            request.DiscountType))
+                request.DiscountType))
         {
             var type =
                 request.DiscountType
@@ -406,12 +702,13 @@ public class VoucherService : IVoucherService
                     "DiscountType phải là percent hoặc amount.");
             }
 
-            voucher.DiscountType = type;
+            voucher.DiscountType =
+                type;
         }
 
-        // -------------------------------------------------
-        // 8. DiscountValue
-        // -------------------------------------------------
+        // =================================================
+        // DISCOUNT VALUE
+        // =================================================
 
         if (request.DiscountValue.HasValue)
         {
@@ -432,9 +729,9 @@ public class VoucherService : IVoucherService
                 request.DiscountValue.Value;
         }
 
-        // -------------------------------------------------
-        // 9. MaxDiscount
-        // -------------------------------------------------
+        // =================================================
+        // MAX DISCOUNT
+        // =================================================
 
         if (request.MaxDiscount.HasValue)
         {
@@ -448,9 +745,9 @@ public class VoucherService : IVoucherService
                 request.MaxDiscount.Value;
         }
 
-        // -------------------------------------------------
-        // 10. MinOrderValue
-        // -------------------------------------------------
+        // =================================================
+        // MIN ORDER VALUE
+        // =================================================
 
         if (request.MinOrderValue.HasValue)
         {
@@ -464,9 +761,9 @@ public class VoucherService : IVoucherService
                 request.MinOrderValue.Value;
         }
 
-        // -------------------------------------------------
-        // 11. UsageLimit
-        // -------------------------------------------------
+        // =================================================
+        // USAGE LIMIT
+        // =================================================
 
         if (request.UsageLimit.HasValue)
         {
@@ -487,9 +784,9 @@ public class VoucherService : IVoucherService
                 request.UsageLimit.Value;
         }
 
-        // -------------------------------------------------
-        // 12. StartAt
-        // -------------------------------------------------
+        // =================================================
+        // START AT
+        // =================================================
 
         if (request.StartAt.HasValue)
         {
@@ -497,9 +794,9 @@ public class VoucherService : IVoucherService
                 request.StartAt.Value;
         }
 
-        // -------------------------------------------------
-        // 13. EndAt
-        // -------------------------------------------------
+        // =================================================
+        // END AT
+        // =================================================
 
         if (request.EndAt.HasValue)
         {
@@ -514,12 +811,12 @@ public class VoucherService : IVoucherService
                 "EndAt phải lớn hơn StartAt.");
         }
 
-        // -------------------------------------------------
-        // 14. Status
-        // -------------------------------------------------
+        // =================================================
+        // STATUS
+        // =================================================
 
         if (!string.IsNullOrWhiteSpace(
-            request.Status))
+                request.Status))
         {
             var status =
                 request.Status
@@ -534,15 +831,19 @@ public class VoucherService : IVoucherService
                     "Status không hợp lệ.");
             }
 
-            voucher.Status = status;
+            voucher.Status =
+                status;
         }
 
-        _unitOfWork.Vouchers.Update(voucher);
+        _unitOfWork.Vouchers
+            .Update(voucher);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
         return MapToResponseDTO(voucher);
     }
+
 
     // =====================================================
     // DELETE
@@ -554,10 +855,13 @@ public class VoucherService : IVoucherService
         string actorRole)
     {
         actorRole =
-            actorRole.Trim().ToLowerInvariant();
+            actorRole
+                .Trim()
+                .ToLowerInvariant();
 
         var voucher =
-            await _unitOfWork.Vouchers.GetByIdAsync(id);
+            await _unitOfWork.Vouchers
+                .GetByIdAsync(id);
 
         if (voucher == null)
         {
@@ -570,26 +874,30 @@ public class VoucherService : IVoucherService
             actorUserId,
             actorRole);
 
-        // Không xóa voucher đã được sử dụng.
+        // Không xóa voucher đã sử dụng
         if (voucher.UsedCount > 0)
         {
             throw new BadRequestException(
                 "Không thể xóa Voucher đã được sử dụng.");
         }
 
-        _unitOfWork.Vouchers.Delete(voucher);
+        _unitOfWork.Vouchers
+            .Delete(voucher);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
     }
+
 
     // =====================================================
     // VALIDATE
     // =====================================================
 
-    public async Task<VoucherResponseDTO> ValidateAsync(
-        string code,
-        decimal orderValue,
-        long? shopId)
+    public async Task<VoucherResponseDTO>
+        ValidateAsync(
+            string code,
+            decimal orderValue,
+            long? shopId)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -604,11 +912,16 @@ public class VoucherService : IVoucherService
         }
 
         var normalizedCode =
-            code.Trim().ToUpperInvariant();
+            code
+                .Trim()
+                .ToUpperInvariant();
 
         var vouchers =
-            await _unitOfWork.Vouchers.FindAsync(
-                x => x.Code == normalizedCode);
+            await _unitOfWork.Vouchers
+                .FindAsync(
+                    x =>
+                        x.Code ==
+                        normalizedCode);
 
         var voucher =
             vouchers.FirstOrDefault();
@@ -619,11 +932,12 @@ public class VoucherService : IVoucherService
                 "Voucher không tồn tại.");
         }
 
-        var now = DateTime.UtcNow;
+        var now =
+            DateTime.UtcNow;
 
-        // -------------------------------------------------
-        // 1. Status
-        // -------------------------------------------------
+        // =================================================
+        // STATUS
+        // =================================================
 
         if (voucher.Status != "active")
         {
@@ -631,9 +945,9 @@ public class VoucherService : IVoucherService
                 "Voucher không active.");
         }
 
-        // -------------------------------------------------
-        // 2. StartAt
-        // -------------------------------------------------
+        // =================================================
+        // START
+        // =================================================
 
         if (now < voucher.StartAt)
         {
@@ -641,9 +955,9 @@ public class VoucherService : IVoucherService
                 "Voucher chưa bắt đầu hiệu lực.");
         }
 
-        // -------------------------------------------------
-        // 3. EndAt
-        // -------------------------------------------------
+        // =================================================
+        // END
+        // =================================================
 
         if (now > voucher.EndAt)
         {
@@ -651,9 +965,9 @@ public class VoucherService : IVoucherService
                 "Voucher đã hết hạn.");
         }
 
-        // -------------------------------------------------
-        // 4. UsageLimit
-        // -------------------------------------------------
+        // =================================================
+        // USAGE LIMIT
+        // =================================================
 
         if (voucher.UsageLimit.HasValue &&
             voucher.UsedCount >=
@@ -663,20 +977,22 @@ public class VoucherService : IVoucherService
                 "Voucher đã hết lượt sử dụng.");
         }
 
-        // -------------------------------------------------
-        // 5. MinOrderValue
-        // -------------------------------------------------
+        // =================================================
+        // MIN ORDER VALUE
+        // =================================================
 
         if (voucher.MinOrderValue.HasValue &&
-            orderValue < voucher.MinOrderValue.Value)
+            orderValue <
+            voucher.MinOrderValue.Value)
         {
             throw new BadRequestException(
-                $"Đơn hàng tối thiểu là {voucher.MinOrderValue.Value:N0} VND.");
+                $"Đơn hàng tối thiểu là " +
+                $"{voucher.MinOrderValue.Value:N0} VND.");
         }
 
-        // -------------------------------------------------
-        // 6. Shop Voucher
-        // -------------------------------------------------
+        // =================================================
+        // SHOP VOUCHER
+        // =================================================
 
         if (voucher.Scope == "shop")
         {
@@ -686,7 +1002,8 @@ public class VoucherService : IVoucherService
                     "Voucher shop cần ShopId.");
             }
 
-            if (voucher.ShopId != shopId.Value)
+            if (voucher.ShopId !=
+                shopId.Value)
             {
                 throw new BadRequestException(
                     "Voucher không áp dụng cho Shop này.");
@@ -695,6 +1012,7 @@ public class VoucherService : IVoucherService
 
         return MapToResponseDTO(voucher);
     }
+
 
     // =====================================================
     // CHECK SHOP ACCESS
@@ -706,12 +1024,16 @@ public class VoucherService : IVoucherService
         string actorRole)
     {
         actorRole =
-            actorRole.Trim().ToLowerInvariant();
+            actorRole
+                .Trim()
+                .ToLowerInvariant();
 
         var shops =
-            await _unitOfWork.Shops.FindAsync(
-                x =>
-                    x.Id == shopId);
+            await _unitOfWork.Shops
+                .FindAsync(
+                    x =>
+                        x.Id ==
+                        shopId);
 
         var shop =
             shops.FirstOrDefault();
@@ -722,13 +1044,16 @@ public class VoucherService : IVoucherService
                 $"Shop {shopId} không tồn tại.");
         }
 
+        // ADMIN
         if (actorRole == "admin")
         {
             return;
         }
 
+        // SELLER
         if (actorRole == "seller" &&
-            shop.OwnerUserId == actorUserId)
+            shop.OwnerUserId ==
+            actorUserId)
         {
             return;
         }
@@ -736,6 +1061,7 @@ public class VoucherService : IVoucherService
         throw new ForbiddenException(
             "Bạn không có quyền quản lý Voucher của Shop này.");
     }
+
 
     // =====================================================
     // CHECK VOUCHER ACCESS
@@ -747,19 +1073,24 @@ public class VoucherService : IVoucherService
         string actorRole)
     {
         actorRole =
-            actorRole.Trim().ToLowerInvariant();
+            actorRole
+                .Trim()
+                .ToLowerInvariant();
 
+        // ADMIN
         if (actorRole == "admin")
         {
             return;
         }
 
+        // SELLER
         if (actorRole != "seller")
         {
             throw new ForbiddenException(
                 "Role không được phép quản lý Voucher.");
         }
 
+        // Seller chỉ được quản lý voucher shop
         if (voucher.Scope != "shop" ||
             !voucher.ShopId.HasValue)
         {
@@ -773,31 +1104,143 @@ public class VoucherService : IVoucherService
             actorRole);
     }
 
+
     // =====================================================
     // MAP
     // =====================================================
 
-    private VoucherResponseDTO MapToResponseDTO(
-        VoucherModel voucher)
+    private VoucherResponseDTO
+        MapToResponseDTO(
+            VoucherModel voucher)
     {
         return new VoucherResponseDTO
         {
-            Id = voucher.Id,
-            Scope = voucher.Scope,
-            ShopId = voucher.ShopId,
-            Code = voucher.Code,
-            Name = voucher.Name,
-            Description = voucher.Description,
-            DiscountType = voucher.DiscountType,
-            DiscountValue = voucher.DiscountValue,
-            MaxDiscount = voucher.MaxDiscount,
-            MinOrderValue = voucher.MinOrderValue,
-            UsageLimit = voucher.UsageLimit,
-            UsedCount = voucher.UsedCount,
-            StartAt = voucher.StartAt,
-            EndAt = voucher.EndAt,
-            Status = voucher.Status,
-            CreatedAt = voucher.CreatedAt
+            Id =
+                voucher.Id,
+
+            Scope =
+                voucher.Scope,
+
+            ShopId =
+                voucher.ShopId,
+
+            Code =
+                voucher.Code,
+
+            Name =
+                voucher.Name,
+
+            Description =
+                voucher.Description,
+
+            DiscountType =
+                voucher.DiscountType,
+
+            DiscountValue =
+                voucher.DiscountValue,
+
+            MaxDiscount =
+                voucher.MaxDiscount,
+
+            MinOrderValue =
+                voucher.MinOrderValue,
+
+            UsageLimit =
+                voucher.UsageLimit,
+
+            UsedCount =
+                voucher.UsedCount,
+
+            StartAt =
+                voucher.StartAt,
+
+            EndAt =
+                voucher.EndAt,
+
+            Status =
+                voucher.Status,
+
+            CreatedAt =
+                voucher.CreatedAt
+        };
+    }
+
+
+    // =====================================================
+    // PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        VoucherPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize < 1)
+        {
+            throw new BadRequestException(
+                "PageSize phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize không được lớn hơn 100.");
+        }
+    }
+
+
+    // =====================================================
+    // CREATE PAGED RESPONSE
+    // =====================================================
+
+    private PagedResponseDTO<VoucherResponseDTO>
+        CreatePagedResponse(
+            List<VoucherResponseDTO> items,
+            VoucherPaginationRequestDTO request)
+    {
+        var totalItems =
+            items.Count;
+
+        var totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+        var pagedItems =
+            items
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<VoucherResponseDTO>
+        {
+            Items =
+                pagedItems,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
         };
     }
 }

@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.ReturnRequest;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -18,6 +19,7 @@ public class ReturnRequestService : IReturnRequestService
 
     // =====================================================
     // CREATE
+    // CUSTOMER
     // =====================================================
 
     public async Task<ReturnRequestResponseDTO> CreateAsync(
@@ -121,7 +123,8 @@ public class ReturnRequestService : IReturnRequestService
                     &&
                     (
                         x.Status == "requested"
-                        || x.Status == "approved"
+                        ||
+                        x.Status == "approved"
                     ));
 
         if (existingRequests.Any())
@@ -166,29 +169,26 @@ public class ReturnRequestService : IReturnRequestService
 
     // =====================================================
     // GET MY REQUESTS
+    // CUSTOMER
     // =====================================================
 
-    public async Task<IEnumerable<ReturnRequestResponseDTO>>
-        GetMyRequestsAsync(long customerId)
+    public async Task<PagedResponseDTO<ReturnRequestResponseDTO>>
+        GetMyRequestsAsync(
+            long customerId,
+            ReturnRequestPaginationRequestDTO request)
     {
         var requests =
             await _unitOfWork.ReturnRequests.FindAsync(
                 x => x.CustomerId == customerId);
 
-        var result = new List<ReturnRequestResponseDTO>();
-
-        foreach (var request in requests
-                     .OrderByDescending(x => x.RequestedAt))
-        {
-            result.Add(
-                await BuildResponseAsync(request));
-        }
-
-        return result;
+        return await BuildPagedResponseAsync(
+            requests,
+            request);
     }
 
     // =====================================================
     // GET BY ID
+    // CUSTOMER / SELLER / ADMIN
     // =====================================================
 
     public async Task<ReturnRequestResponseDTO?>
@@ -208,13 +208,19 @@ public class ReturnRequestService : IReturnRequestService
 
         role = role.Trim().ToLowerInvariant();
 
-        // Admin
+        // =================================================
+        // ADMIN
+        // =================================================
+
         if (role == "admin")
         {
             return await BuildResponseAsync(request);
         }
 
-        // Customer
+        // =================================================
+        // CUSTOMER
+        // =================================================
+
         if (role == "customer")
         {
             if (request.CustomerId != userId)
@@ -226,7 +232,10 @@ public class ReturnRequestService : IReturnRequestService
             return await BuildResponseAsync(request);
         }
 
-        // Seller
+        // =================================================
+        // SELLER
+        // =================================================
+
         if (role == "seller")
         {
             var order =
@@ -264,10 +273,13 @@ public class ReturnRequestService : IReturnRequestService
 
     // =====================================================
     // GET SHOP REQUESTS
+    // SELLER
     // =====================================================
 
-    public async Task<IEnumerable<ReturnRequestResponseDTO>>
-        GetShopRequestsAsync(long sellerId)
+    public async Task<PagedResponseDTO<ReturnRequestResponseDTO>>
+        GetShopRequestsAsync(
+            long sellerId,
+            ReturnRequestPaginationRequestDTO request)
     {
         var shops =
             await _unitOfWork.Shops.FindAsync(
@@ -279,7 +291,7 @@ public class ReturnRequestService : IReturnRequestService
 
         if (!shopIds.Any())
         {
-            return Enumerable.Empty<ReturnRequestResponseDTO>();
+            return CreateEmptyPagedResponse(request);
         }
 
         var orders =
@@ -292,50 +304,39 @@ public class ReturnRequestService : IReturnRequestService
 
         if (!orderIds.Any())
         {
-            return Enumerable.Empty<ReturnRequestResponseDTO>();
+            return CreateEmptyPagedResponse(request);
         }
 
         var requests =
             await _unitOfWork.ReturnRequests.FindAsync(
                 x => orderIds.Contains(x.OrderId));
 
-        var result = new List<ReturnRequestResponseDTO>();
-
-        foreach (var request in requests
-                     .OrderByDescending(x => x.RequestedAt))
-        {
-            result.Add(
-                await BuildResponseAsync(request));
-        }
-
-        return result;
+        return await BuildPagedResponseAsync(
+            requests,
+            request);
     }
 
     // =====================================================
-    // GET ALL - ADMIN
+    // GET ALL
+    // ADMIN
     // =====================================================
 
-    public async Task<IEnumerable<ReturnRequestResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<ReturnRequestResponseDTO>>
+        GetAllAsync(
+            ReturnRequestPaginationRequestDTO request)
     {
         var requests =
             await _unitOfWork.ReturnRequests
                 .GetAllAsync();
 
-        var result = new List<ReturnRequestResponseDTO>();
-
-        foreach (var request in requests
-                     .OrderByDescending(x => x.RequestedAt))
-        {
-            result.Add(
-                await BuildResponseAsync(request));
-        }
-
-        return result;
+        return await BuildPagedResponseAsync(
+            requests,
+            request);
     }
 
     // =====================================================
     // APPROVE
+    // SELLER / ADMIN
     // =====================================================
 
     public async Task<ReturnRequestResponseDTO>
@@ -376,6 +377,7 @@ public class ReturnRequestService : IReturnRequestService
 
     // =====================================================
     // REJECT
+    // SELLER / ADMIN
     // =====================================================
 
     public async Task<ReturnRequestResponseDTO>
@@ -451,13 +453,19 @@ public class ReturnRequestService : IReturnRequestService
     {
         role = role.Trim().ToLowerInvariant();
 
+        // =================================================
         // ADMIN
+        // =================================================
+
         if (role == "admin")
         {
             return;
         }
 
+        // =================================================
         // SELLER
+        // =================================================
+
         if (role != "seller")
         {
             throw new ForbiddenException(
@@ -492,11 +500,204 @@ public class ReturnRequestService : IReturnRequestService
     }
 
     // =====================================================
+    // BUILD PAGED RESPONSE
+    // =====================================================
+
+    private async Task<PagedResponseDTO<ReturnRequestResponseDTO>>
+        BuildPagedResponseAsync(
+            IEnumerable<ReturnRequestModel> requests,
+            ReturnRequestPaginationRequestDTO request)
+    {
+        ValidatePagination(request);
+
+        var result =
+            new List<ReturnRequestResponseDTO>();
+
+        foreach (var item in requests
+                     .OrderByDescending(x => x.RequestedAt))
+        {
+            result.Add(
+                await BuildResponseAsync(item));
+        }
+
+        // =================================================
+        // FILTER STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            var status =
+                request.Status.Trim()
+                    .ToLowerInvariant();
+
+            ValidateStatus(status);
+
+            result = result
+                .Where(x =>
+                    x.Status != null &&
+                    x.Status.Trim()
+                        .ToLowerInvariant() == status)
+                .ToList();
+        }
+
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            result = result
+                .Where(x =>
+                    (!string.IsNullOrWhiteSpace(x.OrderCode)
+                     &&
+                     x.OrderCode.Contains(
+                         search,
+                         StringComparison.OrdinalIgnoreCase))
+
+                    ||
+
+                    (!string.IsNullOrWhiteSpace(x.CustomerEmail)
+                     &&
+                     x.CustomerEmail.Contains(
+                         search,
+                         StringComparison.OrdinalIgnoreCase))
+
+                    ||
+
+                    (!string.IsNullOrWhiteSpace(x.Reason)
+                     &&
+                     x.Reason.Contains(
+                         search,
+                         StringComparison.OrdinalIgnoreCase))
+
+                    ||
+
+                    (!string.IsNullOrWhiteSpace(x.Description)
+                     &&
+                     x.Description.Contains(
+                         search,
+                         StringComparison.OrdinalIgnoreCase))
+                )
+                .ToList();
+        }
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var totalItems = result.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        var items =
+            result
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<ReturnRequestResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = totalItems,
+
+            TotalPages = totalPages
+        };
+    }
+
+    // =====================================================
+    // EMPTY PAGED RESPONSE
+    // =====================================================
+
+    private PagedResponseDTO<ReturnRequestResponseDTO>
+        CreateEmptyPagedResponse(
+            ReturnRequestPaginationRequestDTO request)
+    {
+        ValidatePagination(request);
+
+        return new PagedResponseDTO<ReturnRequestResponseDTO>
+        {
+            Items = new List<ReturnRequestResponseDTO>(),
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = 0,
+
+            TotalPages = 0
+        };
+    }
+
+    // =====================================================
+    // VALIDATE PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        ReturnRequestPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Pagination request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải >= 1.");
+        }
+
+        if (request.PageSize < 1 ||
+            request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize phải từ 1 đến 100.");
+        }
+    }
+
+    // =====================================================
+    // VALIDATE STATUS
+    // =====================================================
+
+    private void ValidateStatus(string status)
+    {
+        var allowedStatuses = new[]
+        {
+            "requested",
+            "approved",
+            "rejected"
+        };
+
+        if (!allowedStatuses.Contains(status))
+        {
+            throw new BadRequestException(
+                "Status không hợp lệ. " +
+                "Chỉ chấp nhận: requested, approved, rejected.");
+        }
+    }
+
+    // =====================================================
     // MAP
     // =====================================================
 
     private async Task<ReturnRequestResponseDTO>
-        BuildResponseAsync(ReturnRequestModel request)
+        BuildResponseAsync(
+            ReturnRequestModel request)
     {
         var order =
             await _unitOfWork.Orders

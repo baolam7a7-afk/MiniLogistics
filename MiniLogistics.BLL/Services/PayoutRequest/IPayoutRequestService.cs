@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.PayoutRequest;
 
 namespace MiniLogistics.BLL.Services.PayoutRequest;
@@ -9,24 +10,26 @@ public interface IPayoutRequestService
         long userId,
         CreatePayoutRequestDTO request);
 
-    // Seller xem các yêu cầu rút tiền của Shop mình
-    Task<IEnumerable<PayoutRequestResponseDTO>> GetMyAsync(
+    // Seller xem payout của Shop mình
+    Task<PagedResponseDTO<PayoutRequestResponseDTO>> GetMyAsync(
         long userId,
-        long shopId);
+        long shopId,
+        PayoutRequestPaginationRequestDTO request);
 
-    // Admin xem tất cả yêu cầu rút tiền
-    Task<IEnumerable<PayoutRequestResponseDTO>> GetAllAsync();
+    // Admin xem tất cả payout
+    Task<PagedResponseDTO<PayoutRequestResponseDTO>> GetAllAsync(
+        PayoutRequestPaginationRequestDTO request);
 
-    // Admin xem chi tiết một yêu cầu
+    // Admin xem chi tiết
     Task<PayoutRequestResponseDTO?> GetByIdAsync(
         long payoutRequestId);
 
-    // Admin duyệt yêu cầu
+    // Admin duyệt
     Task<PayoutRequestResponseDTO> ApproveAsync(
         long adminUserId,
         long payoutRequestId);
 
-    // Admin từ chối yêu cầu
+    // Admin từ chối
     Task<PayoutRequestResponseDTO> RejectAsync(
         long adminUserId,
         long payoutRequestId);

@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+
 using MiniLogistics.BLL.DTOs.Cart;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.UnitOfWork;
 
-using CartEntity = MiniLogistics.DAL.Models.Cart;
+using CartEntity =
+    MiniLogistics.DAL.Models.Cart;
 
 namespace MiniLogistics.BLL.Services.Cart;
 
@@ -12,28 +14,46 @@ public class CartService : ICartService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public CartService(IUnitOfWork unitOfWork)
+    public CartService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
 
-    // =========================================================
+
+    // =====================================================
     // GET MY CART
-    // =========================================================
-    public async Task<CartResponseDTO> GetMyCartAsync(long userId)
+    // =====================================================
+
+    public async Task<CartResponseDTO>
+        GetMyCartAsync(
+            long userId)
     {
         if (userId <= 0)
-            throw new UnauthorizedAccessException("User ID không hợp lệ.");
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ.");
+        }
 
-        var cart = await GetCartEntityAsync(userId);
+        var cart =
+            await GetCartEntityAsync(
+                userId);
+
+        // -------------------------------------------------
+        // User chưa có Cart
+        // -------------------------------------------------
 
         if (cart == null)
         {
             return new CartResponseDTO
             {
                 CartId = 0,
+
                 UserId = userId,
-                Items = new List<CartItemResponseDTO>(),
+
+                Items =
+                    new List<CartItemResponseDTO>(),
+
                 TotalAmount = 0
             };
         }
@@ -41,255 +61,451 @@ public class CartService : ICartService
         return MapCart(cart);
     }
 
-    // =========================================================
+
+    // =====================================================
     // ADD TO CART
-    // =========================================================
-    public async Task<CartResponseDTO> AddToCartAsync(
-        long userId,
-        AddToCartDTO request)
+    // =====================================================
+
+    public async Task<CartResponseDTO>
+        AddToCartAsync(
+            long userId,
+            AddToCartDTO request)
     {
         if (userId <= 0)
-            throw new UnauthorizedAccessException("User ID không hợp lệ.");
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ.");
+        }
 
         if (request == null)
-            throw new BadRequestException("Dữ liệu thêm vào giỏ hàng không được để trống.");
+        {
+            throw new BadRequestException(
+                "Dữ liệu thêm vào giỏ hàng không được để trống.");
+        }
 
         if (request.VariantId <= 0)
-            throw new BadRequestException("VariantId không hợp lệ.");
+        {
+            throw new BadRequestException(
+                "VariantId không hợp lệ.");
+        }
 
         if (request.Quantity <= 0)
-            throw new BadRequestException("Số lượng phải lớn hơn 0.");
+        {
+            throw new BadRequestException(
+                "Số lượng phải lớn hơn 0.");
+        }
 
-        // -----------------------------------------------------
-        // Tìm ProductVariant
-        // -----------------------------------------------------
-        var variant = await _unitOfWork.ProductVariants
-            .Query()
-            .Include(x => x.Product)
-            .FirstOrDefaultAsync(x => x.Id == request.VariantId);
+
+        // =================================================
+        // 1. Tìm ProductVariant
+        // =================================================
+
+        var variant =
+            await _unitOfWork.ProductVariants
+                .Query()
+                .Include(x => x.Product)
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Id ==
+                        request.VariantId);
 
         if (variant == null)
+        {
             throw new NotFoundException(
                 $"Không tìm thấy ProductVariant với Id = {request.VariantId}.");
+        }
+
+
+        // =================================================
+        // 2. Kiểm tra Variant Active
+        // =================================================
 
         if (!variant.IsActive)
+        {
             throw new BadRequestException(
                 "ProductVariant hiện đang không hoạt động.");
+        }
 
-        // -----------------------------------------------------
-        // Tìm Inventory
-        // -----------------------------------------------------
-        var inventory = await _unitOfWork.Inventories
-            .Query()
-            .FirstOrDefaultAsync(
-                x => x.ProductVariantId == request.VariantId);
+
+        // =================================================
+        // 3. Tìm Inventory
+        // =================================================
+
+        var inventory =
+            await _unitOfWork.Inventories
+                .Query()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.ProductVariantId ==
+                        request.VariantId);
 
         if (inventory == null)
+        {
             throw new NotFoundException(
                 "Không tìm thấy tồn kho của sản phẩm.");
+        }
+
+
+        // =================================================
+        // 4. Tính Available
+        // =================================================
 
         var availableQuantity =
-            inventory.Quantity - inventory.ReservedQuantity;
+            inventory.Quantity -
+            inventory.ReservedQuantity;
+
 
         if (availableQuantity <= 0)
+        {
             throw new BadRequestException(
                 "Sản phẩm hiện đã hết hàng.");
+        }
 
-        // -----------------------------------------------------
-        // Tìm hoặc tạo Cart
-        // -----------------------------------------------------
-        var cart = await _unitOfWork.Carts
-            .Query()
-            .Include(x => x.CartItems)
-            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        // =================================================
+        // 5. Tìm hoặc tạo Cart
+        // =================================================
+
+        var cart =
+            await _unitOfWork.Carts
+                .Query()
+                .Include(x => x.CartItems)
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.UserId ==
+                        userId);
+
+
+        // -------------------------------------------------
+        // Chưa có Cart
+        // -------------------------------------------------
 
         if (cart == null)
         {
-            cart = new CartEntity
-            {
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+            cart =
+                new CartEntity
+                {
+                    UserId =
+                        userId,
 
-            await _unitOfWork.Carts.AddAsync(cart);
+                    CreatedAt =
+                        DateTime.UtcNow,
 
-            await _unitOfWork.SaveChangesAsync();
+                    UpdatedAt =
+                        DateTime.UtcNow
+                };
 
-            cart = await _unitOfWork.Carts
-                .Query()
-                .Include(x => x.CartItems)
-                .FirstOrDefaultAsync(x => x.UserId == userId);
+            await _unitOfWork.Carts
+                .AddAsync(cart);
+
+            await _unitOfWork
+                .SaveChangesAsync();
+
+
+            // Reload Cart để lấy CartId
+            cart =
+                await _unitOfWork.Carts
+                    .Query()
+                    .Include(x => x.CartItems)
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.UserId ==
+                            userId);
 
             if (cart == null)
-                throw new Exception("Không thể tạo giỏ hàng.");
+            {
+                throw new Exception(
+                    "Không thể tạo giỏ hàng.");
+            }
         }
 
-        // -----------------------------------------------------
-        // Kiểm tra CartItem đã tồn tại chưa
-        // -----------------------------------------------------
-        var cartItem = cart.CartItems
-            .FirstOrDefault(x =>
-                x.VariantId == request.VariantId);
+
+        // =================================================
+        // 6. Kiểm tra CartItem
+        // =================================================
+
+        var cartItem =
+            cart.CartItems
+                .FirstOrDefault(
+                    x =>
+                        x.VariantId ==
+                        request.VariantId);
+
+
+        // =================================================
+        // 7. Chưa có CartItem
+        // =================================================
 
         if (cartItem == null)
         {
-            if (request.Quantity > availableQuantity)
+            if (request.Quantity >
+                availableQuantity)
             {
                 throw new BadRequestException(
                     $"Số lượng yêu cầu vượt quá tồn kho. " +
                     $"Tồn kho khả dụng: {availableQuantity}.");
             }
 
-            cartItem = new CartItem
-            {
-                CartId = cart.Id,
-                VariantId = request.VariantId,
-                Quantity = request.Quantity
-            };
 
-            await _unitOfWork.CartItems.AddAsync(cartItem);
+            cartItem =
+                new CartItem
+                {
+                    CartId =
+                        cart.Id,
+
+                    VariantId =
+                        request.VariantId,
+
+                    Quantity =
+                        request.Quantity
+                };
+
+            await _unitOfWork.CartItems
+                .AddAsync(cartItem);
         }
+
+
+        // =================================================
+        // 8. CartItem đã tồn tại
+        // =================================================
+
         else
         {
             var newQuantity =
-                cartItem.Quantity + request.Quantity;
+                cartItem.Quantity +
+                request.Quantity;
 
-            if (newQuantity > availableQuantity)
+
+            if (newQuantity >
+                availableQuantity)
             {
                 throw new BadRequestException(
                     $"Số lượng trong giỏ vượt quá tồn kho. " +
                     $"Tồn kho khả dụng: {availableQuantity}.");
             }
 
-            cartItem.Quantity = newQuantity;
 
-            _unitOfWork.CartItems.Update(cartItem);
+            cartItem.Quantity =
+                newQuantity;
+
+            _unitOfWork.CartItems
+                .Update(cartItem);
         }
 
-        cart.UpdatedAt = DateTime.UtcNow;
 
-        _unitOfWork.Carts.Update(cart);
+        // =================================================
+        // 9. Update Cart
+        // =================================================
 
-        await _unitOfWork.SaveChangesAsync();
+        cart.UpdatedAt =
+            DateTime.UtcNow;
 
-        // -----------------------------------------------------
-        // Reload Cart
-        // -----------------------------------------------------
-        var updatedCart = await GetCartEntityAsync(userId);
+        _unitOfWork.Carts
+            .Update(cart);
+
+
+        // =================================================
+        // 10. Save
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        // =================================================
+        // 11. Reload Cart
+        // =================================================
+
+        var updatedCart =
+            await GetCartEntityAsync(
+                userId);
 
         if (updatedCart == null)
-            throw new Exception("Không thể tải lại giỏ hàng.");
+        {
+            throw new Exception(
+                "Không thể tải lại giỏ hàng.");
+        }
 
-        return MapCart(updatedCart);
+
+        return MapCart(
+            updatedCart);
     }
 
-    // =========================================================
+
+    // =====================================================
     // UPDATE CART ITEM
-    // =========================================================
-    public async Task<CartResponseDTO> UpdateCartItemAsync(
-        long userId,
-        long cartItemId,
-        UpdateCartItemDTO request)
+    // =====================================================
+
+    public async Task<CartResponseDTO>
+        UpdateCartItemAsync(
+            long userId,
+            long cartItemId,
+            UpdateCartItemDTO request)
     {
         if (userId <= 0)
-            throw new UnauthorizedAccessException("User ID không hợp lệ.");
+        {
+            throw new UnauthorizedAccessException(
+                "User ID không hợp lệ.");
+        }
 
         if (cartItemId <= 0)
-            throw new BadRequestException("CartItemId không hợp lệ.");
+        {
+            throw new BadRequestException(
+                "CartItemId không hợp lệ.");
+        }
 
         if (request == null)
+        {
             throw new BadRequestException(
                 "Dữ liệu cập nhật giỏ hàng không được để trống.");
+        }
 
         if (request.Quantity <= 0)
+        {
             throw new BadRequestException(
                 "Số lượng phải lớn hơn 0.");
+        }
 
-        // -----------------------------------------------------
-        // Tìm CartItem thuộc User
-        // -----------------------------------------------------
+
+        // =================================================
+        // 1. Tìm CartItem thuộc User
+        // =================================================
+
         var cartItem =
             await _unitOfWork.CartItems
                 .Query()
                 .Include(x => x.Cart)
                 .FirstOrDefaultAsync(
                     x =>
-                        x.Id == cartItemId &&
-                        x.Cart.UserId == userId);
+                        x.Id ==
+                        cartItemId
+                        &&
+                        x.Cart.UserId ==
+                        userId);
 
         if (cartItem == null)
+        {
             throw new NotFoundException(
                 "Không tìm thấy sản phẩm trong giỏ hàng.");
+        }
 
-        // -----------------------------------------------------
-        // Tìm Inventory
-        // -----------------------------------------------------
-        var inventory = await _unitOfWork.Inventories
-            .Query()
-            .FirstOrDefaultAsync(
-                x => x.ProductVariantId == cartItem.VariantId);
+
+        // =================================================
+        // 2. Tìm Inventory
+        // =================================================
+
+        var inventory =
+            await _unitOfWork.Inventories
+                .Query()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.ProductVariantId ==
+                        cartItem.VariantId);
 
         if (inventory == null)
+        {
             throw new NotFoundException(
                 "Không tìm thấy tồn kho của sản phẩm.");
+        }
+
+
+        // =================================================
+        // 3. Tính Available
+        // =================================================
 
         var availableQuantity =
-            inventory.Quantity - inventory.ReservedQuantity;
+            inventory.Quantity -
+            inventory.ReservedQuantity;
 
-        if (request.Quantity > availableQuantity)
+
+        if (request.Quantity >
+            availableQuantity)
         {
             throw new BadRequestException(
                 $"Số lượng yêu cầu vượt quá tồn kho. " +
                 $"Tồn kho khả dụng: {availableQuantity}.");
         }
 
-        // -----------------------------------------------------
-        // Update Quantity
-        // -----------------------------------------------------
-        cartItem.Quantity = request.Quantity;
 
-        _unitOfWork.CartItems.Update(cartItem);
+        // =================================================
+        // 4. Update CartItem
+        // =================================================
 
-        cartItem.Cart.UpdatedAt = DateTime.UtcNow;
+        cartItem.Quantity =
+            request.Quantity;
 
-        _unitOfWork.Carts.Update(cartItem.Cart);
+        _unitOfWork.CartItems
+            .Update(cartItem);
 
-        await _unitOfWork.SaveChangesAsync();
 
-        // -----------------------------------------------------
-        // Reload Cart
-        // -----------------------------------------------------
-        var updatedCart = await GetCartEntityAsync(userId);
+        // =================================================
+        // 5. Update Cart
+        // =================================================
+
+        cartItem.Cart.UpdatedAt =
+            DateTime.UtcNow;
+
+        _unitOfWork.Carts
+            .Update(cartItem.Cart);
+
+
+        // =================================================
+        // 6. Save
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        // =================================================
+        // 7. Reload Cart
+        // =================================================
+
+        var updatedCart =
+            await GetCartEntityAsync(
+                userId);
 
         if (updatedCart == null)
-            throw new Exception("Không thể tải lại giỏ hàng.");
+        {
+            throw new Exception(
+                "Không thể tải lại giỏ hàng.");
+        }
 
-        return MapCart(updatedCart);
+
+        return MapCart(
+            updatedCart);
     }
 
-    // =========================================================
+
+    // =====================================================
     // REMOVE CART ITEM
-    // =========================================================
+    // =====================================================
+
     public async Task RemoveCartItemAsync(
         long userId,
         long cartItemId)
     {
         if (userId <= 0)
+        {
             throw new UnauthorizedAccessException(
                 "User ID không hợp lệ.");
+        }
 
         if (cartItemId <= 0)
+        {
             throw new BadRequestException(
                 "CartItemId không hợp lệ.");
+        }
 
-        // -----------------------------------------------------
-        // BƯỚC 1:
-        // Tìm CartItem trực tiếp theo ID
-        // -----------------------------------------------------
+
+        // =================================================
+        // 1. Tìm CartItem
+        // =================================================
+
         var cartItem =
             await _unitOfWork.CartItems
-                .GetByIdAsync(cartItemId);
+                .GetByIdAsync(
+                    cartItemId);
 
         if (cartItem == null)
         {
@@ -297,13 +513,15 @@ public class CartService : ICartService
                 "Không tìm thấy sản phẩm trong giỏ hàng.");
         }
 
-        // -----------------------------------------------------
-        // BƯỚC 2:
-        // Tìm Cart mà CartItem đang thuộc về
-        // -----------------------------------------------------
+
+        // =================================================
+        // 2. Tìm Cart
+        // =================================================
+
         var cart =
             await _unitOfWork.Carts
-                .GetByIdAsync(cartItem.CartId);
+                .GetByIdAsync(
+                    cartItem.CartId);
 
         if (cart == null)
         {
@@ -311,79 +529,123 @@ public class CartService : ICartService
                 "Không tìm thấy giỏ hàng.");
         }
 
-        // -----------------------------------------------------
-        // BƯỚC 3:
-        // Kiểm tra quyền sở hữu
-        // -----------------------------------------------------
+
+        // =================================================
+        // 3. Kiểm tra quyền sở hữu
+        // =================================================
+
         if (cart.UserId != userId)
         {
             throw new ForbiddenException(
                 "Bạn không có quyền xóa sản phẩm trong giỏ hàng này.");
         }
 
-        // -----------------------------------------------------
-        // BƯỚC 4:
-        // Xóa CartItem
-        // -----------------------------------------------------
-        _unitOfWork.CartItems.Delete(cartItem);
 
-        // -----------------------------------------------------
-        // BƯỚC 5:
-        // Cập nhật Cart
-        // -----------------------------------------------------
-        cart.UpdatedAt = DateTime.UtcNow;
+        // =================================================
+        // 4. Delete CartItem
+        // =================================================
 
-        _unitOfWork.Carts.Update(cart);
+        _unitOfWork.CartItems
+            .Delete(cartItem);
 
-        // -----------------------------------------------------
-        // BƯỚC 6:
-        // Lưu Database
-        // -----------------------------------------------------
-        await _unitOfWork.SaveChangesAsync();
+
+        // =================================================
+        // 5. Update Cart
+        // =================================================
+
+        cart.UpdatedAt =
+            DateTime.UtcNow;
+
+        _unitOfWork.Carts
+            .Update(cart);
+
+
+        // =================================================
+        // 6. Save
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
-    // =========================================================
+
+    // =====================================================
     // CLEAR CART
-    // =========================================================
-    public async Task ClearCartAsync(long userId)
+    // =====================================================
+
+    public async Task ClearCartAsync(
+        long userId)
     {
         if (userId <= 0)
+        {
             throw new UnauthorizedAccessException(
                 "User ID không hợp lệ.");
+        }
+
+
+        // =================================================
+        // 1. Tìm Cart
+        // =================================================
 
         var cart =
             await _unitOfWork.Carts
                 .Query()
                 .Include(x => x.CartItems)
                 .FirstOrDefaultAsync(
-                    x => x.UserId == userId);
+                    x =>
+                        x.UserId ==
+                        userId);
 
         if (cart == null)
         {
             return;
         }
 
+
+        // =================================================
+        // 2. Xóa CartItems
+        // =================================================
+
         if (cart.CartItems != null &&
             cart.CartItems.Any())
         {
-            foreach (var item in cart.CartItems.ToList())
+            foreach (
+                var item in
+                cart.CartItems.ToList())
             {
-                _unitOfWork.CartItems.Delete(item);
+                _unitOfWork.CartItems
+                    .Delete(item);
             }
         }
 
-        cart.UpdatedAt = DateTime.UtcNow;
 
-        _unitOfWork.Carts.Update(cart);
+        // =================================================
+        // 3. Update Cart
+        // =================================================
 
-        await _unitOfWork.SaveChangesAsync();
+        cart.UpdatedAt =
+            DateTime.UtcNow;
+
+        _unitOfWork.Carts
+            .Update(cart);
+
+
+        // =================================================
+        // 4. Save
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
-    // =========================================================
+
+    // =====================================================
     // GET CART ENTITY
-    // =========================================================
-    private async Task<CartEntity?> GetCartEntityAsync(
-        long userId)
+    // =====================================================
+
+    private async Task<CartEntity?>
+        GetCartEntityAsync(
+            long userId)
     {
         return await _unitOfWork.Carts
             .Query()
@@ -391,29 +653,51 @@ public class CartService : ICartService
                 .ThenInclude(x => x.Variant)
                     .ThenInclude(x => x.Product)
             .FirstOrDefaultAsync(
-                x => x.UserId == userId);
+                x =>
+                    x.UserId ==
+                    userId);
     }
 
-    // =========================================================
+
+    // =====================================================
     // MAP CART -> DTO
-    // =========================================================
-    private CartResponseDTO MapCart(CartEntity cart)
+    // =====================================================
+
+    private CartResponseDTO
+        MapCart(
+            CartEntity cart)
     {
-        var items = new List<CartItemResponseDTO>();
+        var items =
+            new List<CartItemResponseDTO>();
+
 
         if (cart.CartItems != null)
         {
-            foreach (var item in cart.CartItems)
+            foreach (
+                var item in
+                cart.CartItems)
             {
-                var variant = item.Variant;
+                var variant =
+                    item.Variant;
 
                 if (variant == null)
+                {
                     continue;
+                }
 
-                var product = variant.Product;
+
+                var product =
+                    variant.Product;
 
                 if (product == null)
+                {
                     continue;
+                }
+
+
+                // -----------------------------------------
+                // Inventory
+                // -----------------------------------------
 
                 var inventory =
                     _unitOfWork.Inventories
@@ -423,34 +707,52 @@ public class CartService : ICartService
                                 x.ProductVariantId ==
                                 item.VariantId);
 
-                var availableQuantity = inventory == null
-                    ? 0
-                    : inventory.Quantity -
-                      inventory.ReservedQuantity;
+
+                var availableQuantity =
+                    inventory == null
+                        ? 0
+                        : inventory.Quantity -
+                          inventory.ReservedQuantity;
+
+
+                // -----------------------------------------
+                // Total Price
+                // -----------------------------------------
 
                 var totalPrice =
-                    variant.Price * item.Quantity;
+                    variant.Price *
+                    item.Quantity;
+
 
                 items.Add(
                     new CartItemResponseDTO
                     {
-                        Id = item.Id,
+                        Id =
+                            item.Id,
 
-                        VariantId = variant.Id,
+                        VariantId =
+                            variant.Id,
 
-                        ProductId = product.Id,
+                        ProductId =
+                            product.Id,
 
-                        ProductName = product.Name,
+                        ProductName =
+                            product.Name,
 
-                        VariantName = variant.VariantName,
+                        VariantName =
+                            variant.VariantName,
 
-                        Sku = variant.Sku,
+                        Sku =
+                            variant.Sku,
 
-                        Price = variant.Price,
+                        Price =
+                            variant.Price,
 
-                        Quantity = item.Quantity,
+                        Quantity =
+                            item.Quantity,
 
-                        TotalPrice = totalPrice,
+                        TotalPrice =
+                            totalPrice,
 
                         AvailableQuantity =
                             availableQuantity
@@ -458,16 +760,25 @@ public class CartService : ICartService
             }
         }
 
+
+        // =================================================
+        // Cart Response
+        // =================================================
+
         return new CartResponseDTO
         {
-            CartId = cart.Id,
+            CartId =
+                cart.Id,
 
-            UserId = cart.UserId,
+            UserId =
+                cart.UserId,
 
-            Items = items,
+            Items =
+                items,
 
             TotalAmount =
-                items.Sum(x => x.TotalPrice)
+                items.Sum(
+                    x => x.TotalPrice)
         };
     }
 }

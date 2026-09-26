@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Payment;
 
 namespace MiniLogistics.BLL.Services.Payment;
@@ -9,7 +10,8 @@ public interface IPaymentService
     // ADMIN
     // =====================================================
 
-    Task<IEnumerable<PaymentResponseDTO>> GetAllAsync();
+    Task<PagedResponseDTO<PaymentResponseDTO>> GetAllAsync(
+        PaymentPaginationRequestDTO request);
 
 
     // =====================================================
@@ -17,8 +19,9 @@ public interface IPaymentService
     // CUSTOMER
     // =====================================================
 
-    Task<IEnumerable<PaymentResponseDTO>> GetMyPaymentsAsync(
-        long customerId);
+    Task<PagedResponseDTO<PaymentResponseDTO>> GetMyPaymentsAsync(
+        long customerId,
+        PaymentPaginationRequestDTO request);
 
 
     // =====================================================

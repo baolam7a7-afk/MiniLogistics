@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.SupportMessage;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -196,15 +197,46 @@ public class SupportMessageService : ISupportMessageService
 
     // =========================================================
     // GET BY TICKET ID
+    // PAGINATION
     // =========================================================
 
-    public async Task<IEnumerable<SupportMessageResponseDTO>>
+    public async Task<
+        PagedResponseDTO<SupportMessageResponseDTO>>
         GetByTicketIdAsync(
             long userId,
             string role,
-            long ticketId)
+            long ticketId,
+            SupportMessagePaginationRequestDTO request)
     {
         role = role.Trim().ToLowerInvariant();
+
+
+        // -----------------------------------------------------
+        // Request mặc định
+        // -----------------------------------------------------
+
+        request ??=
+            new SupportMessagePaginationRequestDTO();
+
+
+        // -----------------------------------------------------
+        // Validate Pagination
+        // -----------------------------------------------------
+
+        if (request.Page <= 0)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize <= 0)
+        {
+            request.PageSize = 20;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
 
 
         // -----------------------------------------------------
@@ -228,7 +260,7 @@ public class SupportMessageService : ISupportMessageService
 
         if (role == "admin")
         {
-            // Cho phép xem mọi message
+            // Admin được xem mọi message
         }
 
 
@@ -264,12 +296,75 @@ public class SupportMessageService : ISupportMessageService
 
         var messages =
             await _unitOfWork.SupportMessages
-                .FindAsync(x => x.TicketId == ticketId);
+                .FindAsync(
+                    x => x.TicketId == ticketId);
 
-        return messages
-            .OrderBy(x => x.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+
+        // -----------------------------------------------------
+        // Sort theo thời gian tăng dần
+        // -----------------------------------------------------
+
+        var orderedMessages =
+            messages
+                .OrderBy(x => x.CreatedAt)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Total Items
+        // -----------------------------------------------------
+
+        var totalItems =
+            orderedMessages.Count;
+
+
+        // -----------------------------------------------------
+        // Total Pages
+        // -----------------------------------------------------
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+
+        // -----------------------------------------------------
+        // Pagination
+        // -----------------------------------------------------
+
+        var items =
+            orderedMessages
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .Select(MapToResponse)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Response
+        // -----------------------------------------------------
+
+        return new PagedResponseDTO<
+            SupportMessageResponseDTO>
+        {
+            Items = items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -366,11 +461,14 @@ public class SupportMessageService : ISupportMessageService
         // Update
         // -----------------------------------------------------
 
-        message.Message = messageText;
+        message.Message =
+            messageText;
 
-        _unitOfWork.SupportMessages.Update(message);
+        _unitOfWork.SupportMessages
+            .Update(message);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
         return MapToResponse(message);
     }
@@ -443,9 +541,11 @@ public class SupportMessageService : ISupportMessageService
         // Delete
         // -----------------------------------------------------
 
-        _unitOfWork.SupportMessages.Delete(message);
+        _unitOfWork.SupportMessages
+            .Delete(message);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
 
@@ -458,11 +558,20 @@ public class SupportMessageService : ISupportMessageService
     {
         return new SupportMessageResponseDTO
         {
-            Id = message.Id,
-            TicketId = message.TicketId,
-            SenderUserId = message.SenderUserId,
-            Message = message.Message,
-            CreatedAt = message.CreatedAt
+            Id =
+                message.Id,
+
+            TicketId =
+                message.TicketId,
+
+            SenderUserId =
+                message.SenderUserId,
+
+            Message =
+                message.Message,
+
+            CreatedAt =
+                message.CreatedAt
         };
     }
 }

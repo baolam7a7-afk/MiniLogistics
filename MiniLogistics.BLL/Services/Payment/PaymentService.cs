@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Payment;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.Models;
@@ -23,9 +24,12 @@ public class PaymentService : IPaymentService
     // ADMIN
     // =====================================================
 
-    public async Task<IEnumerable<PaymentResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<PaymentResponseDTO>>
+        GetAllAsync(
+            PaymentPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
         var payments =
             await _unitOfWork.PaymentTransactions
                 .GetAllAsync();
@@ -50,8 +54,103 @@ public class PaymentService : IPaymentService
                     order));
         }
 
-        return result
-            .OrderByDescending(x => x.CreatedAt);
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result = result
+                .Where(x =>
+                    x.OrderCode
+                        .ToLowerInvariant()
+                        .Contains(search))
+                .ToList();
+        }
+
+        // =================================================
+        // STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            var status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result = result
+                .Where(x =>
+                    x.Status
+                        .Equals(
+                            status,
+                            StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        // =================================================
+        // ORDER ID
+        // =================================================
+
+        if (request.OrderId.HasValue)
+        {
+            result = result
+                .Where(x =>
+                    x.OrderId ==
+                    request.OrderId.Value)
+                .ToList();
+        }
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        result = result
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var totalItems =
+            result.Count;
+
+        var totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+        var items =
+            result
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<PaymentResponseDTO>
+        {
+            Items = items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -60,16 +159,25 @@ public class PaymentService : IPaymentService
     // CUSTOMER
     // =====================================================
 
-    public async Task<IEnumerable<PaymentResponseDTO>>
+    public async Task<PagedResponseDTO<PaymentResponseDTO>>
         GetMyPaymentsAsync(
-            long customerId)
+            long customerId,
+            PaymentPaginationRequestDTO request)
     {
+        if (customerId <= 0)
+        {
+            throw new BadRequestException(
+                "Customer ID không hợp lệ.");
+        }
+
+        ValidatePagination(request);
+
         var orders =
             await _unitOfWork.Orders
                 .FindAsync(
                     x =>
-                        x.CustomerId
-                        == customerId);
+                        x.CustomerId ==
+                        customerId);
 
         var result =
             new List<PaymentResponseDTO>();
@@ -81,8 +189,8 @@ public class PaymentService : IPaymentService
                     .PaymentTransactions
                     .FindAsync(
                         x =>
-                            x.OrderId
-                            == order.Id);
+                            x.OrderId ==
+                            order.Id);
 
             foreach (var payment in payments)
             {
@@ -93,9 +201,103 @@ public class PaymentService : IPaymentService
             }
         }
 
-        return result
-            .OrderByDescending(
-                x => x.CreatedAt);
+        // =================================================
+        // SEARCH
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result = result
+                .Where(x =>
+                    x.OrderCode
+                        .ToLowerInvariant()
+                        .Contains(search))
+                .ToList();
+        }
+
+        // =================================================
+        // STATUS
+        // =================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            var status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            result = result
+                .Where(x =>
+                    x.Status
+                        .Equals(
+                            status,
+                            StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        // =================================================
+        // ORDER ID
+        // =================================================
+
+        if (request.OrderId.HasValue)
+        {
+            result = result
+                .Where(x =>
+                    x.OrderId ==
+                    request.OrderId.Value)
+                .ToList();
+        }
+
+        // =================================================
+        // SORT
+        // =================================================
+
+        result = result
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+        // =================================================
+        // PAGINATION
+        // =================================================
+
+        var totalItems =
+            result.Count;
+
+        var totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+        var items =
+            result
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(
+                    request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<PaymentResponseDTO>
+        {
+            Items = items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -174,8 +376,8 @@ public class PaymentService : IPaymentService
                 .PaymentTransactions
                 .FindAsync(
                     x =>
-                        x.OrderId
-                        == orderId);
+                        x.OrderId ==
+                        orderId);
 
         var payment =
             payments
@@ -254,18 +456,25 @@ public class PaymentService : IPaymentService
         // CURRENTLY ONLY COD
         // =================================================
 
-        if (order.PaymentMethod != "cod")
+        if (!string.Equals(
+                order.PaymentMethod,
+                "cod",
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new BadRequestException(
                 "Project hiện tại chỉ hỗ trợ COD.");
         }
 
         // =================================================
-        // UPDATE
+        // UPDATE STATUS
         // =================================================
 
         payment.Status =
             newStatus;
+
+        // =================================================
+        // PROVIDER TRANSACTION ID
+        // =================================================
 
         if (!string.IsNullOrWhiteSpace(
                 request.ProviderTxnId))
@@ -273,6 +482,10 @@ public class PaymentService : IPaymentService
             payment.ProviderTxnId =
                 request.ProviderTxnId.Trim();
         }
+
+        // =================================================
+        // PAID TIME
+        // =================================================
 
         if (newStatus == "paid")
         {
@@ -322,18 +535,18 @@ public class PaymentService : IPaymentService
                 "Payment status không hợp lệ.");
         }
 
-        // -----------------------------------------------
+        // =================================================
         // SAME STATUS
-        // -----------------------------------------------
+        // =================================================
 
         if (currentStatus == newStatus)
         {
             return;
         }
 
-        // -----------------------------------------------
+        // =================================================
         // TERMINAL STATUS
-        // -----------------------------------------------
+        // =================================================
 
         if (currentStatus == "paid")
         {
@@ -353,9 +566,9 @@ public class PaymentService : IPaymentService
                 "Payment đã failed và không thể thay đổi.");
         }
 
-        // -----------------------------------------------
+        // =================================================
         // PENDING
-        // -----------------------------------------------
+        // =================================================
 
         if (currentStatus == "pending" &&
             (newStatus == "paid" ||
@@ -372,7 +585,7 @@ public class PaymentService : IPaymentService
 
 
     // =====================================================
-    // ACCESS
+    // ACCESS CONTROL
     // =====================================================
 
     private async Task CheckAccess(
@@ -384,13 +597,19 @@ public class PaymentService : IPaymentService
             role.Trim()
                 .ToLowerInvariant();
 
+        // =================================================
         // ADMIN
+        // =================================================
+
         if (role == "admin")
         {
             return;
         }
 
+        // =================================================
         // CUSTOMER
+        // =================================================
+
         if (role == "customer")
         {
             if (order.CustomerId != userId)
@@ -402,7 +621,10 @@ public class PaymentService : IPaymentService
             return;
         }
 
+        // =================================================
         // SELLER
+        // =================================================
+
         if (role == "seller")
         {
             bool ownsShop =
@@ -410,8 +632,10 @@ public class PaymentService : IPaymentService
                     .Shops
                     .AnyAsync(
                         x =>
-                            x.Id == order.ShopId &&
-                            x.OwnerUserId == userId);
+                            x.Id ==
+                            order.ShopId &&
+                            x.OwnerUserId ==
+                            userId);
 
             if (!ownsShop)
             {
@@ -473,5 +697,38 @@ public class PaymentService : IPaymentService
             CreatedAt =
                 payment.CreatedAt
         };
+    }
+
+
+    // =====================================================
+    // VALIDATE PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        PaymentPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize < 1)
+        {
+            throw new BadRequestException(
+                "PageSize phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize không được lớn hơn 100.");
+        }
     }
 }

@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shop;
 
 namespace MiniLogistics.BLL.Services.Shop;
@@ -34,8 +35,11 @@ public interface IShopService
 
 
     // =====================================================
-    // ADMIN - SHOP APPROVAL
+    // ADMIN
     // =====================================================
+
+    Task<PagedResponseDTO<ShopResponseDTO>> GetAllAsync(
+        ShopPaginationRequestDTO request);
 
     Task<IEnumerable<ShopResponseDTO>> GetPendingAsync();
 

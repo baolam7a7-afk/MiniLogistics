@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.DisputeMessage;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -126,7 +127,9 @@ public class DisputeMessageService : IDisputeMessageService
         // Không cho message vào Dispute đã đóng
         // -----------------------------------------------------
 
-        if (dispute.Status.Trim().ToLowerInvariant() == "closed")
+        if (dispute.Status
+            .Trim()
+            .ToLowerInvariant() == "closed")
         {
             throw new BadRequestException(
                 "Dispute đã đóng, không thể gửi thêm message.");
@@ -137,13 +140,21 @@ public class DisputeMessageService : IDisputeMessageService
         // Tạo Message
         // -----------------------------------------------------
 
-        var disputeMessage = new DisputeMessageModel
-        {
-            DisputeId = request.DisputeId,
-            SenderUserId = userId,
-            Message = messageText,
-            CreatedAt = DateTime.UtcNow
-        };
+        var disputeMessage =
+            new DisputeMessageModel
+            {
+                DisputeId =
+                    request.DisputeId,
+
+                SenderUserId =
+                    userId,
+
+                Message =
+                    messageText,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
 
         await _unitOfWork.DisputeMessages
             .AddAsync(disputeMessage);
@@ -223,15 +234,44 @@ public class DisputeMessageService : IDisputeMessageService
 
     // =========================================================
     // GET BY DISPUTE ID
+    // PAGINATION
     // =========================================================
 
-    public async Task<IEnumerable<DisputeMessageResponseDTO>>
+    public async Task<
+        PagedResponseDTO<DisputeMessageResponseDTO>>
         GetByDisputeIdAsync(
             long userId,
             string role,
-            long disputeId)
+            long disputeId,
+            DisputeMessagePaginationRequestDTO request)
     {
         role = role.Trim().ToLowerInvariant();
+
+
+        // -----------------------------------------------------
+        // Validate request
+        // -----------------------------------------------------
+
+        if (request == null)
+        {
+            request =
+                new DisputeMessagePaginationRequestDTO();
+        }
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 20;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
 
 
         // -----------------------------------------------------
@@ -291,12 +331,67 @@ public class DisputeMessageService : IDisputeMessageService
 
         var messages =
             await _unitOfWork.DisputeMessages
-                .FindAsync(x => x.DisputeId == disputeId);
+                .FindAsync(
+                    x => x.DisputeId == disputeId);
 
-        return messages
-            .OrderBy(x => x.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+
+        // -----------------------------------------------------
+        // Sort
+        // Tin nhắn cũ -> mới
+        // -----------------------------------------------------
+
+        var ordered =
+            messages
+                .OrderBy(x => x.CreatedAt)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Total
+        // -----------------------------------------------------
+
+        var totalItems =
+            ordered.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+
+        // -----------------------------------------------------
+        // Pagination
+        // -----------------------------------------------------
+
+        var items =
+            ordered
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .Select(MapToResponse)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Response
+        // -----------------------------------------------------
+
+        return new PagedResponseDTO<
+            DisputeMessageResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = totalItems,
+
+            TotalPages = totalPages
+        };
     }
 
 
@@ -413,7 +508,9 @@ public class DisputeMessageService : IDisputeMessageService
         // Không sửa khi Dispute đã đóng
         // -----------------------------------------------------
 
-        if (dispute.Status.Trim().ToLowerInvariant() == "closed")
+        if (dispute.Status
+            .Trim()
+            .ToLowerInvariant() == "closed")
         {
             throw new BadRequestException(
                 "Dispute đã đóng, không thể sửa message.");
@@ -424,9 +521,11 @@ public class DisputeMessageService : IDisputeMessageService
         // Update
         // -----------------------------------------------------
 
-        message.Message = messageText;
+        message.Message =
+            messageText;
 
-        _unitOfWork.DisputeMessages.Update(message);
+        _unitOfWork.DisputeMessages
+            .Update(message);
 
         await _unitOfWork.SaveChangesAsync();
 
@@ -516,7 +615,9 @@ public class DisputeMessageService : IDisputeMessageService
         // Không xóa khi Dispute đã đóng
         // -----------------------------------------------------
 
-        if (dispute.Status.Trim().ToLowerInvariant() == "closed")
+        if (dispute.Status
+            .Trim()
+            .ToLowerInvariant() == "closed")
         {
             throw new BadRequestException(
                 "Dispute đã đóng, không thể xóa message.");
@@ -527,7 +628,8 @@ public class DisputeMessageService : IDisputeMessageService
         // Delete
         // -----------------------------------------------------
 
-        _unitOfWork.DisputeMessages.Delete(message);
+        _unitOfWork.DisputeMessages
+            .Delete(message);
 
         await _unitOfWork.SaveChangesAsync();
     }
@@ -543,10 +645,18 @@ public class DisputeMessageService : IDisputeMessageService
         return new DisputeMessageResponseDTO
         {
             Id = message.Id,
-            DisputeId = message.DisputeId,
-            SenderUserId = message.SenderUserId,
-            Message = message.Message,
-            CreatedAt = message.CreatedAt
+
+            DisputeId =
+                message.DisputeId,
+
+            SenderUserId =
+                message.SenderUserId,
+
+            Message =
+                message.Message,
+
+            CreatedAt =
+                message.CreatedAt
         };
     }
 }

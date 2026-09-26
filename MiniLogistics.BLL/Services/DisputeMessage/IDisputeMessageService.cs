@@ -1,12 +1,13 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.DisputeMessage;
 
 namespace MiniLogistics.BLL.Services.DisputeMessage;
 
 public interface IDisputeMessageService
 {
-    // =========================================================
+    // =====================================================
     // CREATE
-    // =========================================================
+    // =====================================================
 
     Task<DisputeMessageResponseDTO> CreateAsync(
         long userId,
@@ -14,9 +15,9 @@ public interface IDisputeMessageService
         CreateDisputeMessageDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // GET BY ID
-    // =========================================================
+    // =====================================================
 
     Task<DisputeMessageResponseDTO?> GetByIdAsync(
         long userId,
@@ -24,20 +25,21 @@ public interface IDisputeMessageService
         long id);
 
 
-    // =========================================================
-    // GET BY DISPUTE ID
-    // =========================================================
+    // =====================================================
+    // GET BY DISPUTE - PAGINATION
+    // =====================================================
 
-    Task<IEnumerable<DisputeMessageResponseDTO>>
+    Task<PagedResponseDTO<DisputeMessageResponseDTO>>
         GetByDisputeIdAsync(
             long userId,
             string role,
-            long disputeId);
+            long disputeId,
+            DisputeMessagePaginationRequestDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // UPDATE
-    // =========================================================
+    // =====================================================
 
     Task<DisputeMessageResponseDTO> UpdateAsync(
         long userId,
@@ -46,9 +48,9 @@ public interface IDisputeMessageService
         UpdateDisputeMessageDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // DELETE
-    // =========================================================
+    // =====================================================
 
     Task DeleteAsync(
         long userId,

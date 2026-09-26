@@ -1,8 +1,13 @@
+using System.Linq.Expressions;
+
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Inventory;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.UnitOfWork;
-using InventoryModel = MiniLogistics.DAL.Models.Inventory;
+
+using InventoryModel =
+    MiniLogistics.DAL.Models.Inventory;
 
 namespace MiniLogistics.BLL.Services.Inventory;
 
@@ -10,7 +15,8 @@ public class InventoryService : IInventoryService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public InventoryService(IUnitOfWork unitOfWork)
+    public InventoryService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
@@ -18,40 +24,171 @@ public class InventoryService : IInventoryService
 
     // =====================================================
     // GET ALL
+    // PAGINATION
     // =====================================================
 
-    public async Task<IEnumerable<InventoryResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<InventoryResponseDTO>>
+        GetAllAsync(
+            InventoryPaginationRequestDTO request)
     {
-        var inventories =
-            await _unitOfWork.Inventories
-                .GetAllAsync();
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống.");
+        }
+
+        if (request.Page <= 0)
+        {
+            throw new BadRequestException(
+                "Page phải lớn hơn 0.");
+        }
+
+        if (request.PageSize <= 0)
+        {
+            throw new BadRequestException(
+                "PageSize phải lớn hơn 0.");
+        }
+
+
+        Expression<Func<InventoryModel, bool>>?
+            predicate = null;
+
+
+        // -------------------------------------------------
+        // Filter ProductVariantId
+        // -------------------------------------------------
+
+        if (request.ProductVariantId.HasValue)
+        {
+            var productVariantId =
+                request.ProductVariantId.Value;
+
+            predicate =
+                x =>
+                    x.ProductVariantId ==
+                    productVariantId;
+        }
+
+
+        // -------------------------------------------------
+        // Filter IsActive
+        //
+        // Inventory không có IsActive.
+        // IsActive thuộc ProductVariant.
+        // Vì vậy filter này sẽ xử lý sau khi lấy
+        // inventory theo ProductVariant.
+        // -------------------------------------------------
+
+
+        // -------------------------------------------------
+        // Pagination
+        // -------------------------------------------------
+
+        var (inventories, totalItems) =
+            await _unitOfWork.Inventories.GetPagedAsync(
+                request.Page,
+                request.PageSize,
+                predicate,
+                query =>
+                    query.OrderByDescending(
+                        x => x.Id));
+
 
         var result =
             new List<InventoryResponseDTO>();
+
+
+        // -------------------------------------------------
+        // Map Inventory + Variant
+        // -------------------------------------------------
 
         foreach (var inventory in inventories)
         {
             var variant =
                 await _unitOfWork.ProductVariants
                     .GetByIdAsync(
-                        inventory.ProductVariantId
-                    );
+                        inventory.ProductVariantId);
 
             if (variant == null)
             {
                 continue;
             }
 
+
+            // -------------------------------------------------
+            // Filter IsActive
+            // -------------------------------------------------
+
+            if (request.IsActive.HasValue &&
+                variant.IsActive !=
+                request.IsActive.Value)
+            {
+                continue;
+            }
+
+
+            // -------------------------------------------------
+            // Search
+            // -------------------------------------------------
+
+            if (!string.IsNullOrWhiteSpace(
+                    request.Search))
+            {
+                var keyword =
+                    request.Search
+                        .Trim()
+                        .ToLower();
+
+                var sku =
+                    variant.Sku?
+                        .ToLower() ?? "";
+
+                var variantName =
+                    variant.VariantName?
+                        .ToLower() ?? "";
+
+                if (!sku.Contains(keyword) &&
+                    !variantName.Contains(keyword))
+                {
+                    continue;
+                }
+            }
+
+
             result.Add(
                 MapToDTO(
                     inventory,
-                    variant
-                )
-            );
+                    variant));
         }
 
-        return result;
+
+        // -------------------------------------------------
+        // TotalPages
+        // -------------------------------------------------
+
+        var totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+
+        return new PagedResponseDTO<InventoryResponseDTO>
+        {
+            Items =
+                result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -66,25 +203,21 @@ public class InventoryService : IInventoryService
         var variant =
             await _unitOfWork.ProductVariants
                 .GetByIdAsync(
-                    productVariantId
-                );
+                    productVariantId);
 
         if (variant == null)
         {
             throw new NotFoundException(
-                "ProductVariant không tồn tại."
-            );
+                "ProductVariant không tồn tại.");
         }
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
         return MapToDTO(
             inventory,
-            variant
-        );
+            variant);
     }
 
 
@@ -97,15 +230,19 @@ public class InventoryService : IInventoryService
             long productVariantId,
             IncreaseInventoryDTO request)
     {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống.");
+        }
+
         var variant =
             await GetVariant(
-                productVariantId
-            );
+                productVariantId);
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -115,8 +252,7 @@ public class InventoryService : IInventoryService
         if (request.Quantity <= 0)
         {
             throw new BadRequestException(
-                "Số lượng nhập kho phải lớn hơn 0."
-            );
+                "Số lượng nhập kho phải lớn hơn 0.");
         }
 
 
@@ -134,13 +270,13 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
 
         return MapToDTO(
             inventory,
-            variant
-        );
+            variant);
     }
 
 
@@ -153,15 +289,19 @@ public class InventoryService : IInventoryService
             long productVariantId,
             DecreaseInventoryDTO request)
     {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống.");
+        }
+
         var variant =
             await GetVariant(
-                productVariantId
-            );
+                productVariantId);
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -171,8 +311,7 @@ public class InventoryService : IInventoryService
         if (request.Quantity <= 0)
         {
             throw new BadRequestException(
-                "Số lượng giảm kho phải lớn hơn 0."
-            );
+                "Số lượng giảm kho phải lớn hơn 0.");
         }
 
 
@@ -181,19 +320,18 @@ public class InventoryService : IInventoryService
         // -------------------------------------------------
 
         int available =
-            inventory.Quantity
-            - inventory.ReservedQuantity;
+            inventory.Quantity -
+            inventory.ReservedQuantity;
 
 
         // -------------------------------------------------
-        // Không được giảm quá số lượng có thể bán
+        // Không được giảm quá Available
         // -------------------------------------------------
 
         if (request.Quantity > available)
         {
             throw new BadRequestException(
-                "Số lượng tồn kho khả dụng không đủ."
-            );
+                "Số lượng tồn kho khả dụng không đủ.");
         }
 
 
@@ -211,13 +349,13 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
 
         return MapToDTO(
             inventory,
-            variant
-        );
+            variant);
     }
 
 
@@ -230,15 +368,19 @@ public class InventoryService : IInventoryService
             long productVariantId,
             AdjustInventoryDTO request)
     {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được để trống.");
+        }
+
         var variant =
             await GetVariant(
-                productVariantId
-            );
+                productVariantId);
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -249,8 +391,7 @@ public class InventoryService : IInventoryService
             inventory.ReservedQuantity)
         {
             throw new BadRequestException(
-                "Quantity không được nhỏ hơn ReservedQuantity."
-            );
+                "Quantity không được nhỏ hơn ReservedQuantity.");
         }
 
 
@@ -268,13 +409,13 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
 
         return MapToDTO(
             inventory,
-            variant
-        );
+            variant);
     }
 
 
@@ -289,15 +430,13 @@ public class InventoryService : IInventoryService
         if (quantity <= 0)
         {
             throw new BadRequestException(
-                "Số lượng Reserve phải lớn hơn 0."
-            );
+                "Số lượng Reserve phải lớn hơn 0.");
         }
 
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -305,8 +444,8 @@ public class InventoryService : IInventoryService
         // -------------------------------------------------
 
         int available =
-            inventory.Quantity
-            - inventory.ReservedQuantity;
+            inventory.Quantity -
+            inventory.ReservedQuantity;
 
 
         // -------------------------------------------------
@@ -316,8 +455,7 @@ public class InventoryService : IInventoryService
         if (quantity > available)
         {
             throw new BadRequestException(
-                "Không đủ hàng để Reserve."
-            );
+                "Không đủ hàng để Reserve.");
         }
 
 
@@ -335,7 +473,8 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
 
@@ -350,15 +489,13 @@ public class InventoryService : IInventoryService
         if (quantity <= 0)
         {
             throw new BadRequestException(
-                "Số lượng Release phải lớn hơn 0."
-            );
+                "Số lượng Release phải lớn hơn 0.");
         }
 
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -369,8 +506,7 @@ public class InventoryService : IInventoryService
             inventory.ReservedQuantity)
         {
             throw new BadRequestException(
-                "Số lượng Release vượt quá ReservedQuantity."
-            );
+                "Số lượng Release vượt quá ReservedQuantity.");
         }
 
 
@@ -388,7 +524,8 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
 
@@ -403,15 +540,13 @@ public class InventoryService : IInventoryService
         if (quantity <= 0)
         {
             throw new BadRequestException(
-                "Số lượng Deduct phải lớn hơn 0."
-            );
+                "Số lượng Deduct phải lớn hơn 0.");
         }
 
 
         var inventory =
             await GetInventoryEntity(
-                productVariantId
-            );
+                productVariantId);
 
 
         // -------------------------------------------------
@@ -422,8 +557,7 @@ public class InventoryService : IInventoryService
             inventory.ReservedQuantity)
         {
             throw new BadRequestException(
-                "Số lượng Deduct vượt quá ReservedQuantity."
-            );
+                "Số lượng Deduct vượt quá ReservedQuantity.");
         }
 
 
@@ -435,8 +569,7 @@ public class InventoryService : IInventoryService
             inventory.Quantity)
         {
             throw new BadRequestException(
-                "Quantity không đủ."
-            );
+                "Quantity không đủ.");
         }
 
 
@@ -457,7 +590,8 @@ public class InventoryService : IInventoryService
         _unitOfWork.Inventories
             .Update(inventory);
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
     }
 
 
@@ -472,14 +606,12 @@ public class InventoryService : IInventoryService
         var variant =
             await _unitOfWork.ProductVariants
                 .GetByIdAsync(
-                    productVariantId
-                );
+                    productVariantId);
 
         if (variant == null)
         {
             throw new NotFoundException(
-                "ProductVariant không tồn tại."
-            );
+                "ProductVariant không tồn tại.");
         }
 
         return variant;
@@ -498,9 +630,8 @@ public class InventoryService : IInventoryService
             await _unitOfWork.Inventories
                 .FindAsync(
                     x =>
-                        x.ProductVariantId
-                        == productVariantId
-                );
+                        x.ProductVariantId ==
+                        productVariantId);
 
         var inventory =
             inventories.FirstOrDefault();
@@ -508,8 +639,7 @@ public class InventoryService : IInventoryService
         if (inventory == null)
         {
             throw new NotFoundException(
-                "Inventory không tồn tại."
-            );
+                "Inventory không tồn tại.");
         }
 
         return inventory;
@@ -520,9 +650,10 @@ public class InventoryService : IInventoryService
     // MAPPING
     // =====================================================
 
-    private InventoryResponseDTO MapToDTO(
-        InventoryModel inventory,
-        ProductVariant variant)
+    private InventoryResponseDTO
+        MapToDTO(
+            InventoryModel inventory,
+            ProductVariant variant)
     {
         return new InventoryResponseDTO
         {
@@ -548,8 +679,8 @@ public class InventoryService : IInventoryService
                 inventory.ReservedQuantity,
 
             AvailableQuantity =
-                inventory.Quantity
-                - inventory.ReservedQuantity,
+                inventory.Quantity -
+                inventory.ReservedQuantity,
 
             IsActive =
                 variant.IsActive,

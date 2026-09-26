@@ -1,37 +1,80 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Inventory;
 
 namespace MiniLogistics.BLL.Services.Inventory;
 
 public interface IInventoryService
 {
-    Task<IEnumerable<InventoryResponseDTO>> GetAllAsync();
+    // =====================================================
+    // GET ALL - PAGINATION
+    // =====================================================
 
-    Task<InventoryResponseDTO> GetByVariantIdAsync(
-        long productVariantId);
+    Task<PagedResponseDTO<InventoryResponseDTO>>
+        GetAllAsync(
+            InventoryPaginationRequestDTO request);
 
-    Task<InventoryResponseDTO> IncreaseAsync(
-        long productVariantId,
-        IncreaseInventoryDTO request);
 
-    Task<InventoryResponseDTO> DecreaseAsync(
-        long productVariantId,
-        DecreaseInventoryDTO request);
+    // =====================================================
+    // GET BY VARIANT
+    // =====================================================
 
-    Task<InventoryResponseDTO> AdjustAsync(
-        long productVariantId,
-        AdjustInventoryDTO request);
+    Task<InventoryResponseDTO>
+        GetByVariantIdAsync(
+            long productVariantId);
 
-    // Dùng sau này khi Order tạo
+
+    // =====================================================
+    // INCREASE
+    // =====================================================
+
+    Task<InventoryResponseDTO>
+        IncreaseAsync(
+            long productVariantId,
+            IncreaseInventoryDTO request);
+
+
+    // =====================================================
+    // DECREASE
+    // =====================================================
+
+    Task<InventoryResponseDTO>
+        DecreaseAsync(
+            long productVariantId,
+            DecreaseInventoryDTO request);
+
+
+    // =====================================================
+    // ADJUST
+    // =====================================================
+
+    Task<InventoryResponseDTO>
+        AdjustAsync(
+            long productVariantId,
+            AdjustInventoryDTO request);
+
+
+    // =====================================================
+    // RESERVE
+    // =====================================================
+
     Task ReserveAsync(
         long productVariantId,
         int quantity);
 
-    // Dùng khi Order bị hủy / Payment thất bại
+
+    // =====================================================
+    // RELEASE
+    // =====================================================
+
     Task ReleaseAsync(
         long productVariantId,
         int quantity);
 
-    // Dùng khi Payment thành công
+
+    // =====================================================
+    // DEDUCT
+    // =====================================================
+
     Task DeductAsync(
         long productVariantId,
         int quantity);

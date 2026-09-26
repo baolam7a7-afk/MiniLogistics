@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Dispute;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
@@ -104,11 +105,17 @@ public class DisputeService : IDisputeService
         var dispute = new DisputeModel
         {
             OrderId = request.OrderId,
+
             RaisedByUserId = userId,
+
             Reason = reason,
+
             Status = "open",
+
             CreatedAt = DateTime.UtcNow,
+
             HandledByUserId = null,
+
             HandledAt = null
         };
 
@@ -181,38 +188,297 @@ public class DisputeService : IDisputeService
 
     // =========================================================
     // GET MY DISPUTES
+    // PAGINATION
     // =========================================================
 
-    public async Task<IEnumerable<DisputeResponseDTO>>
-        GetMyDisputesAsync(long userId)
+    public async Task<PagedResponseDTO<DisputeResponseDTO>>
+        GetMyDisputesAsync(
+            long userId,
+            DisputePaginationRequestDTO request)
     {
+        if (request == null)
+        {
+            request = new DisputePaginationRequestDTO();
+        }
+
+
+        // -----------------------------------------------------
+        // Validate Pagination
+        // -----------------------------------------------------
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+
+        var status =
+            request.Status?
+                .Trim()
+                .ToLowerInvariant();
+
+        var search =
+            request.Search?
+                .Trim()
+                .ToLowerInvariant();
+
+
+        // -----------------------------------------------------
+        // Get dữ liệu
+        // -----------------------------------------------------
+
         var disputes =
             await _unitOfWork.Disputes
                 .FindAsync(
                     x => x.RaisedByUserId == userId);
 
-        return disputes
-            .OrderByDescending(x => x.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+
+        // -----------------------------------------------------
+        // Filter
+        // -----------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            disputes = disputes
+                .Where(x =>
+                    x.Status
+                        .Trim()
+                        .ToLowerInvariant()
+                        == status)
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            disputes = disputes
+                .Where(x =>
+                    x.Reason
+                        .ToLowerInvariant()
+                        .Contains(search)
+                    ||
+                    x.OrderId
+                        .ToString()
+                        .Contains(search))
+                .ToList();
+        }
+
+
+        // -----------------------------------------------------
+        // Sort
+        // -----------------------------------------------------
+
+        var ordered =
+            disputes
+                .OrderByDescending(x => x.CreatedAt)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Total
+        // -----------------------------------------------------
+
+        var totalItems = ordered.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+
+        // -----------------------------------------------------
+        // Pagination
+        // -----------------------------------------------------
+
+        var items =
+            ordered
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .Select(MapToResponse)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Response
+        // -----------------------------------------------------
+
+        return new PagedResponseDTO<DisputeResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = totalItems,
+
+            TotalPages = totalPages
+        };
     }
 
 
     // =========================================================
     // GET ALL
+    // ADMIN
+    // PAGINATION
     // =========================================================
 
-    public async Task<IEnumerable<DisputeResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<DisputeResponseDTO>>
+        GetAllAsync(
+            DisputePaginationRequestDTO request)
     {
+        if (request == null)
+        {
+            request = new DisputePaginationRequestDTO();
+        }
+
+
+        // -----------------------------------------------------
+        // Validate Pagination
+        // -----------------------------------------------------
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+
+        var status =
+            request.Status?
+                .Trim()
+                .ToLowerInvariant();
+
+        var search =
+            request.Search?
+                .Trim()
+                .ToLowerInvariant();
+
+
+        // -----------------------------------------------------
+        // Get tất cả
+        // -----------------------------------------------------
+
         var disputes =
             await _unitOfWork.Disputes
                 .GetAllAsync();
 
-        return disputes
-            .OrderByDescending(x => x.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+
+        // -----------------------------------------------------
+        // Filter Status
+        // -----------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            disputes = disputes
+                .Where(x =>
+                    x.Status
+                        .Trim()
+                        .ToLowerInvariant()
+                        == status)
+                .ToList();
+        }
+
+
+        // -----------------------------------------------------
+        // Search
+        // -----------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            disputes = disputes
+                .Where(x =>
+                    x.Reason
+                        .ToLowerInvariant()
+                        .Contains(search)
+                    ||
+                    x.OrderId
+                        .ToString()
+                        .Contains(search)
+                    ||
+                    x.RaisedByUserId
+                        .ToString()
+                        .Contains(search))
+                .ToList();
+        }
+
+
+        // -----------------------------------------------------
+        // Sort
+        // -----------------------------------------------------
+
+        var ordered =
+            disputes
+                .OrderByDescending(x => x.CreatedAt)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Total
+        // -----------------------------------------------------
+
+        var totalItems = ordered.Count;
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+
+        // -----------------------------------------------------
+        // Pagination
+        // -----------------------------------------------------
+
+        var items =
+            ordered
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .Select(MapToResponse)
+                .ToList();
+
+
+        // -----------------------------------------------------
+        // Response
+        // -----------------------------------------------------
+
+        return new PagedResponseDTO<DisputeResponseDTO>
+        {
+            Items = items,
+
+            Page = request.Page,
+
+            PageSize = request.PageSize,
+
+            TotalItems = totalItems,
+
+            TotalPages = totalPages
+        };
     }
 
 
@@ -433,13 +699,23 @@ public class DisputeService : IDisputeService
         return new DisputeResponseDTO
         {
             Id = dispute.Id,
+
             OrderId = dispute.OrderId,
-            RaisedByUserId = dispute.RaisedByUserId,
+
+            RaisedByUserId =
+                dispute.RaisedByUserId,
+
             Reason = dispute.Reason,
+
             Status = dispute.Status,
+
             CreatedAt = dispute.CreatedAt,
-            HandledByUserId = dispute.HandledByUserId,
-            HandledAt = dispute.HandledAt
+
+            HandledByUserId =
+                dispute.HandledByUserId,
+
+            HandledAt =
+                dispute.HandledAt
         };
     }
 }

@@ -1,12 +1,13 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.SupportMessage;
 
 namespace MiniLogistics.BLL.Services.SupportMessage;
 
 public interface ISupportMessageService
 {
-    // =========================================================
+    // =====================================================
     // CREATE
-    // =========================================================
+    // =====================================================
 
     Task<SupportMessageResponseDTO> CreateAsync(
         long userId,
@@ -14,9 +15,9 @@ public interface ISupportMessageService
         CreateSupportMessageDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // GET BY ID
-    // =========================================================
+    // =====================================================
 
     Task<SupportMessageResponseDTO?> GetByIdAsync(
         long userId,
@@ -24,20 +25,21 @@ public interface ISupportMessageService
         long id);
 
 
-    // =========================================================
-    // GET BY TICKET ID
-    // =========================================================
+    // =====================================================
+    // GET BY TICKET ID - PAGINATION
+    // =====================================================
 
-    Task<IEnumerable<SupportMessageResponseDTO>>
+    Task<PagedResponseDTO<SupportMessageResponseDTO>>
         GetByTicketIdAsync(
             long userId,
             string role,
-            long ticketId);
+            long ticketId,
+            SupportMessagePaginationRequestDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // UPDATE
-    // =========================================================
+    // =====================================================
 
     Task<SupportMessageResponseDTO> UpdateAsync(
         long userId,
@@ -46,9 +48,9 @@ public interface ISupportMessageService
         UpdateSupportMessageDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // DELETE
-    // =========================================================
+    // =====================================================
 
     Task DeleteAsync(
         long userId,

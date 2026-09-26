@@ -1,10 +1,18 @@
+using System.Linq.Expressions;
+
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.ProductVariant;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
 
-using ProductModel = MiniLogistics.DAL.Models.Product;
-using ProductVariantModel = MiniLogistics.DAL.Models.ProductVariant;
-using InventoryModel = MiniLogistics.DAL.Models.Inventory;
+using ProductModel =
+    MiniLogistics.DAL.Models.Product;
+
+using ProductVariantModel =
+    MiniLogistics.DAL.Models.ProductVariant;
+
+using InventoryModel =
+    MiniLogistics.DAL.Models.Inventory;
 
 namespace MiniLogistics.BLL.Services;
 
@@ -12,7 +20,8 @@ public class ProductVariantService : IProductVariantService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public ProductVariantService(IUnitOfWork unitOfWork)
+    public ProductVariantService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
@@ -20,94 +29,117 @@ public class ProductVariantService : IProductVariantService
 
     // =====================================================
     // GET ALL
+    // PUBLIC
+    // PAGINATION
     // =====================================================
 
-    public async Task<IEnumerable<ProductVariantResponseDTO>> GetAllAsync()
+    public async Task<PagedResponseDTO<ProductVariantResponseDTO>>
+        GetAllAsync(
+            ProductVariantPaginationRequestDTO request)
     {
-        var variants =
-            await _unitOfWork.ProductVariants.GetAllAsync();
-
-        var result =
-            new List<ProductVariantResponseDTO>();
-
-        foreach (var variant in variants)
-        {
-            var inventories =
-                await _unitOfWork.Inventories.FindAsync(
-                    x => x.ProductVariantId == variant.Id
-                );
-
-            var inventory =
-                inventories.FirstOrDefault();
-
-            result.Add(
-                MapToResponseDTO(
-                    variant,
-                    inventory
-                )
-            );
-        }
-
-        return result;
-    }
-
-
-    // =====================================================
-    // GET BY ID
-    // =====================================================
-
-    public async Task<ProductVariantResponseDTO?> GetByIdAsync(
-        long id)
-    {
-        if (id <= 0)
+        if (request == null)
         {
             throw new BadRequestException(
-                "ProductVariant ID không hợp lệ."
-            );
+                "Request không được để trống.");
         }
 
-        var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(id);
-
-        if (variant == null)
-        {
-            return null;
-        }
-
-        var inventories =
-            await _unitOfWork.Inventories.FindAsync(
-                x => x.ProductVariantId == variant.Id
-            );
-
-        var inventory =
-            inventories.FirstOrDefault();
-
-        return MapToResponseDTO(
-            variant,
-            inventory
-        );
-    }
-
-
-    // =====================================================
-    // GET BY PRODUCT ID
-    // =====================================================
-
-    public async Task<IEnumerable<ProductVariantResponseDTO>>
-        GetByProductIdAsync(long productId)
-    {
-        if (productId <= 0)
+        if (request.Page <= 0)
         {
             throw new BadRequestException(
-                "ProductId không hợp lệ."
-            );
+                "Page phải lớn hơn 0.");
         }
 
-        var variants =
-            await _unitOfWork.ProductVariants.FindAsync(
-                variant =>
-                    variant.ProductId == productId
-            );
+        if (request.PageSize <= 0)
+        {
+            throw new BadRequestException(
+                "PageSize phải lớn hơn 0.");
+        }
+
+
+        // -------------------------------------------------
+        // Tạo điều kiện filter
+        // -------------------------------------------------
+
+        Expression<Func<ProductVariantModel, bool>>? predicate = null;
+
+
+        // -------------------------------------------------
+        // Search theo SKU hoặc VariantName
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var keyword =
+                request.Search.Trim().ToLower();
+
+            predicate = x =>
+                (x.Sku != null &&
+                 x.Sku.ToLower().Contains(keyword))
+                ||
+                (x.VariantName != null &&
+                 x.VariantName
+                    .ToLower()
+                    .Contains(keyword));
+        }
+
+
+        // -------------------------------------------------
+        // Filter theo ProductId
+        // -------------------------------------------------
+
+        if (request.ProductId.HasValue)
+        {
+            var productId =
+                request.ProductId.Value;
+
+            Expression<Func<ProductVariantModel, bool>>
+                productPredicate =
+                    x => x.ProductId == productId;
+
+            predicate =
+                CombinePredicates(
+                    predicate,
+                    productPredicate);
+        }
+
+
+        // -------------------------------------------------
+        // Filter theo IsActive
+        // -------------------------------------------------
+
+        if (request.IsActive.HasValue)
+        {
+            var isActive =
+                request.IsActive.Value;
+
+            Expression<Func<ProductVariantModel, bool>>
+                activePredicate =
+                    x => x.IsActive == isActive;
+
+            predicate =
+                CombinePredicates(
+                    predicate,
+                    activePredicate);
+        }
+
+
+        // -------------------------------------------------
+        // Pagination
+        // -------------------------------------------------
+
+        var (variants, totalItems) =
+            await _unitOfWork.ProductVariants.GetPagedAsync(
+                request.Page,
+                request.PageSize,
+                predicate,
+                query =>
+                    query.OrderByDescending(
+                        x => x.Id));
+
+
+        // -------------------------------------------------
+        // Map Response
+        // -------------------------------------------------
 
         var result =
             new List<ProductVariantResponseDTO>();
@@ -118,8 +150,7 @@ public class ProductVariantService : IProductVariantService
                 await _unitOfWork.Inventories.FindAsync(
                     x =>
                         x.ProductVariantId ==
-                        variant.Id
-                );
+                        variant.Id);
 
             var inventory =
                 inventories.FirstOrDefault();
@@ -127,9 +158,121 @@ public class ProductVariantService : IProductVariantService
             result.Add(
                 MapToResponseDTO(
                     variant,
-                    inventory
-                )
-            );
+                    inventory));
+        }
+
+
+        // -------------------------------------------------
+        // Tính TotalPages
+        // -------------------------------------------------
+
+        var totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+
+        // -------------------------------------------------
+        // Response
+        // -------------------------------------------------
+
+        return new PagedResponseDTO<ProductVariantResponseDTO>
+        {
+            Items = result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
+    }
+
+
+    // =====================================================
+    // GET BY ID
+    // PUBLIC
+    // =====================================================
+
+    public async Task<ProductVariantResponseDTO?>
+        GetByIdAsync(long id)
+    {
+        if (id <= 0)
+        {
+            throw new BadRequestException(
+                "ProductVariant ID không hợp lệ.");
+        }
+
+        var variant =
+            await _unitOfWork.ProductVariants
+                .GetByIdAsync(id);
+
+        if (variant == null)
+        {
+            return null;
+        }
+
+        var inventories =
+            await _unitOfWork.Inventories.FindAsync(
+                x =>
+                    x.ProductVariantId ==
+                    variant.Id);
+
+        var inventory =
+            inventories.FirstOrDefault();
+
+        return MapToResponseDTO(
+            variant,
+            inventory);
+    }
+
+
+    // =====================================================
+    // GET BY PRODUCT ID
+    // PUBLIC
+    // =====================================================
+
+    public async Task<IEnumerable<ProductVariantResponseDTO>>
+        GetByProductIdAsync(
+            long productId)
+    {
+        if (productId <= 0)
+        {
+            throw new BadRequestException(
+                "ProductId không hợp lệ.");
+        }
+
+        var variants =
+            await _unitOfWork.ProductVariants
+                .FindAsync(
+                    variant =>
+                        variant.ProductId ==
+                        productId);
+
+        var result =
+            new List<ProductVariantResponseDTO>();
+
+        foreach (var variant in variants)
+        {
+            var inventories =
+                await _unitOfWork.Inventories.FindAsync(
+                    x =>
+                        x.ProductVariantId ==
+                        variant.Id);
+
+            var inventory =
+                inventories.FirstOrDefault();
+
+            result.Add(
+                MapToResponseDTO(
+                    variant,
+                    inventory));
         }
 
         return result;
@@ -138,24 +281,24 @@ public class ProductVariantService : IProductVariantService
 
     // =====================================================
     // CREATE
+    // SELLER
     // =====================================================
 
-    public async Task<ProductVariantResponseDTO> CreateAsync(
-        long userId,
-        CreateProductVariantDTO request)
+    public async Task<ProductVariantResponseDTO>
+        CreateAsync(
+            long userId,
+            CreateProductVariantDTO request)
     {
         if (userId <= 0)
         {
             throw new UnauthorizedAccessException(
-                "User ID không hợp lệ."
-            );
+                "User ID không hợp lệ.");
         }
 
         if (request == null)
         {
             throw new BadRequestException(
-                "Request không được để trống."
-            );
+                "Request không được để trống.");
         }
 
 
@@ -166,8 +309,7 @@ public class ProductVariantService : IProductVariantService
         if (request.ProductId <= 0)
         {
             throw new BadRequestException(
-                "ProductId không hợp lệ."
-            );
+                "ProductId không hợp lệ.");
         }
 
 
@@ -176,15 +318,14 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(
-                request.ProductId
-            );
+            await _unitOfWork.Products
+                .GetByIdAsync(
+                    request.ProductId);
 
         if (product == null)
         {
             throw new NotFoundException(
-                $"Product với ID {request.ProductId} không tồn tại."
-            );
+                $"Product với ID {request.ProductId} không tồn tại.");
         }
 
 
@@ -194,36 +335,35 @@ public class ProductVariantService : IProductVariantService
 
         await CheckProductShopAccessAsync(
             product,
-            userId
-        );
+            userId);
 
 
         // -------------------------------------------------
         // 4. Validate SKU
         // -------------------------------------------------
 
-        if (string.IsNullOrWhiteSpace(request.Sku))
+        if (string.IsNullOrWhiteSpace(
+                request.Sku))
         {
             throw new BadRequestException(
-                "SKU không được để trống."
-            );
+                "SKU không được để trống.");
         }
 
         var sku =
             request.Sku.Trim();
 
         var existingVariants =
-            await _unitOfWork.ProductVariants.FindAsync(
-                x =>
-                    x.Sku != null &&
-                    x.Sku.ToLower() == sku.ToLower()
-            );
+            await _unitOfWork.ProductVariants
+                .FindAsync(
+                    x =>
+                        x.Sku != null &&
+                        x.Sku.ToLower()
+                            == sku.ToLower());
 
         if (existingVariants.Any())
         {
             throw new BadRequestException(
-                $"SKU '{sku}' đã tồn tại."
-            );
+                $"SKU '{sku}' đã tồn tại.");
         }
 
 
@@ -234,8 +374,7 @@ public class ProductVariantService : IProductVariantService
         if (request.Price < 0)
         {
             throw new BadRequestException(
-                "Price không được nhỏ hơn 0."
-            );
+                "Price không được nhỏ hơn 0.");
         }
 
 
@@ -300,18 +439,16 @@ public class ProductVariantService : IProductVariantService
         // 8. Add ProductVariant
         // -------------------------------------------------
 
-        await _unitOfWork.ProductVariants.AddAsync(
-            variant
-        );
+        await _unitOfWork.ProductVariants
+            .AddAsync(variant);
 
 
         // -------------------------------------------------
         // 9. Add Inventory
         // -------------------------------------------------
 
-        await _unitOfWork.Inventories.AddAsync(
-            inventory
-        );
+        await _unitOfWork.Inventories
+            .AddAsync(inventory);
 
 
         // -------------------------------------------------
@@ -327,39 +464,37 @@ public class ProductVariantService : IProductVariantService
 
         return MapToResponseDTO(
             variant,
-            inventory
-        );
+            inventory);
     }
 
 
     // =====================================================
     // UPDATE
+    // SELLER
     // =====================================================
 
-    public async Task<ProductVariantResponseDTO?> UpdateAsync(
-        long userId,
-        long id,
-        UpdateProductVariantDTO request)
+    public async Task<ProductVariantResponseDTO?>
+        UpdateAsync(
+            long userId,
+            long id,
+            UpdateProductVariantDTO request)
     {
         if (userId <= 0)
         {
             throw new UnauthorizedAccessException(
-                "User ID không hợp lệ."
-            );
+                "User ID không hợp lệ.");
         }
 
         if (id <= 0)
         {
             throw new BadRequestException(
-                "ProductVariant ID không hợp lệ."
-            );
+                "ProductVariant ID không hợp lệ.");
         }
 
         if (request == null)
         {
             throw new BadRequestException(
-                "Request không được để trống."
-            );
+                "Request không được để trống.");
         }
 
 
@@ -368,9 +503,8 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(
-                id
-            );
+            await _unitOfWork.ProductVariants
+                .GetByIdAsync(id);
 
         if (variant == null)
         {
@@ -383,15 +517,14 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(
-                variant.ProductId
-            );
+            await _unitOfWork.Products
+                .GetByIdAsync(
+                    variant.ProductId);
 
         if (product == null)
         {
             throw new NotFoundException(
-                $"Product với ID {variant.ProductId} không tồn tại."
-            );
+                $"Product với ID {variant.ProductId} không tồn tại.");
         }
 
 
@@ -401,37 +534,36 @@ public class ProductVariantService : IProductVariantService
 
         await CheckProductShopAccessAsync(
             product,
-            userId
-        );
+            userId);
 
 
         // -------------------------------------------------
         // 4. Validate SKU
         // -------------------------------------------------
 
-        if (string.IsNullOrWhiteSpace(request.Sku))
+        if (string.IsNullOrWhiteSpace(
+                request.Sku))
         {
             throw new BadRequestException(
-                "SKU không được để trống."
-            );
+                "SKU không được để trống.");
         }
 
         var sku =
             request.Sku.Trim();
 
         var duplicateVariants =
-            await _unitOfWork.ProductVariants.FindAsync(
-                x =>
-                    x.Id != id &&
-                    x.Sku != null &&
-                    x.Sku.ToLower() == sku.ToLower()
-            );
+            await _unitOfWork.ProductVariants
+                .FindAsync(
+                    x =>
+                        x.Id != id &&
+                        x.Sku != null &&
+                        x.Sku.ToLower()
+                            == sku.ToLower());
 
         if (duplicateVariants.Any())
         {
             throw new BadRequestException(
-                $"SKU '{sku}' đã tồn tại."
-            );
+                $"SKU '{sku}' đã tồn tại.");
         }
 
 
@@ -442,8 +574,7 @@ public class ProductVariantService : IProductVariantService
         if (request.Price < 0)
         {
             throw new BadRequestException(
-                "Price không được nhỏ hơn 0."
-            );
+                "Price không được nhỏ hơn 0.");
         }
 
 
@@ -474,9 +605,8 @@ public class ProductVariantService : IProductVariantService
         // 7. Update Repository
         // -------------------------------------------------
 
-        _unitOfWork.ProductVariants.Update(
-            variant
-        );
+        _unitOfWork.ProductVariants
+            .Update(variant);
 
 
         // -------------------------------------------------
@@ -494,8 +624,7 @@ public class ProductVariantService : IProductVariantService
             await _unitOfWork.Inventories.FindAsync(
                 x =>
                     x.ProductVariantId ==
-                    variant.Id
-            );
+                    variant.Id);
 
         var inventory =
             inventories.FirstOrDefault();
@@ -507,31 +636,30 @@ public class ProductVariantService : IProductVariantService
 
         return MapToResponseDTO(
             variant,
-            inventory
-        );
+            inventory);
     }
 
 
     // =====================================================
     // DELETE
+    // SELLER
     // =====================================================
 
-    public async Task<bool> DeleteAsync(
-        long userId,
-        long id)
+    public async Task<bool>
+        DeleteAsync(
+            long userId,
+            long id)
     {
         if (userId <= 0)
         {
             throw new UnauthorizedAccessException(
-                "User ID không hợp lệ."
-            );
+                "User ID không hợp lệ.");
         }
 
         if (id <= 0)
         {
             throw new BadRequestException(
-                "ProductVariant ID không hợp lệ."
-            );
+                "ProductVariant ID không hợp lệ.");
         }
 
 
@@ -540,9 +668,8 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var variant =
-            await _unitOfWork.ProductVariants.GetByIdAsync(
-                id
-            );
+            await _unitOfWork.ProductVariants
+                .GetByIdAsync(id);
 
         if (variant == null)
         {
@@ -555,15 +682,14 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(
-                variant.ProductId
-            );
+            await _unitOfWork.Products
+                .GetByIdAsync(
+                    variant.ProductId);
 
         if (product == null)
         {
             throw new NotFoundException(
-                $"Product với ID {variant.ProductId} không tồn tại."
-            );
+                $"Product với ID {variant.ProductId} không tồn tại.");
         }
 
 
@@ -573,8 +699,7 @@ public class ProductVariantService : IProductVariantService
 
         await CheckProductShopAccessAsync(
             product,
-            userId
-        );
+            userId);
 
 
         // -------------------------------------------------
@@ -582,11 +707,11 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var inventories =
-            await _unitOfWork.Inventories.FindAsync(
-                x =>
-                    x.ProductVariantId ==
-                    id
-            );
+            await _unitOfWork.Inventories
+                .FindAsync(
+                    x =>
+                        x.ProductVariantId ==
+                        id);
 
         var inventory =
             inventories.FirstOrDefault();
@@ -598,9 +723,8 @@ public class ProductVariantService : IProductVariantService
 
         if (inventory != null)
         {
-            _unitOfWork.Inventories.Delete(
-                inventory
-            );
+            _unitOfWork.Inventories
+                .Delete(inventory);
         }
 
 
@@ -608,9 +732,8 @@ public class ProductVariantService : IProductVariantService
         // 6. Xóa ProductVariant
         // -------------------------------------------------
 
-        _unitOfWork.ProductVariants.Delete(
-            variant
-        );
+        _unitOfWork.ProductVariants
+            .Delete(variant);
 
 
         // -------------------------------------------------
@@ -634,8 +757,7 @@ public class ProductVariantService : IProductVariantService
         if (product.ShopId <= 0)
         {
             throw new BadRequestException(
-                "Product chưa được gắn với Shop hợp lệ."
-            );
+                "Product chưa được gắn với Shop hợp lệ.");
         }
 
 
@@ -644,15 +766,14 @@ public class ProductVariantService : IProductVariantService
         // -------------------------------------------------
 
         var shop =
-            await _unitOfWork.Shops.GetByIdAsync(
-                product.ShopId
-            );
+            await _unitOfWork.Shops
+                .GetByIdAsync(
+                    product.ShopId);
 
         if (shop == null)
         {
             throw new NotFoundException(
-                $"Shop {product.ShopId} không tồn tại."
-            );
+                $"Shop {product.ShopId} không tồn tại.");
         }
 
 
@@ -663,8 +784,7 @@ public class ProductVariantService : IProductVariantService
         if (shop.OwnerUserId != userId)
         {
             throw new ForbiddenException(
-                "Bạn không có quyền quản lý ProductVariant của Shop này."
-            );
+                "Bạn không có quyền quản lý ProductVariant của Shop này.");
         }
 
 
@@ -678,8 +798,7 @@ public class ProductVariantService : IProductVariantService
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new BadRequestException(
-                $"Shop chưa được Admin duyệt. Trạng thái hiện tại: '{shop.Status}'."
-            );
+                $"Shop chưa được Admin duyệt. Trạng thái hiện tại: '{shop.Status}'.");
         }
     }
 
@@ -688,9 +807,10 @@ public class ProductVariantService : IProductVariantService
     // MAP DTO
     // =====================================================
 
-    private ProductVariantResponseDTO MapToResponseDTO(
-        ProductVariantModel variant,
-        InventoryModel? inventory)
+    private ProductVariantResponseDTO
+        MapToResponseDTO(
+            ProductVariantModel variant,
+            InventoryModel? inventory)
     {
         int quantity =
             inventory?.Quantity ?? 0;
@@ -699,7 +819,8 @@ public class ProductVariantService : IProductVariantService
             inventory?.ReservedQuantity ?? 0;
 
         int availableQuantity =
-            quantity - reservedQuantity;
+            quantity -
+            reservedQuantity;
 
 
         return new ProductVariantResponseDTO
@@ -734,5 +855,82 @@ public class ProductVariantService : IProductVariantService
             UpdatedAt =
                 variant.UpdatedAt
         };
+    }
+
+
+    // =====================================================
+    // COMBINE PREDICATES
+    // =====================================================
+
+    private static Expression<Func<ProductVariantModel, bool>>
+        CombinePredicates(
+            Expression<Func<ProductVariantModel, bool>>? first,
+            Expression<Func<ProductVariantModel, bool>> second)
+    {
+        if (first == null)
+        {
+            return second;
+        }
+
+        var parameter =
+            Expression.Parameter(
+                typeof(ProductVariantModel),
+                "x");
+
+        var firstBody =
+            new ParameterReplacer(
+                first.Parameters[0],
+                parameter)
+            .Visit(first.Body);
+
+        var secondBody =
+            new ParameterReplacer(
+                second.Parameters[0],
+                parameter)
+            .Visit(second.Body);
+
+        var body =
+            Expression.AndAlso(
+                firstBody!,
+                secondBody!);
+
+        return Expression.Lambda<
+            Func<ProductVariantModel, bool>>(
+                body,
+                parameter);
+    }
+
+
+    // =====================================================
+    // PARAMETER REPLACER
+    // =====================================================
+
+    private sealed class ParameterReplacer
+        : ExpressionVisitor
+    {
+        private readonly ParameterExpression
+            _oldParameter;
+
+        private readonly ParameterExpression
+            _newParameter;
+
+        public ParameterReplacer(
+            ParameterExpression oldParameter,
+            ParameterExpression newParameter)
+        {
+            _oldParameter =
+                oldParameter;
+
+            _newParameter =
+                newParameter;
+        }
+
+        protected override Expression VisitParameter(
+            ParameterExpression node)
+        {
+            return node == _oldParameter
+                ? _newParameter
+                : base.VisitParameter(node);
+        }
     }
 }

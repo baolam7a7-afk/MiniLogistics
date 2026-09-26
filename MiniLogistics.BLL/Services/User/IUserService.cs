@@ -1,22 +1,22 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.User;
 
 namespace MiniLogistics.BLL.Services.User;
 
 public interface IUserService
 {
-    // GET ALL USERS
-    Task<IEnumerable<UserResponseDTO>> GetAllAsync();
+    Task<PagedResponseDTO<UserResponseDTO>> GetAllAsync(
+        UserPaginationRequestDTO request);
 
-    // GET USER BY ID
-    Task<UserResponseDTO?> GetByIdAsync(long userId);
+    Task<UserResponseDTO?> GetByIdAsync(
+        long userId);
 
-    // LOCK USER
-    Task<UserResponseDTO> LockAsync(long userId);
+    Task<UserResponseDTO> LockAsync(
+        long userId);
 
-    // UNLOCK USER
-    Task<UserResponseDTO> UnlockAsync(long userId);
+    Task<UserResponseDTO> UnlockAsync(
+        long userId);
 
-    // UPDATE ROLE
     Task<UserResponseDTO> UpdateRoleAsync(
         long userId,
         UpdateUserRoleDTO request);

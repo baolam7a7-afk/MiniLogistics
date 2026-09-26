@@ -492,6 +492,40 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("order_vouchers", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.PasswordResetToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("password_reset_tokens", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.PaymentTransaction", b =>
                 {
                     b.Property<long>("Id")
@@ -1233,6 +1267,9 @@ namespace MiniLogistics.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AuthProvider")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AvatarUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1250,6 +1287,9 @@ namespace MiniLogistics.DAL.Migrations
                     b.Property<string>("FullName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GoogleId")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -1609,6 +1649,17 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("Voucher");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.PasswordResetToken", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.PaymentTransaction", b =>

@@ -1,21 +1,22 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.SupportTicket;
 
 namespace MiniLogistics.BLL.Services.SupportTicket;
 
 public interface ISupportTicketService
 {
-    // =========================================================
+    // =====================================================
     // CREATE
-    // =========================================================
+    // =====================================================
 
     Task<SupportTicketResponseDTO> CreateAsync(
         long userId,
         CreateSupportTicketDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // GET BY ID
-    // =========================================================
+    // =====================================================
 
     Task<SupportTicketResponseDTO?> GetByIdAsync(
         long userId,
@@ -23,26 +24,28 @@ public interface ISupportTicketService
         long id);
 
 
-    // =========================================================
-    // GET MY TICKETS
-    // =========================================================
+    // =====================================================
+    // GET MY TICKETS - PAGINATION
+    // =====================================================
 
-    Task<IEnumerable<SupportTicketResponseDTO>>
+    Task<PagedResponseDTO<SupportTicketResponseDTO>>
         GetMyTicketsAsync(
-            long userId);
+            long userId,
+            SupportTicketPaginationRequestDTO request);
 
 
-    // =========================================================
-    // GET ALL
-    // =========================================================
+    // =====================================================
+    // GET ALL - ADMIN - PAGINATION
+    // =====================================================
 
-    Task<IEnumerable<SupportTicketResponseDTO>>
-        GetAllAsync();
+    Task<PagedResponseDTO<SupportTicketResponseDTO>>
+        GetAllAsync(
+            SupportTicketPaginationRequestDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // UPDATE
-    // =========================================================
+    // =====================================================
 
     Task<SupportTicketResponseDTO> UpdateAsync(
         long userId,
@@ -51,9 +54,9 @@ public interface ISupportTicketService
         UpdateSupportTicketDTO request);
 
 
-    // =========================================================
+    // =====================================================
     // DELETE
-    // =========================================================
+    // =====================================================
 
     Task DeleteAsync(
         long userId,

@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shipment;
 
 namespace MiniLogistics.BLL.Services.Shipment;
@@ -28,20 +29,22 @@ public interface IShipmentService
 
 
     // =====================================================
-    // GET ALL
+    // GET ALL - PAGINATION
     // Admin
     // =====================================================
 
-    Task<List<ShipmentResponseDTO>> GetAllAsync();
+    Task<PagedResponseDTO<ShipmentResponseDTO>> GetAllAsync(
+        ShipmentPaginationRequestDTO request);
 
 
     // =====================================================
-    // GET MY SHIPMENTS
+    // GET MY SHIPMENTS - PAGINATION
     // Shipper
     // =====================================================
 
-    Task<List<ShipmentResponseDTO>> GetMyShipmentsAsync(
-        long shipperUserId);
+    Task<PagedResponseDTO<ShipmentResponseDTO>> GetMyShipmentsAsync(
+        long shipperUserId,
+        ShipmentPaginationRequestDTO request);
 
 
     // =====================================================

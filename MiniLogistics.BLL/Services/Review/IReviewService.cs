@@ -1,4 +1,5 @@
 using MiniLogistics.BLL.DTOs.Review;
+using MiniLogistics.BLL.DTOs.Common;
 
 namespace MiniLogistics.BLL.Services.Review;
 
@@ -11,11 +12,13 @@ public interface IReviewService
     Task<ReviewResponseDTO> GetByIdAsync(
         long reviewId);
 
-    Task<IEnumerable<ReviewResponseDTO>> GetByProductIdAsync(
-        long productId);
+    Task<PagedResponseDTO<ReviewResponseDTO>> GetByProductIdAsync(
+        long productId,
+        ReviewPaginationRequestDTO request);
 
-    Task<IEnumerable<ReviewResponseDTO>> GetMyReviewsAsync(
-        long customerId);
+    Task<PagedResponseDTO<ReviewResponseDTO>> GetMyReviewsAsync(
+        long customerId,
+        ReviewPaginationRequestDTO request);
 
     Task<ReviewResponseDTO> UpdateAsync(
         long customerId,

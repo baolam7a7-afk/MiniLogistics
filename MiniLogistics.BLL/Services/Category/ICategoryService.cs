@@ -1,21 +1,47 @@
 using MiniLogistics.BLL.DTOs.Category;
+using MiniLogistics.BLL.DTOs.Common;
 
 namespace MiniLogistics.BLL.Services;
 
 public interface ICategoryService
 {
-    Task<IEnumerable<CategoryResponseDTO>> GetAllAsync();
+    // =====================================================
+    // GET ALL
+    // =====================================================
 
-    Task<CategoryResponseDTO?> GetByIdAsync(long id);
+    Task<PagedResponseDTO<CategoryResponseDTO>> GetAllAsync(
+        CategoryPaginationRequestDTO request);
+
+
+    // =====================================================
+    // GET BY ID
+    // =====================================================
+
+    Task<CategoryResponseDTO?> GetByIdAsync(
+        long id);
+
+
+    // =====================================================
+    // CREATE
+    // =====================================================
 
     Task<CategoryResponseDTO> CreateAsync(
-        CreateCategoryDTO request
-    );
+        CreateCategoryDTO request);
+
+
+    // =====================================================
+    // UPDATE
+    // =====================================================
 
     Task<CategoryResponseDTO?> UpdateAsync(
         long id,
-        UpdateCategoryDTO request
-    );
+        UpdateCategoryDTO request);
 
-    Task<bool> DeleteAsync(long id);
+
+    // =====================================================
+    // DELETE
+    // =====================================================
+
+    Task<bool> DeleteAsync(
+        long id);
 }

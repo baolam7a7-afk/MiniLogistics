@@ -1,5 +1,9 @@
+using System.Linq.Expressions;
+
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Product;
 using MiniLogistics.BLL.Exceptions;
+
 using MiniLogistics.DAL.UnitOfWork;
 
 using ProductEntity = MiniLogistics.DAL.Models.Product;
@@ -10,7 +14,8 @@ public class ProductService : IProductService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    public ProductService(IUnitOfWork unitOfWork)
+    public ProductService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
@@ -19,14 +24,205 @@ public class ProductService : IProductService
     // =====================================================
     // GET ALL
     // PUBLIC
+    // PAGINATION + SEARCH + FILTER
     // =====================================================
 
-    public async Task<IEnumerable<ProductResponseDTO>> GetAllAsync()
+    public async Task<PagedResponseDTO<ProductResponseDTO>>
+        GetAllAsync(
+            ProductPaginationRequestDTO request)
     {
-        var products =
-            await _unitOfWork.Products.GetAllAsync();
+        // =================================================
+        // VALIDATE REQUEST
+        // =================================================
 
-        return products.Select(MapToDTO);
+        if (request == null)
+        {
+            request =
+                new ProductPaginationRequestDTO();
+        }
+
+
+        // =================================================
+        // VALIDATE PAGINATION
+        // =================================================
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+
+        // =================================================
+        // PREPARE FILTER
+        // =================================================
+
+        var search =
+            request.Search?
+                .Trim()
+                .ToLower();
+
+        var status =
+            request.Status?
+                .Trim()
+                .ToLower();
+
+
+        // =================================================
+        // BUILD FILTER
+        // =================================================
+
+        Expression<Func<ProductEntity, bool>>? predicate =
+            null;
+
+
+        // -------------------------------------------------
+        // SEARCH
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            predicate =
+                product =>
+                    product.Name
+                        .ToLower()
+                        .Contains(search)
+                    ||
+                    product.Slug
+                        .ToLower()
+                        .Contains(search);
+        }
+
+
+        // -------------------------------------------------
+        // CATEGORY
+        // -------------------------------------------------
+
+        if (request.CategoryId.HasValue)
+        {
+            var categoryId =
+                request.CategoryId.Value;
+
+            Expression<Func<ProductEntity, bool>>
+                categoryPredicate =
+                    product =>
+                        product.CategoryId == categoryId;
+
+            predicate =
+                CombinePredicates(
+                    predicate,
+                    categoryPredicate);
+        }
+
+
+        // -------------------------------------------------
+        // SHOP
+        // -------------------------------------------------
+
+        if (request.ShopId.HasValue)
+        {
+            var shopId =
+                request.ShopId.Value;
+
+            Expression<Func<ProductEntity, bool>>
+                shopPredicate =
+                    product =>
+                        product.ShopId == shopId;
+
+            predicate =
+                CombinePredicates(
+                    predicate,
+                    shopPredicate);
+        }
+
+
+        // -------------------------------------------------
+        // STATUS
+        // -------------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            Expression<Func<ProductEntity, bool>>
+                statusPredicate =
+                    product =>
+                        product.Status
+                            .ToLower()
+                            .Equals(status);
+
+            predicate =
+                CombinePredicates(
+                    predicate,
+                    statusPredicate);
+        }
+
+
+        // =================================================
+        // QUERY DATABASE
+        // =================================================
+
+        var result =
+            await _unitOfWork.Products
+                .GetPagedAsync(
+                    request.Page,
+                    request.PageSize,
+                    predicate,
+                    query =>
+                        query.OrderByDescending(
+                            x => x.Id));
+
+
+        // =================================================
+        // MAP
+        // =================================================
+
+        var items =
+            result.Items
+                .Select(MapToDTO)
+                .ToList();
+
+
+        // =================================================
+        // CALCULATE TOTAL PAGES
+        // =================================================
+
+        var totalPages =
+            result.TotalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    result.TotalItems /
+                    (double)request.PageSize);
+
+
+        // =================================================
+        // RETURN
+        // =================================================
+
+        return new PagedResponseDTO<ProductResponseDTO>
+        {
+            Items =
+                items,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                result.TotalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
 
@@ -35,10 +231,13 @@ public class ProductService : IProductService
     // PUBLIC
     // =====================================================
 
-    public async Task<ProductResponseDTO?> GetByIdAsync(long id)
+    public async Task<ProductResponseDTO?>
+        GetByIdAsync(
+            long id)
     {
         var product =
-            await _unitOfWork.Products.GetByIdAsync(id);
+            await _unitOfWork.Products
+                .GetByIdAsync(id);
 
         if (product == null)
         {
@@ -55,15 +254,17 @@ public class ProductService : IProductService
     // =====================================================
 
     public async Task<IEnumerable<ProductResponseDTO>>
-        GetByCategoryAsync(long categoryId)
+        GetByCategoryAsync(
+            long categoryId)
     {
-        // -------------------------------------------------
-        // 1. CHECK CATEGORY
-        // -------------------------------------------------
+        // =================================================
+        // CHECK CATEGORY
+        // =================================================
 
         var categoryExists =
-            await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == categoryId);
+            await _unitOfWork.Categories
+                .AnyAsync(
+                    c => c.Id == categoryId);
 
         if (!categoryExists)
         {
@@ -72,15 +273,19 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 2. GET PRODUCTS
-        // -------------------------------------------------
+        // =================================================
+        // GET PRODUCTS
+        // =================================================
 
         var products =
-            await _unitOfWork.Products.FindAsync(
-                p => p.CategoryId == categoryId);
+            await _unitOfWork.Products
+                .FindAsync(
+                    p =>
+                        p.CategoryId == categoryId);
 
-        return products.Select(MapToDTO);
+
+        return products
+            .Select(MapToDTO);
     }
 
 
@@ -90,11 +295,12 @@ public class ProductService : IProductService
     // =====================================================
 
     public async Task<IEnumerable<ProductResponseDTO>>
-        SearchAsync(string keyword)
+        SearchAsync(
+            string keyword)
     {
-        // -------------------------------------------------
-        // 1. VALIDATE KEYWORD
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE KEYWORD
+        // =================================================
 
         if (string.IsNullOrWhiteSpace(keyword))
         {
@@ -102,26 +308,31 @@ public class ProductService : IProductService
                 "Keyword không được để trống.");
         }
 
-        keyword = keyword.Trim();
+        keyword =
+            keyword.Trim();
 
 
-        // -------------------------------------------------
-        // 2. SEARCH
-        // -------------------------------------------------
+        // =================================================
+        // SEARCH
+        // =================================================
 
         var products =
-            await _unitOfWork.Products.FindAsync(
-                p =>
-                    p.Name.Contains(keyword) ||
-                    p.Slug.Contains(keyword));
+            await _unitOfWork.Products
+                .FindAsync(
+                    p =>
+                        p.Name.Contains(keyword)
+                        ||
+                        p.Slug.Contains(keyword));
 
-        return products.Select(MapToDTO);
+
+        return products
+            .Select(MapToDTO);
     }
 
 
     // =====================================================
     // CREATE
-    // SELLER
+    // SELLER ONLY
     // =====================================================
 
     public async Task<ProductResponseDTO>
@@ -129,9 +340,9 @@ public class ProductService : IProductService
             long userId,
             CreateProductDTO request)
     {
-        // -------------------------------------------------
-        // 1. VALIDATE REQUEST
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE REQUEST
+        // =================================================
 
         if (request == null)
         {
@@ -140,44 +351,49 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 2. CHECK SHOP
-        // -------------------------------------------------
+        // =================================================
+        // CHECK SHOP
+        // =================================================
 
         await GetApprovedOwnedShopAsync(
             userId,
             request.ShopId);
 
 
-        // -------------------------------------------------
-        // 3. VALIDATE NAME
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE NAME
+        // =================================================
 
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (string.IsNullOrWhiteSpace(
+                request.Name))
         {
             throw new BadRequestException(
                 "Tên Product không được để trống.");
         }
 
 
-        // -------------------------------------------------
-        // 4. VALIDATE SLUG
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE SLUG
+        // =================================================
 
-        if (string.IsNullOrWhiteSpace(request.Slug))
+        if (string.IsNullOrWhiteSpace(
+                request.Slug))
         {
             throw new BadRequestException(
                 "Slug không được để trống.");
         }
 
 
-        // -------------------------------------------------
-        // 5. CHECK CATEGORY
-        // -------------------------------------------------
+        // =================================================
+        // CHECK CATEGORY
+        // =================================================
 
         var categoryExists =
-            await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == request.CategoryId);
+            await _unitOfWork.Categories
+                .AnyAsync(
+                    c =>
+                        c.Id ==
+                        request.CategoryId);
 
         if (!categoryExists)
         {
@@ -186,9 +402,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 6. CHECK DUPLICATE SLUG
-        // -------------------------------------------------
+        // =================================================
+        // CHECK DUPLICATE SLUG
+        // =================================================
 
         var slug =
             request.Slug
@@ -196,8 +412,10 @@ public class ProductService : IProductService
                 .ToLowerInvariant();
 
         var slugExists =
-            await _unitOfWork.Products.AnyAsync(
-                p => p.Slug == slug);
+            await _unitOfWork.Products
+                .AnyAsync(
+                    p =>
+                        p.Slug == slug);
 
         if (slugExists)
         {
@@ -206,51 +424,60 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 7. CREATE PRODUCT
-        // -------------------------------------------------
+        // =================================================
+        // CREATE PRODUCT
+        // =================================================
 
-        var product = new ProductEntity
-        {
-            ShopId = request.ShopId,
+        var product =
+            new ProductEntity
+            {
+                ShopId =
+                    request.ShopId,
 
-            CategoryId = request.CategoryId,
+                CategoryId =
+                    request.CategoryId,
 
-            Name = request.Name.Trim(),
+                Name =
+                    request.Name.Trim(),
 
-            Slug = slug,
+                Slug =
+                    slug,
 
-            Description =
-                request.Description?.Trim(),
+                Description =
+                    request.Description?.Trim(),
 
-            Status =
-                string.IsNullOrWhiteSpace(request.Status)
-                    ? "active"
-                    : request.Status
-                        .Trim()
-                        .ToLowerInvariant(),
+                Status =
+                    string.IsNullOrWhiteSpace(
+                        request.Status)
+                        ? "active"
+                        : request.Status
+                            .Trim()
+                            .ToLowerInvariant(),
 
-            CreatedAt = DateTime.UtcNow
-        };
-
-
-        // -------------------------------------------------
-        // 8. ADD PRODUCT
-        // -------------------------------------------------
-
-        await _unitOfWork.Products.AddAsync(product);
-
-
-        // -------------------------------------------------
-        // 9. SAVE
-        // -------------------------------------------------
-
-        await _unitOfWork.SaveChangesAsync();
+                CreatedAt =
+                    DateTime.UtcNow
+            };
 
 
-        // -------------------------------------------------
-        // 10. RETURN
-        // -------------------------------------------------
+        // =================================================
+        // ADD
+        // =================================================
+
+        await _unitOfWork.Products
+            .AddAsync(product);
+
+
+        // =================================================
+        // SAVE
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        // =================================================
+        // RETURN
+        // =================================================
 
         return MapToDTO(product);
     }
@@ -258,7 +485,7 @@ public class ProductService : IProductService
 
     // =====================================================
     // UPDATE
-    // SELLER
+    // SELLER ONLY
     // =====================================================
 
     public async Task<ProductResponseDTO?>
@@ -267,9 +494,9 @@ public class ProductService : IProductService
             long id,
             UpdateProductDTO request)
     {
-        // -------------------------------------------------
-        // 1. VALIDATE REQUEST
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE REQUEST
+        // =================================================
 
         if (request == null)
         {
@@ -278,12 +505,13 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 2. FIND PRODUCT
-        // -------------------------------------------------
+        // =================================================
+        // FIND PRODUCT
+        // =================================================
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(id);
+            await _unitOfWork.Products
+                .GetByIdAsync(id);
 
         if (product == null)
         {
@@ -291,50 +519,49 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 3. CHECK SHOP
-        // -------------------------------------------------
-        //
-        // Shop trong request phải:
-        // - tồn tại
-        // - thuộc Seller hiện tại
-        // - đã được Admin approve
-        //
+        // =================================================
+        // CHECK SHOP
+        // =================================================
 
         await GetApprovedOwnedShopAsync(
             userId,
             request.ShopId);
 
 
-        // -------------------------------------------------
-        // 4. VALIDATE NAME
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE NAME
+        // =================================================
 
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (string.IsNullOrWhiteSpace(
+                request.Name))
         {
             throw new BadRequestException(
                 "Tên Product không được để trống.");
         }
 
 
-        // -------------------------------------------------
-        // 5. VALIDATE SLUG
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE SLUG
+        // =================================================
 
-        if (string.IsNullOrWhiteSpace(request.Slug))
+        if (string.IsNullOrWhiteSpace(
+                request.Slug))
         {
             throw new BadRequestException(
                 "Slug không được để trống.");
         }
 
 
-        // -------------------------------------------------
-        // 6. CHECK CATEGORY
-        // -------------------------------------------------
+        // =================================================
+        // CHECK CATEGORY
+        // =================================================
 
         var categoryExists =
-            await _unitOfWork.Categories.AnyAsync(
-                c => c.Id == request.CategoryId);
+            await _unitOfWork.Categories
+                .AnyAsync(
+                    c =>
+                        c.Id ==
+                        request.CategoryId);
 
         if (!categoryExists)
         {
@@ -343,9 +570,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 7. CHECK DUPLICATE SLUG
-        // -------------------------------------------------
+        // =================================================
+        // CHECK DUPLICATE SLUG
+        // =================================================
 
         var slug =
             request.Slug
@@ -353,10 +580,11 @@ public class ProductService : IProductService
                 .ToLowerInvariant();
 
         var slugExists =
-            await _unitOfWork.Products.AnyAsync(
-                p =>
-                    p.Slug == slug &&
-                    p.Id != id);
+            await _unitOfWork.Products
+                .AnyAsync(
+                    p =>
+                        p.Slug == slug &&
+                        p.Id != id);
 
         if (slugExists)
         {
@@ -365,9 +593,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 8. UPDATE PRODUCT
-        // -------------------------------------------------
+        // =================================================
+        // UPDATE PRODUCT
+        // =================================================
 
         product.ShopId =
             request.ShopId;
@@ -385,7 +613,8 @@ public class ProductService : IProductService
             request.Description?.Trim();
 
         product.Status =
-            string.IsNullOrWhiteSpace(request.Status)
+            string.IsNullOrWhiteSpace(
+                request.Status)
                 ? "active"
                 : request.Status
                     .Trim()
@@ -395,23 +624,25 @@ public class ProductService : IProductService
             DateTime.UtcNow;
 
 
-        // -------------------------------------------------
-        // 9. UPDATE REPOSITORY
-        // -------------------------------------------------
+        // =================================================
+        // UPDATE REPOSITORY
+        // =================================================
 
-        _unitOfWork.Products.Update(product);
-
-
-        // -------------------------------------------------
-        // 10. SAVE
-        // -------------------------------------------------
-
-        await _unitOfWork.SaveChangesAsync();
+        _unitOfWork.Products
+            .Update(product);
 
 
-        // -------------------------------------------------
-        // 11. RETURN
-        // -------------------------------------------------
+        // =================================================
+        // SAVE
+        // =================================================
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        // =================================================
+        // RETURN
+        // =================================================
 
         return MapToDTO(product);
     }
@@ -419,7 +650,7 @@ public class ProductService : IProductService
 
     // =====================================================
     // DELETE
-    // SELLER
+    // SELLER ONLY
     // =====================================================
 
     public async Task<bool>
@@ -427,12 +658,13 @@ public class ProductService : IProductService
             long userId,
             long id)
     {
-        // -------------------------------------------------
-        // 1. FIND PRODUCT
-        // -------------------------------------------------
+        // =================================================
+        // FIND PRODUCT
+        // =================================================
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(id);
+            await _unitOfWork.Products
+                .GetByIdAsync(id);
 
         if (product == null)
         {
@@ -440,28 +672,24 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 2. CHECK SHOP
-        // -------------------------------------------------
-        //
-        // Product đang thuộc Shop nào thì Shop đó phải:
-        // - tồn tại
-        // - thuộc Seller hiện tại
-        // - approved
-        //
+        // =================================================
+        // CHECK SHOP
+        // =================================================
 
         await GetApprovedOwnedShopAsync(
             userId,
             product.ShopId);
 
 
-        // -------------------------------------------------
-        // 3. CHECK PRODUCT VARIANT
-        // -------------------------------------------------
+        // =================================================
+        // CHECK PRODUCT VARIANT
+        // =================================================
 
         var hasVariants =
-            await _unitOfWork.ProductVariants.AnyAsync(
-                v => v.ProductId == id);
+            await _unitOfWork.ProductVariants
+                .AnyAsync(
+                    v =>
+                        v.ProductId == id);
 
         if (hasVariants)
         {
@@ -470,18 +698,20 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 4. DELETE
-        // -------------------------------------------------
+        // =================================================
+        // DELETE
+        // =================================================
 
-        _unitOfWork.Products.Delete(product);
+        _unitOfWork.Products
+            .Delete(product);
 
 
-        // -------------------------------------------------
-        // 5. SAVE
-        // -------------------------------------------------
+        // =================================================
+        // SAVE
+        // =================================================
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork
+            .SaveChangesAsync();
 
 
         return true;
@@ -490,6 +720,7 @@ public class ProductService : IProductService
 
     // =====================================================
     // CHECK SHOP
+    // =====================================================
     //
     // Shop phải:
     // 1. Tồn tại
@@ -502,9 +733,9 @@ public class ProductService : IProductService
             long userId,
             long shopId)
     {
-        // -------------------------------------------------
-        // 1. VALIDATE USER ID
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE USER ID
+        // =================================================
 
         if (userId <= 0)
         {
@@ -513,9 +744,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 2. VALIDATE SHOP ID
-        // -------------------------------------------------
+        // =================================================
+        // VALIDATE SHOP ID
+        // =================================================
 
         if (shopId <= 0)
         {
@@ -524,13 +755,13 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 3. FIND SHOP
-        // -------------------------------------------------
+        // =================================================
+        // FIND SHOP
+        // =================================================
 
         var shop =
-            await _unitOfWork.Shops.GetByIdAsync(
-                shopId);
+            await _unitOfWork.Shops
+                .GetByIdAsync(shopId);
 
         if (shop == null)
         {
@@ -539,9 +770,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 4. CHECK OWNER
-        // -------------------------------------------------
+        // =================================================
+        // CHECK OWNER
+        // =================================================
 
         if (shop.OwnerUserId != userId)
         {
@@ -550,9 +781,9 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 5. CHECK APPROVAL
-        // -------------------------------------------------
+        // =================================================
+        // CHECK APPROVAL
+        // =================================================
 
         if (!string.Equals(
                 shop.Status?.Trim(),
@@ -565,11 +796,93 @@ public class ProductService : IProductService
         }
 
 
-        // -------------------------------------------------
-        // 6. RETURN SHOP
-        // -------------------------------------------------
+        // =================================================
+        // RETURN SHOP
+        // =================================================
 
         return shop;
+    }
+
+
+    // =====================================================
+    // COMBINE EXPRESSIONS
+    // =====================================================
+
+    private static Expression<Func<T, bool>>
+        CombinePredicates<T>(
+            Expression<Func<T, bool>>? first,
+            Expression<Func<T, bool>> second)
+    {
+        if (first == null)
+        {
+            return second;
+        }
+
+        var parameter =
+            Expression.Parameter(
+                typeof(T),
+                "x");
+
+        var firstBody =
+            ReplaceParameter(
+                first.Body,
+                first.Parameters[0],
+                parameter);
+
+        var secondBody =
+            ReplaceParameter(
+                second.Body,
+                second.Parameters[0],
+                parameter);
+
+        var body =
+            Expression.AndAlso(
+                firstBody,
+                secondBody);
+
+        return Expression.Lambda<Func<T, bool>>(
+            body,
+            parameter);
+    }
+
+
+    private static Expression
+        ReplaceParameter(
+            Expression expression,
+            ParameterExpression oldParameter,
+            ParameterExpression newParameter)
+    {
+        return new ParameterReplacer(
+            oldParameter,
+            newParameter)
+            .Visit(expression)!;
+    }
+
+
+    private sealed class ParameterReplacer
+        : ExpressionVisitor
+    {
+        private readonly ParameterExpression _oldParameter;
+        private readonly ParameterExpression _newParameter;
+
+        public ParameterReplacer(
+            ParameterExpression oldParameter,
+            ParameterExpression newParameter)
+        {
+            _oldParameter =
+                oldParameter;
+
+            _newParameter =
+                newParameter;
+        }
+
+        protected override Expression VisitParameter(
+            ParameterExpression node)
+        {
+            return node == _oldParameter
+                ? _newParameter
+                : base.VisitParameter(node);
+        }
     }
 
 
@@ -578,27 +891,37 @@ public class ProductService : IProductService
     // =====================================================
 
     private static ProductResponseDTO
-        MapToDTO(ProductEntity product)
+        MapToDTO(
+            ProductEntity product)
     {
         return new ProductResponseDTO
         {
-            Id = product.Id,
+            Id =
+                product.Id,
 
-            ShopId = product.ShopId,
+            ShopId =
+                product.ShopId,
 
-            CategoryId = product.CategoryId,
+            CategoryId =
+                product.CategoryId,
 
-            Name = product.Name,
+            Name =
+                product.Name,
 
-            Slug = product.Slug,
+            Slug =
+                product.Slug,
 
-            Description = product.Description,
+            Description =
+                product.Description,
 
-            Status = product.Status,
+            Status =
+                product.Status,
 
-            CreatedAt = product.CreatedAt,
+            CreatedAt =
+                product.CreatedAt,
 
-            UpdatedAt = product.UpdatedAt
+            UpdatedAt =
+                product.UpdatedAt
         };
     }
 }

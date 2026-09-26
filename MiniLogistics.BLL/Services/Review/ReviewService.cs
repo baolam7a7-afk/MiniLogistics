@@ -1,4 +1,5 @@
 using MiniLogistics.BLL.DTOs.Review;
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.DAL.UnitOfWork;
 using MiniLogistics.BLL.Exceptions;
 using ReviewModel = MiniLogistics.DAL.Models.Review;
@@ -13,6 +14,11 @@ public class ReviewService : IReviewService
     {
         _unitOfWork = unitOfWork;
     }
+
+
+    // =====================================================
+    // CREATE
+    // =====================================================
 
     public async Task<ReviewResponseDTO> CreateAsync(
         long customerId,
@@ -30,7 +36,8 @@ public class ReviewService : IReviewService
         }
 
         var order =
-            await _unitOfWork.Orders.GetByIdAsync(request.OrderId);
+            await _unitOfWork.Orders
+                .GetByIdAsync(request.OrderId);
 
         if (order == null)
             throw new NotFoundException(
@@ -52,8 +59,8 @@ public class ReviewService : IReviewService
         }
 
         var orderItem =
-            await _unitOfWork.OrderItems.GetByIdAsync(
-                request.OrderItemId);
+            await _unitOfWork.OrderItems
+                .GetByIdAsync(request.OrderItemId);
 
         if (orderItem == null)
             throw new NotFoundException(
@@ -70,8 +77,8 @@ public class ReviewService : IReviewService
                 "Product không khớp với Product của OrderItem.");
 
         var product =
-            await _unitOfWork.Products.GetByIdAsync(
-                request.ProductId);
+            await _unitOfWork.Products
+                .GetByIdAsync(request.ProductId);
 
         if (product == null)
             throw new NotFoundException(
@@ -112,11 +119,17 @@ public class ReviewService : IReviewService
         return MapToResponse(review);
     }
 
+
+    // =====================================================
+    // GET BY ID
+    // =====================================================
+
     public async Task<ReviewResponseDTO> GetByIdAsync(
         long reviewId)
     {
         var review =
-            await _unitOfWork.Reviews.GetByIdAsync(reviewId);
+            await _unitOfWork.Reviews
+                .GetByIdAsync(reviewId);
 
         if (review == null)
             throw new NotFoundException(
@@ -125,38 +138,132 @@ public class ReviewService : IReviewService
         return MapToResponse(review);
     }
 
-    public async Task<IEnumerable<ReviewResponseDTO>>
-        GetByProductIdAsync(long productId)
+
+    // =====================================================
+    // GET BY PRODUCT
+    // PUBLIC + PAGINATION
+    // =====================================================
+
+    public async Task<PagedResponseDTO<ReviewResponseDTO>>
+        GetByProductIdAsync(
+            long productId,
+            ReviewPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
         var product =
-            await _unitOfWork.Products.GetByIdAsync(productId);
+            await _unitOfWork.Products
+                .GetByIdAsync(productId);
 
         if (product == null)
+        {
             throw new NotFoundException(
                 $"Không tìm thấy Product với Id = {productId}.");
+        }
 
         var reviews =
             await _unitOfWork.Reviews.FindAsync(
                 r => r.ProductId == productId);
 
-        return reviews
-            .OrderByDescending(r => r.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+        var query = reviews.AsEnumerable();
+
+        // Filter Rating
+        if (request.Rating.HasValue)
+        {
+            if (request.Rating.Value < 1 ||
+                request.Rating.Value > 5)
+            {
+                throw new BadRequestException(
+                    "Rating phải nằm trong khoảng từ 1 đến 5.");
+            }
+
+            query = query.Where(
+                r => r.Rating == request.Rating.Value);
+        }
+
+        // Search Content
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            query = query.Where(
+                r =>
+                    !string.IsNullOrWhiteSpace(r.Content)
+                    &&
+                    r.Content.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = query
+            .OrderByDescending(r => r.CreatedAt);
+
+        return CreatePagedResponse(
+            query.Select(MapToResponse),
+            request);
     }
 
-    public async Task<IEnumerable<ReviewResponseDTO>>
-        GetMyReviewsAsync(long customerId)
+
+    // =====================================================
+    // GET MY REVIEWS
+    // CUSTOMER + PAGINATION
+    // =====================================================
+
+    public async Task<PagedResponseDTO<ReviewResponseDTO>>
+        GetMyReviewsAsync(
+            long customerId,
+            ReviewPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
         var reviews =
             await _unitOfWork.Reviews.FindAsync(
                 r => r.CustomerId == customerId);
 
-        return reviews
-            .OrderByDescending(r => r.CreatedAt)
-            .Select(MapToResponse)
-            .ToList();
+        var query = reviews.AsEnumerable();
+
+        // Filter Rating
+        if (request.Rating.HasValue)
+        {
+            if (request.Rating.Value < 1 ||
+                request.Rating.Value > 5)
+            {
+                throw new BadRequestException(
+                    "Rating phải nằm trong khoảng từ 1 đến 5.");
+            }
+
+            query = query.Where(
+                r => r.Rating == request.Rating.Value);
+        }
+
+        // Search Content
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            query = query.Where(
+                r =>
+                    !string.IsNullOrWhiteSpace(r.Content)
+                    &&
+                    r.Content.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = query
+            .OrderByDescending(r => r.CreatedAt);
+
+        return CreatePagedResponse(
+            query.Select(MapToResponse),
+            request);
     }
+
+
+    // =====================================================
+    // UPDATE
+    // =====================================================
 
     public async Task<ReviewResponseDTO> UpdateAsync(
         long customerId,
@@ -168,14 +275,16 @@ public class ReviewService : IReviewService
                 "Review request không được null.");
 
         // Rating phải từ 1 đến 5
-        if (request.Rating < 1 || request.Rating > 5)
+        if (request.Rating < 1 ||
+            request.Rating > 5)
         {
             throw new BadRequestException(
                 "Rating phải nằm trong khoảng từ 1 đến 5.");
         }
 
         var review =
-            await _unitOfWork.Reviews.GetByIdAsync(reviewId);
+            await _unitOfWork.Reviews
+                .GetByIdAsync(reviewId);
 
         if (review == null)
             throw new NotFoundException(
@@ -204,12 +313,18 @@ public class ReviewService : IReviewService
         return MapToResponse(review);
     }
 
+
+    // =====================================================
+    // DELETE
+    // =====================================================
+
     public async Task DeleteAsync(
         long customerId,
         long reviewId)
     {
         var review =
-            await _unitOfWork.Reviews.GetByIdAsync(reviewId);
+            await _unitOfWork.Reviews
+                .GetByIdAsync(reviewId);
 
         if (review == null)
             throw new NotFoundException(
@@ -226,6 +341,77 @@ public class ReviewService : IReviewService
 
         await _unitOfWork.SaveChangesAsync();
     }
+
+
+    // =====================================================
+    // PAGINATION VALIDATION
+    // =====================================================
+
+    private void ValidatePagination(
+        ReviewPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Pagination request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            throw new BadRequestException(
+                "Page phải lớn hơn hoặc bằng 1.");
+        }
+
+        if (request.PageSize < 1 ||
+            request.PageSize > 100)
+        {
+            throw new BadRequestException(
+                "PageSize phải nằm trong khoảng từ 1 đến 100.");
+        }
+    }
+
+
+    // =====================================================
+    // CREATE PAGED RESPONSE
+    // =====================================================
+
+    private PagedResponseDTO<ReviewResponseDTO>
+        CreatePagedResponse(
+            IEnumerable<ReviewResponseDTO> source,
+            ReviewPaginationRequestDTO request)
+    {
+        var totalItems =
+            source.Count();
+
+        var totalPages =
+            totalItems == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalItems /
+                    (double)request.PageSize);
+
+        var items =
+            source
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+        return new PagedResponseDTO<ReviewResponseDTO>
+        {
+            Items = items,
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
+        };
+    }
+
+
+    // =====================================================
+    // MAP
+    // =====================================================
 
     private ReviewResponseDTO MapToResponse(
         ReviewModel review)

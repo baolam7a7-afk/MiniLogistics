@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Order;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.Models;
@@ -15,10 +16,13 @@ public class OrderService : IOrderService
 
     private const decimal ShippingFee = 0m;
 
-    public OrderService(IUnitOfWork unitOfWork)
+
+    public OrderService(
+        IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
     }
+
 
     // =====================================================
     // CREATE ORDER
@@ -41,6 +45,7 @@ public class OrderService : IOrderService
                 "Order phải có ít nhất một sản phẩm.");
         }
 
+
         // ================================================
         // PAYMENT METHOD
         // ================================================
@@ -48,7 +53,9 @@ public class OrderService : IOrderService
         string paymentMethod =
             string.IsNullOrWhiteSpace(request.PaymentMethod)
                 ? "cod"
-                : request.PaymentMethod.Trim().ToLowerInvariant();
+                : request.PaymentMethod
+                    .Trim()
+                    .ToLowerInvariant();
 
         if (paymentMethod != "cod")
         {
@@ -56,12 +63,14 @@ public class OrderService : IOrderService
                 "Hiện tại Order chỉ hỗ trợ phương thức COD.");
         }
 
+
         // ================================================
         // CHECK CUSTOMER
         // ================================================
 
         var customer =
-            await _unitOfWork.Users.GetByIdAsync(customerId);
+            await _unitOfWork.Users.GetByIdAsync(
+                customerId);
 
         if (customer == null)
         {
@@ -74,6 +83,7 @@ public class OrderService : IOrderService
             throw new BadRequestException(
                 "Tài khoản Customer không hoạt động.");
         }
+
 
         // ================================================
         // CHECK ADDRESS
@@ -95,6 +105,7 @@ public class OrderService : IOrderService
                 "Bạn không có quyền sử dụng địa chỉ này.");
         }
 
+
         // ================================================
         // CHECK DUPLICATE VARIANT
         // ================================================
@@ -110,6 +121,7 @@ public class OrderService : IOrderService
                 "Không được có cùng ProductVariant nhiều lần trong Order.");
         }
 
+
         // ================================================
         // TRANSACTION
         // ================================================
@@ -124,6 +136,7 @@ public class OrderService : IOrderService
 
                 long? shopId = null;
 
+
                 // ========================================
                 // PROCESS ITEMS
                 // ========================================
@@ -135,6 +148,7 @@ public class OrderService : IOrderService
                         throw new BadRequestException(
                             "Quantity phải lớn hơn 0.");
                     }
+
 
                     // ------------------------------------
                     // GET VARIANT
@@ -151,6 +165,7 @@ public class OrderService : IOrderService
                             $"ProductVariant {requestItem.VariantId} không tồn tại.");
                     }
 
+
                     // ------------------------------------
                     // CHECK ACTIVE
                     // ------------------------------------
@@ -160,6 +175,7 @@ public class OrderService : IOrderService
                         throw new BadRequestException(
                             $"ProductVariant {variant.Id} hiện không hoạt động.");
                     }
+
 
                     // ------------------------------------
                     // GET PRODUCT
@@ -176,6 +192,7 @@ public class OrderService : IOrderService
                             $"Product {variant.ProductId} không tồn tại.");
                     }
 
+
                     // ------------------------------------
                     // CHECK PRODUCT ACTIVE
                     // ------------------------------------
@@ -185,6 +202,7 @@ public class OrderService : IOrderService
                         throw new BadRequestException(
                             $"Product {product.Id} hiện không được bán.");
                     }
+
 
                     // ------------------------------------
                     // SHOP
@@ -200,6 +218,7 @@ public class OrderService : IOrderService
                             "Một Order hiện tại chỉ được chứa sản phẩm của cùng một Shop.");
                     }
 
+
                     // ------------------------------------
                     // CALCULATE
                     // ------------------------------------
@@ -209,6 +228,7 @@ public class OrderService : IOrderService
                         requestItem.Quantity;
 
                     subtotal += lineTotal;
+
 
                     // ------------------------------------
                     // ORDER ITEM
@@ -242,6 +262,7 @@ public class OrderService : IOrderService
                     orderItems.Add(orderItem);
                 }
 
+
                 // ========================================
                 // SHOP MUST EXIST
                 // ========================================
@@ -254,13 +275,15 @@ public class OrderService : IOrderService
 
                 var shop =
                     await _unitOfWork.Shops
-                        .GetByIdAsync(shopId.Value);
+                        .GetByIdAsync(
+                            shopId.Value);
 
                 if (shop == null)
                 {
                     throw new NotFoundException(
                         "Shop không tồn tại.");
                 }
+
 
                 // ========================================
                 // RESERVE INVENTORY
@@ -273,11 +296,13 @@ public class OrderService : IOrderService
                         item.Quantity);
                 }
 
+
                 // ========================================
                 // DISCOUNT
                 // ========================================
 
                 decimal discountTotal = 0m;
+
 
                 // ========================================
                 // TOTAL
@@ -287,6 +312,7 @@ public class OrderService : IOrderService
                     subtotal
                     + ShippingFee
                     - discountTotal;
+
 
                 // ========================================
                 // CREATE ORDER
@@ -329,7 +355,8 @@ public class OrderService : IOrderService
                             paymentMethod,
 
                         Note =
-                            string.IsNullOrWhiteSpace(request.Note)
+                            string.IsNullOrWhiteSpace(
+                                request.Note)
                                 ? null
                                 : request.Note.Trim(),
 
@@ -340,6 +367,7 @@ public class OrderService : IOrderService
                             null
                     };
 
+
                 // ========================================
                 // ADD ORDER
                 // ========================================
@@ -348,6 +376,7 @@ public class OrderService : IOrderService
                     .AddAsync(order);
 
                 await _unitOfWork.SaveChangesAsync();
+
 
                 // ========================================
                 // ADD ORDER ITEMS
@@ -361,6 +390,7 @@ public class OrderService : IOrderService
                     await _unitOfWork.OrderItems
                         .AddAsync(item);
                 }
+
 
                 // ========================================
                 // ADD PAYMENT
@@ -397,6 +427,7 @@ public class OrderService : IOrderService
                 await _unitOfWork.PaymentTransactions
                     .AddAsync(payment);
 
+
                 // ========================================
                 // STATUS LOG
                 // ========================================
@@ -426,11 +457,13 @@ public class OrderService : IOrderService
                 await _unitOfWork.OrderStatusLogs
                     .AddAsync(statusLog);
 
+
                 // ========================================
                 // SAVE ALL
                 // ========================================
 
                 await _unitOfWork.SaveChangesAsync();
+
 
                 // ========================================
                 // RESPONSE
@@ -440,31 +473,134 @@ public class OrderService : IOrderService
             });
     }
 
+
     // =====================================================
-    // GET MY ORDERS
+    // GET MY ORDERS - CUSTOMER
+    // PAGINATION
     // =====================================================
 
-    public async Task<IEnumerable<OrderResponseDTO>>
-        GetMyOrdersAsync(long customerId)
+    public async Task<PagedResponseDTO<OrderResponseDTO>>
+        GetMyOrdersAsync(
+            long customerId,
+            OrderPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
+
         var orders =
             await _unitOfWork.Orders
                 .FindAsync(
                     x =>
-                        x.CustomerId
-                        == customerId);
+                        x.CustomerId ==
+                        customerId);
+
+
+        // ================================================
+        // FILTER STATUS
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            string status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.Status.ToLower() ==
+                        status)
+                    .ToList();
+        }
+
+
+        // ================================================
+        // SEARCH ORDER CODE
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            string search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.OrderCode
+                            .ToLower()
+                            .Contains(search))
+                    .ToList();
+        }
+
+
+        // ================================================
+        // ORDER BY
+        // ================================================
+
+        var orderedOrders =
+            orders
+                .OrderByDescending(
+                    x => x.PlacedAt)
+                .ToList();
+
+
+        // ================================================
+        // PAGINATION
+        // ================================================
+
+        int totalItems =
+            orderedOrders.Count;
+
+        int totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+        var pagedOrders =
+            orderedOrders
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+
+        // ================================================
+        // BUILD RESPONSE
+        // ================================================
 
         var result =
             new List<OrderResponseDTO>();
 
-        foreach (var order in orders)
+        foreach (var order in pagedOrders)
         {
             result.Add(
                 await BuildResponse(order));
         }
 
-        return result;
+
+        return new PagedResponseDTO<OrderResponseDTO>
+        {
+            Items =
+                result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
+
 
     // =====================================================
     // GET BY ID
@@ -478,7 +614,8 @@ public class OrderService : IOrderService
     {
         var order =
             await _unitOfWork.Orders
-                .GetByIdAsync(orderId);
+                .GetByIdAsync(
+                    orderId);
 
         if (order == null)
         {
@@ -494,69 +631,273 @@ public class OrderService : IOrderService
         return await BuildResponse(order);
     }
 
+
     // =====================================================
     // GET ALL - ADMIN
+    // PAGINATION
     // =====================================================
 
-    public async Task<IEnumerable<OrderResponseDTO>>
-        GetAllAsync()
+    public async Task<PagedResponseDTO<OrderResponseDTO>>
+        GetAllAsync(
+            OrderPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
+
         var orders =
             await _unitOfWork.Orders
                 .GetAllAsync();
 
+
+        // ================================================
+        // FILTER STATUS
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            string status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.Status.ToLower() ==
+                        status)
+                    .ToList();
+        }
+
+
+        // ================================================
+        // SEARCH ORDER CODE
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            string search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.OrderCode
+                            .ToLower()
+                            .Contains(search))
+                    .ToList();
+        }
+
+
+        // ================================================
+        // ORDER BY
+        // ================================================
+
+        var orderedOrders =
+            orders
+                .OrderByDescending(
+                    x => x.PlacedAt)
+                .ToList();
+
+
+        int totalItems =
+            orderedOrders.Count;
+
+        int totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+
+        var pagedOrders =
+            orderedOrders
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+
         var result =
             new List<OrderResponseDTO>();
 
-        foreach (var order in orders)
+        foreach (var order in pagedOrders)
         {
             result.Add(
                 await BuildResponse(order));
         }
 
-        return result;
+
+        return new PagedResponseDTO<OrderResponseDTO>
+        {
+            Items =
+                result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
 
+
     // =====================================================
-    // GET BY SHOP OWNER
+    // GET BY SHOP OWNER - SELLER
+    // PAGINATION
     // =====================================================
 
-    public async Task<IEnumerable<OrderResponseDTO>>
+    public async Task<PagedResponseDTO<OrderResponseDTO>>
         GetByShopOwnerAsync(
-            long sellerUserId)
+            long sellerUserId,
+            OrderPaginationRequestDTO request)
     {
+        ValidatePagination(request);
+
+
+        // ================================================
+        // GET SELLER SHOPS
+        // ================================================
+
         var shops =
             await _unitOfWork.Shops
                 .FindAsync(
                     x =>
-                        x.OwnerUserId
-                        == sellerUserId);
+                        x.OwnerUserId ==
+                        sellerUserId);
 
         var shopIds =
             shops
                 .Select(x => x.Id)
                 .ToHashSet();
 
+
+        // ================================================
+        // GET ORDERS
+        // ================================================
+
         var orders =
             await _unitOfWork.Orders
                 .GetAllAsync();
 
+        orders =
+            orders
+                .Where(x =>
+                    shopIds.Contains(
+                        x.ShopId))
+                .ToList();
+
+
+        // ================================================
+        // FILTER STATUS
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            string status =
+                request.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.Status.ToLower() ==
+                        status)
+                    .ToList();
+        }
+
+
+        // ================================================
+        // SEARCH ORDER CODE
+        // ================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            string search =
+                request.Search
+                    .Trim()
+                    .ToLowerInvariant();
+
+            orders =
+                orders
+                    .Where(x =>
+                        x.OrderCode
+                            .ToLower()
+                            .Contains(search))
+                    .ToList();
+        }
+
+
+        // ================================================
+        // ORDER BY
+        // ================================================
+
+        var orderedOrders =
+            orders
+                .OrderByDescending(
+                    x => x.PlacedAt)
+                .ToList();
+
+
+        int totalItems =
+            orderedOrders.Count;
+
+        int totalPages =
+            (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize);
+
+
+        var pagedOrders =
+            orderedOrders
+                .Skip(
+                    (request.Page - 1)
+                    * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+
+
+        // ================================================
+        // BUILD RESPONSE
+        // ================================================
+
         var result =
             new List<OrderResponseDTO>();
 
-        foreach (var order in orders)
+        foreach (var order in pagedOrders)
         {
-            if (!shopIds.Contains(order.ShopId))
-            {
-                continue;
-            }
-
             result.Add(
                 await BuildResponse(order));
         }
 
-        return result;
+
+        return new PagedResponseDTO<OrderResponseDTO>
+        {
+            Items =
+                result,
+
+            Page =
+                request.Page,
+
+            PageSize =
+                request.PageSize,
+
+            TotalItems =
+                totalItems,
+
+            TotalPages =
+                totalPages
+        };
     }
+
 
     // =====================================================
     // CANCEL BY CUSTOMER
@@ -573,7 +914,8 @@ public class OrderService : IOrderService
                 {
                     var order =
                         await _unitOfWork.Orders
-                            .GetByIdAsync(orderId);
+                            .GetByIdAsync(
+                                orderId);
 
                     if (order == null)
                     {
@@ -581,11 +923,14 @@ public class OrderService : IOrderService
                             "Order không tồn tại.");
                     }
 
-                    if (order.CustomerId != customerId)
+
+                    if (order.CustomerId !=
+                        customerId)
                     {
                         throw new ForbiddenException(
                             "Bạn không có quyền hủy Order này.");
                     }
+
 
                     if (order.Status !=
                         OrderStatuses.Pending)
@@ -594,12 +939,14 @@ public class OrderService : IOrderService
                             "Chỉ có thể hủy Order đang ở trạng thái pending.");
                     }
 
+
                     var items =
                         await _unitOfWork.OrderItems
                             .FindAsync(
                                 x =>
-                                    x.OrderId
-                                    == order.Id);
+                                    x.OrderId ==
+                                    order.Id);
+
 
                     foreach (var item in items)
                     {
@@ -608,26 +955,31 @@ public class OrderService : IOrderService
                             item.Quantity);
                     }
 
+
                     // ========================================
                     // RELEASE VOUCHER
                     // ========================================
 
-                    await ReleaseVoucher(order.Id);
+                    await ReleaseVoucher(
+                        order.Id);
+
 
                     // ========================================
                     // CANCEL PAYMENT
                     // ========================================
 
                     var payments =
-                        await _unitOfWork.PaymentTransactions
+                        await _unitOfWork
+                            .PaymentTransactions
                             .FindAsync(
                                 x =>
-                                    x.OrderId
-                                    == order.Id);
+                                    x.OrderId ==
+                                    order.Id);
 
                     foreach (var payment in payments)
                     {
-                        if (payment.Status == "pending")
+                        if (payment.Status ==
+                            "pending")
                         {
                             payment.Status =
                                 "cancelled";
@@ -635,10 +987,12 @@ public class OrderService : IOrderService
                             payment.PaidAt =
                                 null;
 
-                            _unitOfWork.PaymentTransactions
+                            _unitOfWork
+                                .PaymentTransactions
                                 .Update(payment);
                         }
                     }
+
 
                     string oldStatus =
                         order.Status;
@@ -651,6 +1005,7 @@ public class OrderService : IOrderService
 
                     _unitOfWork.Orders
                         .Update(order);
+
 
                     await _unitOfWork.OrderStatusLogs
                         .AddAsync(
@@ -675,14 +1030,18 @@ public class OrderService : IOrderService
                                     DateTime.UtcNow
                             });
 
+
                     await _unitOfWork.SaveChangesAsync();
 
-                    return await BuildResponse(order);
+                    return await BuildResponse(
+                        order);
                 });
     }
 
+
     // =====================================================
     // UPDATE STATUS
+    // SELLER / ADMIN
     // =====================================================
 
     public async Task<OrderResponseDTO>
@@ -702,9 +1061,11 @@ public class OrderService : IOrderService
                             "Request không được null.");
                     }
 
+
                     var order =
                         await _unitOfWork.Orders
-                            .GetByIdAsync(orderId);
+                            .GetByIdAsync(
+                                orderId);
 
                     if (order == null)
                     {
@@ -712,29 +1073,36 @@ public class OrderService : IOrderService
                             "Order không tồn tại.");
                     }
 
+
                     await CheckOrderAccess(
                         order,
                         actorUserId,
                         role);
 
-                    if (string.IsNullOrWhiteSpace(request.Status))
+
+                    if (string.IsNullOrWhiteSpace(
+                        request.Status))
                     {
                         throw new BadRequestException(
                             "Status không được để trống.");
                     }
+
 
                     string newStatus =
                         request.Status
                             .Trim()
                             .ToLowerInvariant();
 
+
                     ValidateStatusTransition(
                         order.Status,
                         newStatus,
                         role);
 
+
                     string oldStatus =
                         order.Status;
+
 
                     // ==================================
                     // CANCEL
@@ -744,11 +1112,13 @@ public class OrderService : IOrderService
                         OrderStatuses.Cancelled)
                     {
                         var items =
-                            await _unitOfWork.OrderItems
+                            await _unitOfWork
+                                .OrderItems
                                 .FindAsync(
                                     x =>
-                                        x.OrderId
-                                        == order.Id);
+                                        x.OrderId ==
+                                        order.Id);
+
 
                         foreach (var item in items)
                         {
@@ -757,26 +1127,31 @@ public class OrderService : IOrderService
                                 item.Quantity);
                         }
 
+
                         // ========================================
                         // RELEASE VOUCHER
                         // ========================================
 
-                        await ReleaseVoucher(order.Id);
+                        await ReleaseVoucher(
+                            order.Id);
+
 
                         // ========================================
                         // CANCEL PAYMENT
                         // ========================================
 
                         var payments =
-                            await _unitOfWork.PaymentTransactions
+                            await _unitOfWork
+                                .PaymentTransactions
                                 .FindAsync(
                                     x =>
-                                        x.OrderId
-                                        == order.Id);
+                                        x.OrderId ==
+                                        order.Id);
 
                         foreach (var payment in payments)
                         {
-                            if (payment.Status == "pending")
+                            if (payment.Status ==
+                                "pending")
                             {
                                 payment.Status =
                                     "cancelled";
@@ -784,11 +1159,13 @@ public class OrderService : IOrderService
                                 payment.PaidAt =
                                     null;
 
-                                _unitOfWork.PaymentTransactions
+                                _unitOfWork
+                                    .PaymentTransactions
                                     .Update(payment);
                             }
                         }
                     }
+
 
                     order.Status =
                         newStatus;
@@ -798,6 +1175,7 @@ public class OrderService : IOrderService
 
                     _unitOfWork.Orders
                         .Update(order);
+
 
                     await _unitOfWork.OrderStatusLogs
                         .AddAsync(
@@ -822,11 +1200,14 @@ public class OrderService : IOrderService
                                     DateTime.UtcNow
                             });
 
+
                     await _unitOfWork.SaveChangesAsync();
 
-                    return await BuildResponse(order);
+                    return await BuildResponse(
+                        order);
                 });
     }
+
 
     // =====================================================
     // RESERVE INVENTORY
@@ -842,15 +1223,17 @@ public class OrderService : IOrderService
                 "Quantity Reserve phải lớn hơn 0.");
         }
 
+
         var inventories =
             await _unitOfWork.Inventories
                 .FindAsync(
                     x =>
-                        x.ProductVariantId
-                        == variantId);
+                        x.ProductVariantId ==
+                        variantId);
 
         var inventory =
             inventories.FirstOrDefault();
+
 
         if (inventory == null)
         {
@@ -858,9 +1241,11 @@ public class OrderService : IOrderService
                 $"Inventory của Variant {variantId} không tồn tại.");
         }
 
+
         int available =
             inventory.Quantity
             - inventory.ReservedQuantity;
+
 
         if (quantity > available)
         {
@@ -868,17 +1253,20 @@ public class OrderService : IOrderService
                 $"Variant {variantId} không đủ tồn kho.");
         }
 
+
         inventory.ReservedQuantity +=
             quantity;
 
         inventory.UpdatedAt =
             DateTime.UtcNow;
 
+
         _unitOfWork.Inventories
             .Update(inventory);
 
         await _unitOfWork.SaveChangesAsync();
     }
+
 
     // =====================================================
     // RELEASE INVENTORY
@@ -894,21 +1282,24 @@ public class OrderService : IOrderService
                 "Quantity Release phải lớn hơn 0.");
         }
 
+
         var inventories =
             await _unitOfWork.Inventories
                 .FindAsync(
                     x =>
-                        x.ProductVariantId
-                        == variantId);
+                        x.ProductVariantId ==
+                        variantId);
 
         var inventory =
             inventories.FirstOrDefault();
+
 
         if (inventory == null)
         {
             throw new NotFoundException(
                 $"Inventory của Variant {variantId} không tồn tại.");
         }
+
 
         if (quantity >
             inventory.ReservedQuantity)
@@ -917,11 +1308,13 @@ public class OrderService : IOrderService
                 $"ReservedQuantity của Variant {variantId} không đủ.");
         }
 
+
         inventory.ReservedQuantity -=
             quantity;
 
         inventory.UpdatedAt =
             DateTime.UtcNow;
+
 
         _unitOfWork.Inventories
             .Update(inventory);
@@ -929,9 +1322,9 @@ public class OrderService : IOrderService
         await _unitOfWork.SaveChangesAsync();
     }
 
+
     // =====================================================
     // RELEASE VOUCHER
-    // DÙNG KHI CANCEL ORDER
     // =====================================================
 
     private async Task ReleaseVoucher(
@@ -941,7 +1334,9 @@ public class OrderService : IOrderService
             await _unitOfWork.OrderVouchers
                 .FindAsync(
                     x =>
-                        x.OrderId == orderId);
+                        x.OrderId ==
+                        orderId);
+
 
         foreach (var orderVoucher in orderVouchers)
         {
@@ -949,6 +1344,7 @@ public class OrderService : IOrderService
                 await _unitOfWork.Vouchers
                     .GetByIdAsync(
                         orderVoucher.VoucherId);
+
 
             if (voucher != null &&
                 voucher.UsedCount > 0)
@@ -959,10 +1355,12 @@ public class OrderService : IOrderService
                     .Update(voucher);
             }
 
+
             _unitOfWork.OrderVouchers
                 .Delete(orderVoucher);
         }
     }
+
 
     // =====================================================
     // CHECK ACCESS
@@ -974,16 +1372,28 @@ public class OrderService : IOrderService
         string role)
     {
         role =
-            role.Trim().ToLowerInvariant();
+            role.Trim()
+                .ToLowerInvariant();
+
+
+        // ================================================
+        // ADMIN
+        // ================================================
 
         if (role == "admin")
         {
             return;
         }
 
+
+        // ================================================
+        // CUSTOMER
+        // ================================================
+
         if (role == "customer")
         {
-            if (order.CustomerId != userId)
+            if (order.CustomerId !=
+                userId)
             {
                 throw new ForbiddenException(
                     "Bạn không có quyền truy cập Order này.");
@@ -992,14 +1402,23 @@ public class OrderService : IOrderService
             return;
         }
 
+
+        // ================================================
+        // SELLER
+        // ================================================
+
         if (role == "seller")
         {
             bool ownsShop =
                 await _unitOfWork.Shops
                     .AnyAsync(
                         x =>
-                            x.Id == order.ShopId
-                            && x.OwnerUserId == userId);
+                            x.Id ==
+                                order.ShopId
+                            &&
+                            x.OwnerUserId ==
+                                userId);
+
 
             if (!ownsShop)
             {
@@ -1010,9 +1429,11 @@ public class OrderService : IOrderService
             return;
         }
 
+
         throw new ForbiddenException(
             "Role không được phép truy cập Order.");
     }
+
 
     // =====================================================
     // STATUS TRANSITION
@@ -1024,13 +1445,24 @@ public class OrderService : IOrderService
         string role)
     {
         currentStatus =
-            currentStatus.Trim().ToLowerInvariant();
+            currentStatus
+                .Trim()
+                .ToLowerInvariant();
 
         newStatus =
-            newStatus.Trim().ToLowerInvariant();
+            newStatus
+                .Trim()
+                .ToLowerInvariant();
 
         role =
-            role.Trim().ToLowerInvariant();
+            role
+                .Trim()
+                .ToLowerInvariant();
+
+
+        // ================================================
+        // FINAL STATUS
+        // ================================================
 
         if (currentStatus ==
             OrderStatuses.Delivered)
@@ -1039,12 +1471,18 @@ public class OrderService : IOrderService
                 "Order đã delivered và không thể thay đổi.");
         }
 
+
         if (currentStatus ==
             OrderStatuses.Cancelled)
         {
             throw new BadRequestException(
                 "Order đã cancelled và không thể thay đổi.");
         }
+
+
+        // ================================================
+        // SELLER
+        // ================================================
 
         if (role == "seller")
         {
@@ -1081,6 +1519,7 @@ public class OrderService : IOrderService
                         OrderStatuses.Cancelled
                 );
 
+
             if (!valid)
             {
                 throw new BadRequestException(
@@ -1089,6 +1528,11 @@ public class OrderService : IOrderService
 
             return;
         }
+
+
+        // ================================================
+        // ADMIN
+        // ================================================
 
         if (role == "admin")
         {
@@ -1127,6 +1571,7 @@ public class OrderService : IOrderService
                         OrderStatuses.Cancelled
                 );
 
+
             if (!valid)
             {
                 throw new BadRequestException(
@@ -1136,16 +1581,19 @@ public class OrderService : IOrderService
             return;
         }
 
+
         throw new ForbiddenException(
             "Role không được phép thay đổi trạng thái Order.");
     }
+
 
     // =====================================================
     // BUILD RESPONSE
     // =====================================================
 
     private async Task<OrderResponseDTO>
-        BuildResponse(OrderModel order)
+        BuildResponse(
+            OrderModel order)
     {
         var result =
             new OrderResponseDTO
@@ -1196,6 +1644,7 @@ public class OrderService : IOrderService
                     order.UpdatedAt
             };
 
+
         // ================================================
         // ITEMS
         // ================================================
@@ -1204,39 +1653,42 @@ public class OrderService : IOrderService
             await _unitOfWork.OrderItems
                 .FindAsync(
                     x =>
-                        x.OrderId
-                        == order.Id);
+                        x.OrderId ==
+                        order.Id);
+
 
         result.Items =
-            items.Select(
-                x =>
-                    new OrderItemResponseDTO
-                    {
-                        Id =
-                            x.Id,
+            items
+                .Select(
+                    x =>
+                        new OrderItemResponseDTO
+                        {
+                            Id =
+                                x.Id,
 
-                        ProductId =
-                            x.ProductId,
+                            ProductId =
+                                x.ProductId,
 
-                        VariantId =
-                            x.VariantId,
+                            VariantId =
+                                x.VariantId,
 
-                        ProductName =
-                            x.ProductNameSnapshot,
+                            ProductName =
+                                x.ProductNameSnapshot,
 
-                        VariantName =
-                            x.VariantNameSnapshot,
+                            VariantName =
+                                x.VariantNameSnapshot,
 
-                        UnitPrice =
-                            x.UnitPrice,
+                            UnitPrice =
+                                x.UnitPrice,
 
-                        Quantity =
-                            x.Quantity,
+                            Quantity =
+                                x.Quantity,
 
-                        LineTotal =
-                            x.LineTotal
-                    })
+                            LineTotal =
+                                x.LineTotal
+                        })
                 .ToList();
+
 
         // ================================================
         // STATUS LOGS
@@ -1246,37 +1698,72 @@ public class OrderService : IOrderService
             await _unitOfWork.OrderStatusLogs
                 .FindAsync(
                     x =>
-                        x.OrderId
-                        == order.Id);
+                        x.OrderId ==
+                        order.Id);
+
 
         result.StatusLogs =
-            logs.Select(
-                x =>
-                    new OrderStatusLogResponseDTO
-                    {
-                        Id =
-                            x.Id,
+            logs
+                .Select(
+                    x =>
+                        new OrderStatusLogResponseDTO
+                        {
+                            Id =
+                                x.Id,
 
-                        FromStatus =
-                            x.FromStatus,
+                            FromStatus =
+                                x.FromStatus,
 
-                        ToStatus =
-                            x.ToStatus,
+                            ToStatus =
+                                x.ToStatus,
 
-                        Message =
-                            x.Message,
+                            Message =
+                                x.Message,
 
-                        CreatedByUserId =
-                            x.CreatedByUserId,
+                            CreatedByUserId =
+                                x.CreatedByUserId,
 
-                        CreatedAt =
-                            x.CreatedAt
-                    })
-                .OrderBy(x => x.CreatedAt)
+                            CreatedAt =
+                                x.CreatedAt
+                        })
+                .OrderBy(
+                    x => x.CreatedAt)
                 .ToList();
+
 
         return result;
     }
+
+
+    // =====================================================
+    // VALIDATE PAGINATION
+    // =====================================================
+
+    private void ValidatePagination(
+        OrderPaginationRequestDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException(
+                "Request không được null.");
+        }
+
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
+
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
+
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+    }
+
 
     // =====================================================
     // ORDER CODE

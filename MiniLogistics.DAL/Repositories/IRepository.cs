@@ -28,5 +28,17 @@ public interface IRepository<T>
     void Update(T entity);
 
     void Delete(T entity);
+
     IQueryable<T> Query();
+
+    // =====================================================
+    // PAGINATION
+    // =====================================================
+
+    Task<(IEnumerable<T> Items, int TotalItems)> GetPagedAsync(
+    int pageNumber,
+    int pageSize,
+    Expression<Func<T, bool>>? predicate = null,
+    Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null
+);
 }

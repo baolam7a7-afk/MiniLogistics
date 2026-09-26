@@ -128,4 +128,52 @@ public class Repository<T> : IRepository<T>
     {
         return _dbSet;
     }
+
+
+    // =====================================================
+    // PAGINATION
+    // =====================================================
+
+    public async Task<(IEnumerable<T> Items, int TotalItems)> GetPagedAsync(
+    int pageNumber,
+    int pageSize,
+    Expression<Func<T, bool>>? predicate = null,
+    Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null)
+    {
+        if (pageNumber < 1)
+        {
+            pageNumber = 1;
+        }
+
+        if (pageSize < 1)
+        {
+            pageSize = 10;
+        }
+
+        IQueryable<T> query = _dbSet
+            .AsNoTracking();
+
+        // WHERE
+        if (predicate != null)
+        {
+            query = query.Where(predicate);
+        }
+
+        // COUNT trước khi Skip/Take
+        var totalItems = await query.CountAsync();
+
+        // ORDER BY
+        if (orderBy != null)
+        {
+            query = orderBy(query);
+        }
+
+        // PAGINATION
+        var items = await query
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalItems);
+    }
 }

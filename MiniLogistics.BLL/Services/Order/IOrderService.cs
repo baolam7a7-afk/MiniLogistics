@@ -1,3 +1,4 @@
+using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Order;
 
 namespace MiniLogistics.BLL.Services.Order;
@@ -8,28 +9,25 @@ public interface IOrderService
         long customerId,
         CreateOrderDTO request);
 
-
-    Task<IEnumerable<OrderResponseDTO>> GetMyOrdersAsync(
-        long customerId);
-
+    Task<PagedResponseDTO<OrderResponseDTO>> GetMyOrdersAsync(
+        long customerId,
+        OrderPaginationRequestDTO request);
 
     Task<OrderResponseDTO> GetByIdAsync(
         long orderId,
         long userId,
         string role);
 
+    Task<PagedResponseDTO<OrderResponseDTO>> GetAllAsync(
+        OrderPaginationRequestDTO request);
 
-    Task<IEnumerable<OrderResponseDTO>> GetAllAsync();
-
-
-    Task<IEnumerable<OrderResponseDTO>> GetByShopOwnerAsync(
-        long sellerUserId);
-
+    Task<PagedResponseDTO<OrderResponseDTO>> GetByShopOwnerAsync(
+        long sellerUserId,
+        OrderPaginationRequestDTO request);
 
     Task<OrderResponseDTO> CancelAsync(
         long orderId,
         long customerId);
-
 
     Task<OrderResponseDTO> UpdateStatusAsync(
         long orderId,
