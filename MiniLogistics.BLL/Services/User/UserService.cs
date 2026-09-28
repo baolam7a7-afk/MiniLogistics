@@ -125,9 +125,9 @@ public class UserService : IUserService
                     .ToLowerInvariant();
 
 
-        // -------------------------------------------------
+        // =================================================
         // ROLE USER IDS
-        // -------------------------------------------------
+        // =================================================
 
         HashSet<long>? roleUserIds = null;
 
@@ -210,14 +210,18 @@ public class UserService : IUserService
                             string.IsNullOrWhiteSpace(search)
                             ||
                             user.Email.Contains(search)
-                            ||
-                            user.FullName.Contains(search)
-                            ||
-                            (
-                                user.Phone != null
-                                &&
-                                user.Phone.Contains(search)
-                            )
+||
+(
+    user.FullName != null
+    &&
+    user.FullName.Contains(search)
+)
+||
+(
+    user.Phone != null
+    &&
+    user.Phone.Contains(search)
+)
                         )
 
                         &&
@@ -626,6 +630,177 @@ public class UserService : IUserService
 
 
     // =====================================================
+    // GET MY PROFILE
+    // =====================================================
+
+    public async Task<UserResponseDTO?> GetMyProfileAsync(
+        long userId)
+    {
+        // -------------------------------------------------
+        // VALIDATE USER ID
+        // -------------------------------------------------
+
+        if (userId <= 0)
+        {
+            throw new BadRequestException(
+                "UserId không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // GET USER
+        // -------------------------------------------------
+
+        var user =
+            await _unitOfWork.Users
+                .GetByIdAsync(userId);
+
+
+        if (user == null)
+        {
+            return null;
+        }
+
+
+        // -------------------------------------------------
+        // MAP USER -> DTO
+        // -------------------------------------------------
+
+        return await MapToResponseAsync(user);
+    }
+
+
+    // =====================================================
+    // UPDATE MY PROFILE
+    // =====================================================
+
+    public async Task<UserResponseDTO> UpdateMyProfileAsync(
+        long userId,
+        UpdateMyProfileDTO request)
+    {
+        // -------------------------------------------------
+        // VALIDATE USER ID
+        // -------------------------------------------------
+
+        if (userId <= 0)
+        {
+            throw new BadRequestException(
+                "UserId không hợp lệ.");
+        }
+
+
+        // -------------------------------------------------
+        // VALIDATE REQUEST
+        // -------------------------------------------------
+
+        if (request == null)
+        {
+            throw new ArgumentNullException(
+                nameof(request));
+        }
+
+
+        // -------------------------------------------------
+        // VALIDATE FULL NAME
+        // -------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(
+                request.FullName))
+        {
+            throw new BadRequestException(
+                "Họ tên không được để trống.");
+        }
+
+
+        // -------------------------------------------------
+        // GET USER
+        // -------------------------------------------------
+
+        var user =
+            await _unitOfWork.Users
+                .GetByIdAsync(userId);
+
+
+        if (user == null)
+        {
+            throw new NotFoundException(
+                $"User {userId} không tồn tại.");
+        }
+
+
+        // -------------------------------------------------
+        // CHECK USER STATUS
+        // -------------------------------------------------
+
+        if (!string.Equals(
+                user.Status,
+                "active",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException(
+                "Tài khoản hiện không hoạt động.");
+        }
+
+
+        // -------------------------------------------------
+        // UPDATE FULL NAME
+        // -------------------------------------------------
+
+        user.FullName =
+            request.FullName.Trim();
+
+
+        // -------------------------------------------------
+        // UPDATE PHONE
+        // -------------------------------------------------
+
+        user.Phone =
+            string.IsNullOrWhiteSpace(
+                request.Phone)
+                ? null
+                : request.Phone.Trim();
+
+
+        // -------------------------------------------------
+        // UPDATE AVATAR URL
+        // -------------------------------------------------
+
+        user.AvatarUrl =
+            string.IsNullOrWhiteSpace(
+                request.AvatarUrl)
+                ? null
+                : request.AvatarUrl.Trim();
+
+
+        // -------------------------------------------------
+        // UPDATE TIMESTAMP
+        // -------------------------------------------------
+
+        user.UpdatedAt =
+            DateTime.UtcNow;
+
+
+        // -------------------------------------------------
+        // UPDATE DATABASE
+        // -------------------------------------------------
+
+        _unitOfWork.Users
+            .Update(user);
+
+
+        await _unitOfWork
+            .SaveChangesAsync();
+
+
+        // -------------------------------------------------
+        // RETURN UPDATED PROFILE
+        // -------------------------------------------------
+
+        return await MapToResponseAsync(user);
+    }
+
+
+    // =====================================================
     // GET ROLE NAMES
     // =====================================================
 
@@ -658,7 +833,7 @@ public class UserService : IUserService
 
 
             if (!string.IsNullOrWhiteSpace(
-                role.Name))
+                    role.Name))
             {
                 roleNames.Add(
                     role.Name);

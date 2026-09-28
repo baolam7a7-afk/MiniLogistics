@@ -2,58 +2,60 @@
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>MiniLogistics.Web</title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>MiniLogistics</title>
 
     <base href="/" />
 
-    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet"
+          href="css/theme.css" />
 
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet"
+          href="css/app.css" />
 
-    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet"
+          href="css/layout.css" />
 
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet"
+          href="css/components.css" />
 
-    <link href="MiniLogistics.Web.styles.css" rel="stylesheet" />
-    <link href="css/theme.css" rel="stylesheet" />
-    <link href="css/app.css" rel="stylesheet" />
-    <link href="css/layout.css" rel="stylesheet" />
-    <link href="css/components.css" rel="stylesheet" />
-    <link href="css/pages.css" rel="stylesheet" />
+    <link rel="stylesheet"
+          href="css/pages.css" />
 
-    <script type="importmap"></script>
+    <link rel="stylesheet"
+          href="css/auth.css" />
+
+    <script src="https://accounts.google.com/gsi/client"></script>
+
 </head>
 
 <body>
 
-    <!-- ========================================= -->
-    <!-- BLAZOR APP -->
-    <!-- ========================================= -->
-
     <div id="app">
 
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
+        <div class="loading-screen">
 
-        <div class="loading-progress-text"></div>
+            <div class="loading-spinner"></div>
+
+            <div class="loading-text">
+                MiniLogistics đang tải...
+            </div>
+
+        </div>
 
     </div>
 
-
-    <!-- ========================================= -->
-    <!-- BLAZOR ERROR -->
-    <!-- ========================================= -->
 
     <div id="blazor-error-ui">
 
         An unhandled error has occurred.
 
-        <a href="." class="reload">
+        <a href=".">
             Reload
         </a>
 
@@ -64,23 +66,7 @@
     </div>
 
 
-    <!-- ========================================= -->
-    <!-- GOOGLE IDENTITY SERVICES -->
-    <!-- ========================================= -->
-
-    <script src="https://accounts.google.com/gsi/client"></script>
-
-
-    <!-- ========================================= -->
-    <!-- MINI LOGISTICS GOOGLE AUTH -->
-    <!-- ========================================= -->
-
     <script src="google-auth.js"></script>
-
-
-    <!-- ========================================= -->
-    <!-- BLAZOR WEBASSEMBLY -->
-    <!-- ========================================= -->
 
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 

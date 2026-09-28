@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Microsoft.Extensions.FileProviders;
 
 using MiniLogistics.API.Middleware;
 
@@ -511,10 +512,20 @@ builder.Services.AddSwaggerGen(
 // 33. BUILD
 // =====================================================
 
-var app =
-    builder.Build();
 
+var app = builder.Build();
 
+// Dùng cùng một thư mục wwwroot với AvatarController.
+var webRootPath = Path.Combine(
+    app.Environment.ContentRootPath,
+    "wwwroot");
+
+Directory.CreateDirectory(webRootPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(webRootPath)
+});
 // =====================================================
 // 34. REQUEST LOGGING
 // =====================================================

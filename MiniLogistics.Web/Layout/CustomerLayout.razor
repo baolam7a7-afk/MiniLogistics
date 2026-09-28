@@ -1,0 +1,268 @@
+
+@inherits LayoutComponentBase
+@implements IDisposable
+
+@using MiniLogistics.Web.Models.User
+@using MiniLogistics.Web.Services.Auth
+@using MiniLogistics.Web.Services.User
+
+@inject AuthStateService AuthState
+@inject TokenStorageService TokenStorage
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<div class="customer-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="customer-sidebar">
+
+        <div class="customer-brand">
+            <div class="customer-brand-icon">M</div>
+            <div class="customer-brand-text">
+                <span class="customer-brand-name">MiniLogistics</span>
+                <span class="customer-brand-subtitle">Customer Portal</span>
+            </div>
+        </div>
+
+        <nav class="customer-nav">
+
+            <div class="customer-nav-section">MAIN</div>
+
+            <NavLink href="/products"
+                     class="customer-nav-item"
+                     Match="NavLinkMatch.All">
+                <span class="customer-nav-icon">▦</span>
+                <span>Products</span>
+            </NavLink>
+
+            <NavLink href="/dashboard"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">⌂</span>
+                <span>Dashboard</span>
+            </NavLink>
+
+            <NavLink href="/cart"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">🛒</span>
+                <span>My Cart</span>
+            </NavLink>
+
+            <NavLink href="/orders"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">▤</span>
+                <span>My Orders</span>
+            </NavLink>
+
+            <div class="customer-nav-section">ACCOUNT</div>
+
+            <NavLink href="/addresses"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">⌖</span>
+                <span>My Addresses</span>
+            </NavLink>
+
+            <NavLink href="/reviews"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">☆</span>
+                <span>My Reviews</span>
+            </NavLink>
+
+            <NavLink href="/profile"
+                     class="customer-nav-item">
+                <span class="customer-nav-icon">♙</span>
+                <span>My Profile</span>
+            </NavLink>
+
+        </nav>
+
+        <div class="customer-sidebar-footer">
+            <button type="button"
+                    class="customer-logout-button"
+                    @onclick="Logout">
+                <span class="customer-nav-icon">↪</span>
+                <span>Đăng xuất</span>
+            </button>
+        </div>
+
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="customer-main">
+
+        <!-- HEADER -->
+        <header class="customer-header">
+
+            <div class="customer-header-left">
+                <div class="customer-header-title">
+                    @GetPageTitle()
+                </div>
+
+                <div class="customer-header-subtitle">
+                    Chào mừng bạn đến với MiniLogistics
+                </div>
+            </div>
+
+            <div class="customer-header-right">
+
+                <div class="customer-user">
+
+                    @if (!string.IsNullOrWhiteSpace(
+                        AuthState.CurrentUser?.AvatarUrl))
+                    {
+                        <img src="@AuthState.CurrentUser.AvatarUrl"
+                             alt="Ảnh đại diện khách hàng"
+                             class="customer-user-avatar customer-user-avatar-image"
+                             @key="AuthState.CurrentUser.AvatarUrl" />
+                    }
+                    else
+                    {
+                        <div class="customer-user-avatar">
+                            @GetAvatarLetter()
+                        </div>
+                    }
+
+                    <div class="customer-user-info">
+                        <div class="customer-user-name">
+                            @GetDisplayName()
+                        </div>
+
+                        <div class="customer-user-role">
+                            Customer
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </header>
+
+        <!-- PAGE CONTENT -->
+        <section class="customer-content">
+            @Body
+        </section>
+
+    </main>
+
+</div>
+
+@code {
+    private bool isDisposed;
+    private bool isLoadingProfile;
+
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += HandleAuthStateChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomerProfileAsync();
+    }
+
+    private async Task LoadCustomerProfileAsync()
+    {
+        if (isLoadingProfile)
+            return;
+
+        isLoadingProfile = true;
+
+        try
+        {
+            var token = await TokenStorage.GetAccessTokenAsync();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            // Tải thông tin mới nhất từ API để lấy AvatarUrl.
+            var profile = await UserService.GetMyProfileAsync();
+
+            if (profile is not null)
+            {
+                AuthState.UpdateUserProfile(
+                    profile.FullName,
+                    profile.AvatarUrl);
+            }
+        }
+        catch (Exception)
+        {
+            // Giữ nguyên thông tin trong AuthState nếu API tạm thời lỗi.
+        }
+        finally
+        {
+            isLoadingProfile = false;
+        }
+    }
+
+    private void HandleAuthStateChanged()
+    {
+        if (isDisposed)
+            return;
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetDisplayName()
+    {
+        var name = AuthState.CurrentUser?.FullName;
+
+        if (!string.IsNullOrWhiteSpace(name))
+            return name;
+
+        return AuthState.CurrentUser?.Email ?? "Khách hàng";
+    }
+
+    private string GetAvatarLetter()
+    {
+        var name = AuthState.CurrentUser?.FullName;
+
+        if (string.IsNullOrWhiteSpace(name))
+            name = AuthState.CurrentUser?.Email;
+
+        if (string.IsNullOrWhiteSpace(name))
+            return "U";
+
+        return name.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private string GetPageTitle()
+    {
+        var relativePath = Navigation.ToBaseRelativePath(
+            Navigation.Uri);
+
+        var path = relativePath
+            .Split('?', '#')[0]
+            .Trim('/')
+            .ToLowerInvariant();
+
+        return path switch
+        {
+            "dashboard" => "Dashboard",
+            "products" => "Products",
+            "cart" => "My Cart",
+            "orders" => "My Orders",
+            "addresses" => "My Addresses",
+            "reviews" => "My Reviews",
+            "profile" => "My Profile",
+            _ => "Customer Portal"
+        };
+    }
+
+    private async Task Logout()
+    {
+        await TokenStorage.ClearAsync();
+
+        AuthState.Logout();
+
+        Navigation.NavigateTo("/login", true);
+    }
+
+    public void Dispose()
+    {
+        isDisposed = true;
+        AuthState.OnChange -= HandleAuthStateChanged;
+    }
+}

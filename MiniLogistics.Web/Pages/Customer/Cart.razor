@@ -1,0 +1,534 @@
+@page "/cart"
+@layout CustomerLayout
+
+@using MiniLogistics.Web.Models.Cart
+@using MiniLogistics.Web.Services.Cart
+
+@inject CartService CartService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Giỏ hàng</PageTitle>
+
+<div class="customer-cart">
+
+    <!-- HEADER -->
+    <div class="customer-page-header">
+
+        <div>
+            <h1 class="customer-page-title">
+                Giỏ hàng
+            </h1>
+
+            <p class="customer-page-description">
+                Kiểm tra và quản lý các sản phẩm trong giỏ hàng của bạn.
+            </p>
+        </div>
+
+    </div>
+
+
+    @if (isLoading)
+    {
+        <div class="cart-loading">
+
+            <div class="loading-spinner"></div>
+
+            <p>
+                Đang tải giỏ hàng...
+            </p>
+
+        </div>
+    }
+    else if (cart == null)
+    {
+        <div class="cart-error">
+
+            <h3>
+                Không thể tải giỏ hàng
+            </h3>
+
+            <p>
+                Vui lòng đăng nhập lại hoặc thử lại.
+            </p>
+
+            <button type="button"
+                    class="app-button app-button-primary"
+                    @onclick="LoadCartAsync">
+                Thử lại
+            </button>
+
+        </div>
+    }
+    else if (cart.Items.Count == 0)
+    {
+        <!-- EMPTY CART -->
+
+        <div class="cart-empty">
+
+            <div class="cart-empty-icon">
+                🛒
+            </div>
+
+            <h2>
+                Giỏ hàng đang trống
+            </h2>
+
+            <p>
+                Bạn chưa có sản phẩm nào trong giỏ hàng.
+            </p>
+
+            <button type="button"
+                    class="app-button app-button-primary"
+                    @onclick="GoToProducts">
+                Tiếp tục mua sắm
+            </button>
+
+        </div>
+    }
+    else
+    {
+        <!-- CART CONTENT -->
+
+        <div class="cart-layout">
+
+            <!-- ITEMS -->
+
+            <div class="cart-items-section">
+
+                <div class="cart-section-header">
+
+                    <h2>
+                        Sản phẩm
+                    </h2>
+
+                    <span>
+                        @cart.Items.Count sản phẩm
+                    </span>
+
+                </div>
+
+
+                @foreach (var item in cart.Items)
+                {
+                    <div class="cart-item">
+
+                        <!-- IMAGE -->
+
+                        <div class="cart-item-image">
+                            <span>📦</span>
+                        </div>
+
+
+                        <!-- INFORMATION -->
+
+                        <div class="cart-item-info">
+
+                            <h3>
+                                @item.ProductName
+                            </h3>
+
+                            <div class="cart-item-variant">
+                                @item.VariantName
+                            </div>
+
+                            <div class="cart-item-sku">
+                                SKU: @item.Sku
+                            </div>
+
+                            <div class="cart-item-price">
+                                @FormatPrice(item.Price)
+                            </div>
+
+                        </div>
+
+
+                        <!-- QUANTITY -->
+
+                        <div class="cart-item-quantity">
+
+                            <span class="quantity-label">
+                                Số lượng
+                            </span>
+
+                            <div class="quantity-control">
+
+                                <button type="button"
+                                        class="quantity-button"
+                                        disabled="@IsUpdating(item.Id)"
+                                        @onclick="() => DecreaseQuantityAsync(item)">
+                                    −
+                                </button>
+
+                                <span class="quantity-value">
+                                    @item.Quantity
+                                </span>
+
+                                <button type="button"
+                                        class="quantity-button"
+                                        disabled="@IsUpdating(item.Id)"
+                                        @onclick="() => IncreaseQuantityAsync(item)">
+                                    +
+                                </button>
+
+                            </div>
+
+                            <span class="cart-available-stock">
+                                Còn @item.AvailableQuantity
+                            </span>
+
+                        </div>
+
+
+                        <!-- TOTAL -->
+
+                        <div class="cart-item-total">
+
+                            <strong>
+                                @FormatPrice(item.TotalPrice)
+                            </strong>
+
+                        </div>
+
+
+                        <!-- DELETE -->
+
+                        <div class="cart-item-actions">
+
+                            <button type="button"
+                                    class="cart-remove-button"
+                                    disabled="@IsUpdating(item.Id)"
+                                    @onclick="() => RemoveItemAsync(item)">
+                                🗑
+                            </button>
+
+                        </div>
+
+                    </div>
+                }
+
+
+                <!-- CLEAR CART -->
+
+                <div class="cart-clear-section">
+
+                    <button type="button"
+                            class="app-button app-button-secondary"
+                            @onclick="ClearCartAsync">
+                        Xóa toàn bộ giỏ hàng
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- SUMMARY -->
+
+            <aside class="cart-summary">
+
+                <h2>
+                    Tóm tắt đơn hàng
+                </h2>
+
+                <div class="cart-summary-row">
+
+                    <span>
+                        Tạm tính
+                    </span>
+
+                    <strong>
+                        @FormatPrice(cart.TotalAmount)
+                    </strong>
+
+                </div>
+
+                <div class="cart-summary-row">
+
+                    <span>
+                        Phí vận chuyển
+                    </span>
+
+                    <span class="cart-free-shipping">
+                        Chưa tính
+                    </span>
+
+                </div>
+
+                <div class="cart-summary-divider"></div>
+
+                <div class="cart-summary-total">
+
+                    <span>
+                        Tổng cộng
+                    </span>
+
+                    <strong>
+                        @FormatPrice(cart.TotalAmount)
+                    </strong>
+
+                </div>
+
+                <button type="button"
+                        class="app-button app-button-primary cart-checkout-button"
+                        @onclick="GoToCheckout">
+                    Tiến hành thanh toán
+                </button>
+
+                <button type="button"
+                        class="app-button app-button-secondary cart-continue-button"
+                        @onclick="GoToProducts">
+                    ← Tiếp tục mua sắm
+                </button>
+
+            </aside>
+
+        </div>
+    }
+
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="cart-message @(messageSuccess ? "success" : "error")">
+
+            @message
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private CartResponse? cart;
+
+    private bool isLoading = true;
+
+    private readonly HashSet<long> updatingItems = new();
+
+    private string message = string.Empty;
+
+    private bool messageSuccess;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCartAsync();
+    }
+
+
+    private async Task LoadCartAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            message = string.Empty;
+
+            cart = await CartService.GetCartAsync();
+
+            if (cart == null)
+            {
+                messageSuccess = false;
+                message = "Không thể tải giỏ hàng.";
+            }
+        }
+        catch (Exception ex)
+        {
+            cart = null;
+
+            messageSuccess = false;
+            message = $"Có lỗi khi tải giỏ hàng: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    private async Task IncreaseQuantityAsync(
+        CartItem item)
+    {
+        if (item.Quantity >= item.AvailableQuantity)
+        {
+            ShowError("Số lượng đã đạt giới hạn tồn kho.");
+            return;
+        }
+
+        await UpdateQuantityAsync(
+            item,
+            item.Quantity + 1);
+    }
+
+
+    private async Task DecreaseQuantityAsync(
+        CartItem item)
+    {
+        if (item.Quantity <= 1)
+        {
+            return;
+        }
+
+        await UpdateQuantityAsync(
+            item,
+            item.Quantity - 1);
+    }
+
+
+    private async Task UpdateQuantityAsync(
+        CartItem item,
+        int quantity)
+    {
+        if (quantity <= 0)
+        {
+            return;
+        }
+
+        if (quantity > item.AvailableQuantity)
+        {
+            ShowError("Số lượng vượt quá tồn kho.");
+            return;
+        }
+
+        try
+        {
+            updatingItems.Add(item.Id);
+
+            var success =
+                await CartService.UpdateItemQuantityAsync(
+                    item.Id,
+                    quantity);
+
+            if (success)
+            {
+                await LoadCartAsync();
+
+                ShowSuccess("Đã cập nhật số lượng.");
+            }
+            else
+            {
+                ShowError(
+                    "Không thể cập nhật số lượng sản phẩm.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                $"Có lỗi khi cập nhật: {ex.Message}");
+        }
+        finally
+        {
+            updatingItems.Remove(item.Id);
+        }
+    }
+
+
+    private async Task RemoveItemAsync(
+        CartItem item)
+    {
+        try
+        {
+            updatingItems.Add(item.Id);
+
+            var success =
+                await CartService.RemoveItemAsync(
+                    item.Id);
+
+            if (success)
+            {
+                await LoadCartAsync();
+
+                ShowSuccess(
+                    $"Đã xóa {item.ProductName} khỏi giỏ hàng.");
+            }
+            else
+            {
+                ShowError(
+                    "Không thể xóa sản phẩm.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                $"Có lỗi khi xóa sản phẩm: {ex.Message}");
+        }
+        finally
+        {
+            updatingItems.Remove(item.Id);
+        }
+    }
+
+
+    private async Task ClearCartAsync()
+    {
+        if (cart == null ||
+            cart.Items.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var success =
+                await CartService.ClearCartAsync();
+
+            if (success)
+            {
+                await LoadCartAsync();
+
+                ShowSuccess(
+                    "Đã xóa toàn bộ giỏ hàng.");
+            }
+            else
+            {
+                ShowError(
+                    "Không thể xóa giỏ hàng.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                $"Có lỗi khi xóa giỏ hàng: {ex.Message}");
+        }
+    }
+
+
+    private bool IsUpdating(long itemId)
+    {
+        return updatingItems.Contains(itemId);
+    }
+
+
+    private void ShowSuccess(string text)
+    {
+        messageSuccess = true;
+        message = text;
+    }
+
+
+    private void ShowError(string text)
+    {
+        messageSuccess = false;
+        message = text;
+    }
+
+
+    private string FormatPrice(decimal price)
+    {
+        return price.ToString("N0") + " ₫";
+    }
+
+
+    private void GoToProducts()
+    {
+        NavigationManager.NavigateTo("/products");
+    }
+
+
+    private void GoToCheckout()
+    {
+        NavigationManager.NavigateTo("/checkout");
+    }
+
+}

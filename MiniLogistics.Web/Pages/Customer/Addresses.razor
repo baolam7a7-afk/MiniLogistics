@@ -1,0 +1,493 @@
+@page "/addresses"
+@layout MiniLogistics.Web.Layout.CustomerLayout
+
+@using MiniLogistics.Web.Models.Address
+@using MiniLogistics.Web.Services.Address
+
+@inject AddressService AddressService
+
+<PageTitle>Địa chỉ của tôi</PageTitle>
+
+<div class="page addresses-page">
+
+    <div class="page-header">
+        <div>
+            <h1>Địa chỉ của tôi</h1>
+            <p class="page-description">
+                Quản lý địa chỉ nhận hàng của bạn
+            </p>
+        </div>
+
+        <button class="app-button app-button-primary"
+                @onclick="OpenCreateForm">
+            + Thêm địa chỉ
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="app-card address-loading">
+            <div class="loading-spinner"></div>
+            <p>Đang tải danh sách địa chỉ...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="app-alert app-alert-danger">
+            @errorMessage
+        </div>
+    }
+    else if (addresses.Count == 0)
+    {
+        <div class="app-card address-empty">
+
+            <div class="empty-icon">
+                📍
+            </div>
+
+            <h2>Chưa có địa chỉ</h2>
+
+            <p>
+                Bạn chưa có địa chỉ nhận hàng nào.
+            </p>
+
+            <button class="app-button app-button-primary"
+                    @onclick="OpenCreateForm">
+                + Thêm địa chỉ đầu tiên
+            </button>
+
+        </div>
+    }
+    else
+    {
+        <div class="address-list">
+
+            @foreach (var address in addresses)
+            {
+                <div class="app-card address-card">
+
+                    <div class="address-card-header">
+
+                        <div class="address-receiver">
+
+                            <div class="receiver-name">
+                                @address.ReceiverName
+
+                                @if (address.IsDefault)
+                                {
+                                    <span class="default-badge">
+                                        Mặc định
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="receiver-phone">
+                                @address.ReceiverPhone
+                            </div>
+
+                        </div>
+
+                        <div class="address-actions">
+
+                            <button class="app-button app-button-secondary"
+                                    @onclick="() => OpenEditForm(address)">
+                                Sửa
+                            </button>
+
+                            <button class="app-button app-button-danger"
+                                    @onclick="() => DeleteAddressAsync(address)">
+                                Xóa
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <div class="address-card-body">
+
+                        <div class="address-line">
+                            @address.Line1
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(address.Line2))
+                        {
+                            <div class="address-line">
+                                @address.Line2
+                            </div>
+                        }
+
+                        <div class="address-line">
+                            @address.Ward,
+                            @address.District,
+                            @address.Province
+                        </div>
+
+                        <div class="address-line address-country">
+                            @address.Country
+                            @if (!string.IsNullOrWhiteSpace(address.PostalCode))
+                            {
+                                <span> - @address.PostalCode</span>
+                            }
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+@if (showForm)
+{
+    <div class="address-modal-overlay">
+
+        <div class="address-modal">
+
+            <div class="address-modal-header">
+
+                <div>
+                    <h2>
+                        @(editingAddress == null
+                            ? "Thêm địa chỉ"
+                            : "Chỉnh sửa địa chỉ")
+                    </h2>
+
+                    <p>
+                        Nhập thông tin địa chỉ nhận hàng
+                    </p>
+                </div>
+
+                <button class="modal-close-button"
+                        @onclick="CloseForm">
+                    ×
+                </button>
+
+            </div>
+
+            <div class="address-form">
+
+                <div class="form-row">
+
+                    <div class="form-group">
+                        <label>Người nhận</label>
+
+                        <input class="app-input"
+                               @bind="form.ReceiverName"
+                               placeholder="Nguyen Van A" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Số điện thoại</label>
+
+                        <input class="app-input"
+                               @bind="form.ReceiverPhone"
+                               placeholder="0901234567" />
+                    </div>
+
+                </div>
+
+                <div class="form-group">
+                    <label>Địa chỉ</label>
+
+                    <input class="app-input"
+                           @bind="form.Line1"
+                           placeholder="Số nhà, tên đường" />
+                </div>
+
+                <div class="form-group">
+                    <label>Địa chỉ bổ sung</label>
+
+                    <input class="app-input"
+                           @bind="form.Line2"
+                           placeholder="Tòa nhà, căn hộ..." />
+                </div>
+
+                <div class="form-row">
+
+                    <div class="form-group">
+                        <label>Phường/Xã</label>
+
+                        <input class="app-input"
+                               @bind="form.Ward"
+                               placeholder="Ben Thanh" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Quận/Huyện</label>
+
+                        <input class="app-input"
+                               @bind="form.District"
+                               placeholder="Quan 1" />
+                    </div>
+
+                </div>
+
+                <div class="form-row">
+
+                    <div class="form-group">
+                        <label>Tỉnh/Thành phố</label>
+
+                        <input class="app-input"
+                               @bind="form.Province"
+                               placeholder="Ho Chi Minh" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Mã bưu chính</label>
+
+                        <input class="app-input"
+                               @bind="form.PostalCode"
+                               placeholder="700000" />
+                    </div>
+
+                </div>
+
+                <div class="form-group">
+                    <label>Quốc gia</label>
+
+                    <input class="app-input"
+                           value="VN"
+                           readonly />
+                </div>
+
+                <label class="default-checkbox">
+
+                    <input type="checkbox"
+                           @bind="form.IsDefault" />
+
+                    <span>
+                        Đặt làm địa chỉ mặc định
+                    </span>
+
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(formError))
+                {
+                    <div class="app-alert app-alert-danger">
+                        @formError
+                    </div>
+                }
+
+                <div class="address-form-actions">
+
+                    <button class="app-button app-button-secondary"
+                            @onclick="CloseForm"
+                            disabled="@isSaving">
+                        Hủy
+                    </button>
+
+                    <button class="app-button app-button-primary"
+                            @onclick="SaveAddressAsync"
+                            disabled="@isSaving">
+
+                        @(isSaving
+                            ? "Đang lưu..."
+                            : "Lưu địa chỉ")
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+@code {
+
+    private List<Address> addresses = new();
+
+    private bool isLoading;
+    private bool showForm;
+    private bool isSaving;
+
+    private string? errorMessage;
+    private string? formError;
+
+    private Address? editingAddress;
+
+    private CreateAddressRequest form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAddressesAsync();
+    }
+
+    private async Task LoadAddressesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result =
+                await AddressService.GetAddressesAsync();
+
+            if (result == null)
+            {
+                errorMessage =
+                    "Không thể tải danh sách địa chỉ.";
+                return;
+            }
+
+            addresses = result;
+        }
+        catch
+        {
+            errorMessage =
+                "Đã xảy ra lỗi khi tải địa chỉ.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateForm()
+    {
+        editingAddress = null;
+
+        form = new CreateAddressRequest
+        {
+            Country = "VN",
+            IsDefault = addresses.Count == 0
+        };
+
+        formError = null;
+        showForm = true;
+    }
+
+    private void OpenEditForm(Address address)
+    {
+        editingAddress = address;
+
+        form = new CreateAddressRequest
+        {
+            ReceiverName = address.ReceiverName,
+            ReceiverPhone = address.ReceiverPhone,
+            Line1 = address.Line1,
+            Line2 = address.Line2 ?? string.Empty,
+            Ward = address.Ward ?? string.Empty,
+            District = address.District ?? string.Empty,
+            Province = address.Province ?? string.Empty,
+            Country = address.Country ?? "VN",
+            PostalCode = address.PostalCode ?? string.Empty,
+            IsDefault = address.IsDefault
+        };
+
+        formError = null;
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        showForm = false;
+        editingAddress = null;
+        formError = null;
+    }
+
+    private async Task SaveAddressAsync()
+    {
+        formError = null;
+
+        if (string.IsNullOrWhiteSpace(form.ReceiverName))
+        {
+            formError = "Vui lòng nhập tên người nhận.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(form.ReceiverPhone))
+        {
+            formError = "Vui lòng nhập số điện thoại.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(form.Line1))
+        {
+            formError = "Vui lòng nhập địa chỉ.";
+            return;
+        }
+
+        form.Country = "VN";
+
+        isSaving = true;
+
+        try
+        {
+            bool success;
+
+            if (editingAddress == null)
+            {
+                success =
+                    await AddressService.CreateAddressAsync(form);
+            }
+            else
+            {
+                var updateRequest = new UpdateAddressRequest
+                {
+                    ReceiverName = form.ReceiverName,
+                    ReceiverPhone = form.ReceiverPhone,
+                    Line1 = form.Line1,
+                    Line2 = form.Line2,
+                    Ward = form.Ward,
+                    District = form.District,
+                    Province = form.Province,
+                    Country = "VN",
+                    PostalCode = form.PostalCode,
+                    IsDefault = form.IsDefault
+                };
+
+                success =
+                    await AddressService.UpdateAddressAsync(
+                        editingAddress.Id,
+                        updateRequest);
+            }
+
+            if (!success)
+            {
+                formError =
+                    "Không thể lưu địa chỉ.";
+                return;
+            }
+
+            showForm = false;
+            editingAddress = null;
+
+            await LoadAddressesAsync();
+        }
+        catch
+        {
+            formError =
+                "Đã xảy ra lỗi khi lưu địa chỉ.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteAddressAsync(Address address)
+    {
+        var success =
+            await AddressService.DeleteAddressAsync(address.Id);
+
+        if (!success)
+        {
+            errorMessage =
+                "Không thể xóa địa chỉ.";
+            return;
+        }
+
+        await LoadAddressesAsync();
+    }
+}

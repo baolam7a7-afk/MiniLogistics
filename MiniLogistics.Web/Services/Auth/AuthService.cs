@@ -112,25 +112,23 @@ public class AuthService
     // CHANGE PASSWORD
     // =========================================================
 
+
     public async Task<bool> ChangePasswordAsync(
         ChangePasswordRequest request,
         string accessToken)
     {
-        using var httpRequest =
-            new HttpRequestMessage(
-                HttpMethod.Post,
-                "api/auth/change-password");
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            "api/auth/change-password");
 
         httpRequest.Headers.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue(
                 "Bearer",
                 accessToken);
 
-        httpRequest.Content =
-            JsonContent.Create(request);
+        httpRequest.Content = JsonContent.Create(request);
 
-        var response =
-            await _httpClient.SendAsync(httpRequest);
+        var response = await _httpClient.SendAsync(httpRequest);
 
         return response.IsSuccessStatusCode;
     }

@@ -393,76 +393,40 @@
     // NAVIGATE BY ROLE
     // =========================================================
 
-    private void NavigateByRole(
-        List<string> roles)
+    
+    private void NavigateByRole(List<string> roles)
     {
-        // =====================================================
-        // Không có role
-        // =====================================================
-
-        if (roles == null ||
-            roles.Count == 0)
+        if (roles == null || roles.Count == 0)
         {
             Navigation.NavigateTo("/");
-
             return;
         }
 
-
-        // =====================================================
-        // Lấy role đầu tiên
-        // =====================================================
-
-        var role =
-            roles
-                .FirstOrDefault()?
-                .Trim()
-                .ToLowerInvariant();
-
-
-        // =====================================================
-        // NAVIGATE
-        // =====================================================
+        var role = roles
+            .FirstOrDefault()?
+            .Trim()
+            .ToLowerInvariant();
 
         switch (role)
         {
             case "admin":
-
-                Navigation.NavigateTo(
-                    "/admin");
-
+                Navigation.NavigateTo("/admin");
                 break;
-
 
             case "seller":
-
-                Navigation.NavigateTo(
-                    "/seller");
-
+                Navigation.NavigateTo("/seller");
                 break;
-
 
             case "shipper":
-
-                Navigation.NavigateTo(
-                    "/shipper");
-
+                Navigation.NavigateTo("/shipper");
                 break;
-
 
             case "customer":
-
-                Navigation.NavigateTo(
-                    "/");
-
+                Navigation.NavigateTo("/products");
                 break;
 
-
             default:
-
-                Navigation.NavigateTo(
-                    "/");
-
+                Navigation.NavigateTo("/");
                 break;
         }
     }

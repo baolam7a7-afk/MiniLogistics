@@ -1,6 +1,12 @@
-/* ========================================
-   APP LAYOUT
-   ======================================== */
+/* =========================================================
+   MINI LOGISTICS - LAYOUT
+   Main Layout + Customer Layout
+   ========================================================= */
+
+
+/* =========================================================
+   1. APP LAYOUT
+   ========================================================= */
 
 .app-layout {
     display: flex;
@@ -9,9 +15,9 @@
 }
 
 
-/* ========================================
-   SIDEBAR
-   ======================================== */
+/* =========================================================
+   2. DEFAULT SIDEBAR
+   ========================================================= */
 
 .app-sidebar {
     position: fixed;
@@ -25,18 +31,19 @@
     flex-direction: column;
 
     background: var(--sidebar-background);
-
     border-right: 1px solid var(--border);
 
     color: var(--sidebar-text);
 
     z-index: 100;
+
+    overflow-y: auto;
 }
 
 
-/* ========================================
-   BRAND
-   ======================================== */
+/* =========================================================
+   3. DEFAULT SIDEBAR BRAND
+   ========================================================= */
 
 .sidebar-brand {
     height: var(--header-height);
@@ -45,7 +52,6 @@
     align-items: center;
 
     gap: 12px;
-
     padding: 0 20px;
 
     border-bottom: 1px solid var(--border);
@@ -54,6 +60,8 @@
     font-weight: 700;
 
     color: var(--text-white);
+
+    box-sizing: border-box;
 }
 
 .sidebar-brand-icon {
@@ -67,7 +75,6 @@
     border-radius: var(--radius-md);
 
     background: var(--primary);
-
     color: white;
 
     font-weight: 700;
@@ -76,9 +83,9 @@
 }
 
 
-/* ========================================
-   SIDEBAR NAV
-   ======================================== */
+/* =========================================================
+   4. DEFAULT SIDEBAR NAV
+   ========================================================= */
 
 .sidebar-nav {
     flex: 1;
@@ -94,18 +101,12 @@
     margin: 8px 0 10px;
 
     font-size: 11px;
-
     font-weight: 700;
 
-    color: #64748b;
+    color: var(--text-muted);
 
     letter-spacing: 0.08em;
 }
-
-
-/* ========================================
-   SIDEBAR LINK
-   ======================================== */
 
 .sidebar-link {
     display: flex;
@@ -117,7 +118,6 @@
     min-height: 44px;
 
     padding: 0 12px;
-
     margin-bottom: 4px;
 
     border-radius: var(--radius-md);
@@ -130,11 +130,12 @@
         background 0.2s ease,
         color 0.2s ease,
         transform 0.2s ease;
+
+    box-sizing: border-box;
 }
 
 .sidebar-link:hover {
     background: var(--sidebar-hover);
-
     color: var(--text-white);
 
     transform: translateX(2px);
@@ -142,7 +143,6 @@
 
 .sidebar-link.active {
     background: var(--sidebar-active);
-
     color: var(--sidebar-text-active);
 
     box-shadow:
@@ -158,9 +158,9 @@
 }
 
 
-/* ========================================
-   DIVIDER
-   ======================================== */
+/* =========================================================
+   5. DEFAULT SIDEBAR DIVIDER
+   ========================================================= */
 
 .sidebar-divider {
     height: 1px;
@@ -171,9 +171,9 @@
 }
 
 
-/* ========================================
-   SIDEBAR FOOTER
-   ======================================== */
+/* =========================================================
+   6. DEFAULT SIDEBAR FOOTER
+   ========================================================= */
 
 .sidebar-footer {
     padding: 12px;
@@ -193,7 +193,6 @@
     padding: 0 12px;
 
     border: none;
-
     border-radius: var(--radius-md);
 
     background: transparent;
@@ -203,22 +202,22 @@
     cursor: pointer;
 
     font: inherit;
-
     text-align: left;
 
-    transition: 0.2s ease;
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
 }
 
 .sidebar-logout:hover {
     background: rgba(239, 68, 68, 0.12);
-
     color: #fca5a5;
 }
 
 
-/* ========================================
-   MAIN
-   ======================================== */
+/* =========================================================
+   7. DEFAULT MAIN
+   ========================================================= */
 
 .app-main {
     flex: 1;
@@ -231,15 +230,16 @@
 }
 
 
-/* ========================================
-   HEADER
-   ======================================== */
+/* =========================================================
+   8. DEFAULT HEADER
+   ========================================================= */
 
 .app-header {
     position: sticky;
     top: 0;
 
     height: var(--header-height);
+    min-height: var(--header-height);
 
     display: flex;
     align-items: center;
@@ -247,13 +247,15 @@
 
     padding: 0 28px;
 
-    background: rgba(17, 24, 39, 0.92);
+    background: rgba(17, 24, 39, 0.96);
 
     backdrop-filter: blur(10px);
 
     border-bottom: 1px solid var(--border);
 
     z-index: 50;
+
+    box-sizing: border-box;
 }
 
 .header-left {
@@ -277,9 +279,9 @@
 }
 
 
-/* ========================================
-   HEADER NOTIFICATION
-   ======================================== */
+/* =========================================================
+   9. DEFAULT HEADER NOTIFICATION
+   ========================================================= */
 
 .header-icon-button {
     width: 40px;
@@ -290,7 +292,6 @@
     justify-content: center;
 
     border: 1px solid var(--border);
-
     border-radius: 50%;
 
     background: var(--surface);
@@ -299,21 +300,23 @@
 
     cursor: pointer;
 
-    transition: 0.2s ease;
+    transition:
+        background 0.2s ease,
+        color 0.2s ease,
+        border-color 0.2s ease;
 }
 
 .header-icon-button:hover {
     background: var(--surface-hover);
-
     color: var(--text);
 
-    border-color: #475569;
+    border-color: var(--border-hover);
 }
 
 
-/* ========================================
-   HEADER USER
-   ======================================== */
+/* =========================================================
+   10. DEFAULT HEADER USER
+   ========================================================= */
 
 .header-user {
     display: flex;
@@ -358,10 +361,624 @@
 }
 
 
-/* ========================================
-   CONTENT
-   ======================================== */
+/* =========================================================
+   11. DEFAULT CONTENT
+   ========================================================= */
 
 .app-content {
     padding: 32px;
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   =========================================================
+   CUSTOMER LAYOUT
+   =========================================================
+   ========================================================= */
+
+
+/* =========================================================
+   12. CUSTOMER LAYOUT
+   ========================================================= */
+
+.customer-layout {
+    display: flex;
+
+    width: 100%;
+    min-height: 100vh;
+
+    background: var(--background);
+}
+
+
+/* =========================================================
+   13. CUSTOMER SIDEBAR
+   ========================================================= */
+
+.customer-sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+
+    height: 100vh;
+
+    position: sticky;
+    top: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    flex-shrink: 0;
+
+    background: var(--sidebar-background);
+
+    border-right: 1px solid var(--border);
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    z-index: 200;
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   14. CUSTOMER BRAND
+   ========================================================= */
+
+.customer-brand {
+    min-height: 76px;
+    height: 76px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 22px;
+
+    border-bottom: 1px solid var(--border);
+
+    box-sizing: border-box;
+}
+
+.customer-brand-icon {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: var(--radius-md);
+
+    background: var(--primary);
+
+    color: white;
+
+    font-size: 18px;
+    font-weight: 800;
+
+    box-shadow:
+        0 4px 12px rgba(59, 130, 246, 0.30);
+}
+
+.customer-brand-text {
+    min-width: 0;
+
+    margin-left: 12px;
+}
+
+.customer-brand-name {
+    color: var(--text);
+
+    font-size: 16px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.customer-brand-subtitle {
+    margin-top: 2px;
+
+    color: var(--text-muted);
+
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   15. CUSTOMER NAVIGATION
+   ========================================================= */
+
+.customer-nav {
+    flex: 1;
+
+    padding: 20px 12px;
+
+    overflow-y: auto;
+}
+
+.customer-nav-section {
+    padding: 0 12px;
+
+    margin: 0 0 9px;
+
+    color: var(--text-muted);
+
+    font-size: 10px;
+    font-weight: 700;
+
+    letter-spacing: 1px;
+}
+
+.customer-nav-section-spaced {
+    margin-top: 26px;
+}
+
+.customer-nav-item {
+    display: flex;
+    align-items: center;
+
+    width: 100%;
+    min-height: 44px;
+
+    padding: 0 12px;
+    margin-bottom: 5px;
+
+    gap: 0;
+
+    border-radius: var(--radius-md);
+
+    color: var(--text-secondary);
+
+    text-decoration: none;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+
+    box-sizing: border-box;
+}
+
+.customer-nav-item:hover {
+    background: var(--surface-hover);
+
+    color: var(--text);
+
+    transform: translateX(2px);
+}
+
+.customer-nav-item.active {
+    background: var(--primary-soft);
+
+    color: var(--primary);
+}
+
+.customer-nav-icon {
+    width: 28px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    margin-right: 8px;
+
+    font-size: 16px;
+}
+
+
+/* =========================================================
+   16. CUSTOMER SIDEBAR FOOTER
+   ========================================================= */
+
+.customer-sidebar-footer {
+    padding: 16px 12px;
+
+    border-top: 1px solid var(--border);
+
+    flex-shrink: 0;
+}
+
+.customer-logout-button {
+    width: 100%;
+    height: 44px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 12px;
+
+    border: 0;
+    border-radius: var(--radius-md);
+
+    background: transparent;
+
+    color: var(--text-secondary);
+
+    font-family: inherit;
+    font-size: 14px;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
+
+    box-sizing: border-box;
+}
+
+.customer-logout-button .customer-nav-icon {
+    margin-right: 8px;
+}
+
+.customer-logout-button:hover {
+    background: rgba(239, 68, 68, 0.12);
+
+    color: #f87171;
+}
+
+
+/* =========================================================
+   17. CUSTOMER MAIN
+   ========================================================= */
+
+.customer-main {
+    flex: 1;
+
+    min-width: 0;
+    min-height: 100vh;
+
+    background: var(--background);
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   18. CUSTOMER HEADER
+   ========================================================= */
+
+.customer-header {
+    height: var(--header-height);
+    min-height: var(--header-height);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 24px;
+
+    background: var(--surface);
+
+    border-bottom: 1px solid var(--border);
+
+    position: sticky;
+    top: 0;
+
+    z-index: 100;
+
+    box-sizing: border-box;
+}
+
+.customer-header-left {
+    min-width: 0;
+}
+
+.customer-header-title {
+    color: var(--text);
+
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.customer-header-subtitle {
+    margin-top: 3px;
+
+    color: var(--text-muted);
+
+    font-size: 12px;
+}
+
+.customer-header-right {
+    display: flex;
+    align-items: center;
+
+    gap: 16px;
+
+    flex-shrink: 0;
+}
+
+
+/* =========================================================
+   19. CUSTOMER HEADER BUTTON
+   ========================================================= */
+
+.customer-header-button {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid var(--border);
+
+    border-radius: var(--radius-md);
+
+    background: var(--surface-secondary);
+
+    color: var(--text-secondary);
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.customer-header-button:hover {
+    background: var(--surface-hover);
+
+    border-color: var(--border-hover);
+
+    color: var(--text);
+}
+
+
+/* =========================================================
+   20. CUSTOMER USER
+   ========================================================= */
+
+.customer-user {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+}
+
+.customer-user-avatar {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background: var(--primary);
+
+    color: white;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    box-shadow:
+        0 4px 10px rgba(59, 130, 246, 0.25);
+}
+
+.customer-user-info {
+    min-width: 0;
+}
+
+.customer-user-name {
+    max-width: 180px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: var(--text);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.customer-user-role {
+    margin-top: 2px;
+
+    color: var(--text-muted);
+
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   21. CUSTOMER CONTENT
+   ========================================================= */
+
+.customer-content {
+    width: 100%;
+
+    padding: 32px;
+
+    min-height: calc(100vh - var(--header-height));
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   22. CUSTOMER SCROLLBAR
+   ========================================================= */
+
+.customer-sidebar::-webkit-scrollbar,
+.customer-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.customer-sidebar::-webkit-scrollbar-track,
+.customer-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.customer-sidebar::-webkit-scrollbar-thumb,
+.customer-nav::-webkit-scrollbar-thumb {
+    background: var(--border);
+
+    border-radius: 10px;
+}
+
+.customer-sidebar::-webkit-scrollbar-thumb:hover,
+.customer-nav::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+}
+
+
+/* =========================================================
+   23. RESPONSIVE - TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+    .customer-sidebar {
+        width: 220px;
+        min-width: 220px;
+    }
+
+    .customer-header {
+        padding: 0 20px;
+    }
+
+    .customer-content {
+        padding: 24px;
+    }
+}
+
+
+/* =========================================================
+   24. RESPONSIVE - MOBILE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+    .customer-sidebar {
+        width: 70px;
+        min-width: 70px;
+    }
+
+    .customer-brand {
+        justify-content: center;
+
+        padding: 0;
+    }
+
+    .customer-brand-text {
+        display: none;
+    }
+
+    .customer-nav {
+        padding: 18px 10px;
+    }
+
+    .customer-nav-section {
+        display: none;
+    }
+
+    .customer-nav-item {
+        justify-content: center;
+
+        padding: 0;
+    }
+
+    .customer-nav-item span:not(.customer-nav-icon) {
+        display: none;
+    }
+
+    .customer-nav-icon {
+        margin-right: 0;
+    }
+
+    .customer-sidebar-footer {
+        padding: 10px;
+    }
+
+    .customer-logout-button {
+        justify-content: center;
+
+        padding: 0;
+    }
+
+    .customer-logout-button span:not(.customer-nav-icon) {
+        display: none;
+    }
+
+    .customer-main {
+        min-width: 0;
+    }
+
+    .customer-header {
+        padding: 0 15px;
+    }
+
+    .customer-header-subtitle {
+        display: none;
+    }
+
+    .customer-user-info {
+        display: none;
+    }
+
+    .customer-content {
+        padding: 20px 15px;
+    }
+}
+
+
+/* =========================================================
+   25. RESPONSIVE - VERY SMALL SCREEN
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+    .customer-sidebar {
+        width: 60px;
+        min-width: 60px;
+    }
+
+    .customer-brand-icon {
+        width: 34px;
+        height: 34px;
+
+        font-size: 16px;
+    }
+
+    .customer-nav {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .customer-header {
+        padding: 0 10px;
+    }
+
+    .customer-header-button {
+        width: 36px;
+        height: 36px;
+    }
+
+    .customer-user-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .customer-header-right {
+        gap: 8px;
+    }
+
+    .customer-content {
+        padding: 16px 12px;
+    }
 }

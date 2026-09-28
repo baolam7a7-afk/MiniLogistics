@@ -1,128 +1,481 @@
-/* ========================================
-   CARD
-   ======================================== */
-
-.app-card {
-    background: var(--surface);
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius-lg);
-
-    padding: var(--space-6);
-
-    box-shadow: var(--shadow-sm);
-}
-
-.app-card h2 {
-    margin-bottom: 8px;
-
-    color: var(--text);
-}
-
-.app-card p {
-    color: var(--text-secondary);
-}
-
-
-/* ========================================
-   BUTTON
-   ======================================== */
+/* =========================================================
+   BUTTONS
+   ========================================================= */
 
 .app-button {
     display: inline-flex;
-
     align-items: center;
     justify-content: center;
+    gap: 8px;
 
     min-height: 40px;
-
     padding: 0 16px;
 
-    border: none;
-
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
 
+    font-family: inherit;
     font-size: 14px;
-
     font-weight: 600;
 
     cursor: pointer;
 
-    transition: 0.2s ease;
+    transition:
+        background-color .2s ease,
+        border-color .2s ease,
+        color .2s ease,
+        transform .2s ease,
+        opacity .2s ease;
 }
+
+.app-button:hover {
+    transform: translateY(-1px);
+}
+
+.app-button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+
+/* PRIMARY */
 
 .app-button-primary {
     background: var(--primary);
-
-    color: white;
+    color: var(--text-white);
 }
 
 .app-button-primary:hover {
     background: var(--primary-hover);
-
-    transform: translateY(-1px);
-
-    box-shadow:
-        0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 
-/* ========================================
+/* SECONDARY */
+
+.app-button-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.app-button-secondary:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-hover);
+}
+
+
+/* SUCCESS */
+
+.app-button-success {
+    background: var(--success);
+    color: var(--text-white);
+}
+
+
+/* DANGER */
+
+.app-button-danger {
+    background: var(--danger);
+    color: var(--text-white);
+}
+
+
+/* WARNING */
+
+.app-button-warning {
+    background: var(--warning);
+    color: var(--text-white);
+}
+
+
+/* SMALL */
+
+.app-button-sm {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+}
+
+
+/* LARGE */
+
+.app-button-lg {
+    min-height: 46px;
+    padding: 0 20px;
+    font-size: 15px;
+}
+
+
+/* FULL WIDTH */
+
+.app-button-full {
+    width: 100%;
+}
+
+
+/* =========================================================
+   CARD
+   ========================================================= */
+
+.app-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-6);
+}
+
+.app-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: var(--space-4);
+
+    margin-bottom: var(--space-5);
+}
+
+.app-card-header h2,
+.app-card-header h3 {
+    margin: 0;
+}
+
+.app-card-header p {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+}
+
+
+/* =========================================================
    INPUT
-   ======================================== */
+   ========================================================= */
 
 .app-input {
     width: 100%;
-
     min-height: 42px;
 
-    padding: 0 12px;
+    padding: 10px 12px;
 
     border: 1px solid var(--border);
-
     border-radius: var(--radius-md);
 
     background: var(--surface-secondary);
-
     color: var(--text);
 
     outline: none;
-}
 
-.app-input::placeholder {
-    color: var(--text-muted);
+    transition:
+        border-color .2s ease,
+        box-shadow .2s ease,
+        background-color .2s ease;
 }
 
 .app-input:focus {
     border-color: var(--primary);
 
     box-shadow:
-        0 0 0 3px rgba(59, 130, 246, 0.15);
+        0 0 0 3px var(--primary-soft);
 }
 
-
-/* ========================================
-   EMPTY STATE
-   ======================================== */
-
-.empty-state {
-    padding: 48px 24px;
-
-    text-align: center;
-
+.app-input::placeholder {
     color: var(--text-muted);
 }
 
 
-/* ========================================
-   LOADING
-   ======================================== */
+/* =========================================================
+   SELECT
+   ========================================================= */
 
-.loading-state {
+.app-select {
+    width: 100%;
+    min-height: 42px;
+
+    padding: 0 12px;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+
+    background: var(--surface-secondary);
+    color: var(--text);
+
+    outline: none;
+}
+
+.app-select:focus {
+    border-color: var(--primary);
+
+    box-shadow:
+        0 0 0 3px var(--primary-soft);
+}
+
+
+/* =========================================================
+   BADGE
+   ========================================================= */
+
+.app-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 4px 10px;
+
+    border-radius: 999px;
+
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.app-badge-success {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.app-badge-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.app-badge-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.app-badge-info {
+    background: var(--info-soft);
+    color: var(--info);
+}
+
+
+/* =========================================================
+   ALERT
+   ========================================================= */
+
+.app-alert {
+    padding: 12px 16px;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+
+    margin-bottom: var(--space-4);
+}
+
+.app-alert-success {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.app-alert-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.app-alert-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.app-alert-info {
+    background: var(--info-soft);
+    color: var(--info);
+}
+
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.app-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.app-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.app-table th {
+    padding: 12px 16px;
+
+    background: var(--surface-secondary);
+
+    color: var(--text-secondary);
+
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+
+    border-bottom: 1px solid var(--border);
+}
+
+.app-table td {
+    padding: 14px 16px;
+
+    border-bottom: 1px solid var(--border);
+
+    color: var(--text);
+}
+
+.app-table tbody tr:hover {
+    background: var(--surface-hover);
+}
+
+.app-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.app-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
     padding: 48px 24px;
 
     text-align: center;
+}
+
+.app-empty-icon {
+    font-size: 42px;
+    margin-bottom: 16px;
+}
+
+.app-empty h3 {
+    margin: 0 0 8px;
+}
+
+.app-empty p {
+    margin: 0 0 20px;
+    color: var(--text-secondary);
+}
+
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.app-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 200px;
 
     color: var(--text-secondary);
+}
+
+.app-spinner {
+    width: 24px;
+    height: 24px;
+
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+
+    border-radius: 50%;
+
+    animation: app-spin .8s linear infinite;
+}
+
+@keyframes app-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* =========================================================
+   FORM GROUP
+   ========================================================= */
+
+.app-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    margin-bottom: var(--space-4);
+}
+
+.app-form-label {
+    color: var(--text-secondary);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   DIVIDER
+   ========================================================= */
+
+.app-divider {
+    width: 100%;
+    height: 1px;
+
+    background: var(--border);
+
+    margin: var(--space-5) 0;
+}
+
+
+/* =========================================================
+   FLEX UTILITIES
+   ========================================================= */
+
+.flex {
+    display: flex;
+}
+
+.flex-column {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.items-start {
+    align-items: flex-start;
+}
+
+.items-end {
+    align-items: flex-end;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.gap-2 {
+    gap: var(--space-2);
+}
+
+.gap-3 {
+    gap: var(--space-3);
+}
+
+.gap-4 {
+    gap: var(--space-4);
+}
+
+.gap-6 {
+    gap: var(--space-6);
+}
+
+.w-full {
+    width: 100%;
 }

@@ -1,0 +1,983 @@
+@page "/products/{Id:long}"
+
+@layout CustomerLayout
+
+@using System.Text.Json
+
+@using MiniLogistics.Web.Models.Product
+
+@using MiniLogistics.Web.Models.Cart
+
+@using MiniLogistics.Web.Services.Product
+
+@using MiniLogistics.Web.Services.Cart
+
+@inject ProductService ProductService
+
+@inject CartService CartService
+
+@inject NavigationManager NavigationManager
+
+<PageTitle>Chi tiết sản phẩm</PageTitle>
+
+<div class="customer-products">
+
+    @if (isLoading)
+
+    {
+
+        <div class="app-card">
+
+            <div class="loading-state">
+
+                <div class="loading-spinner"></div>
+
+                <p>Đang tải sản phẩm...</p>
+
+            </div>
+
+        </div>
+
+    }
+
+    else if (product == null)
+
+    {
+
+        <div class="app-card">
+
+            <div class="empty-state">
+
+                <h2>Không tìm thấy sản phẩm</h2>
+
+                <p>Sản phẩm bạn đang tìm kiếm không tồn tại.</p>
+
+                <button type="button" class="app-button app-button-primary" @onclick="GoBack">
+
+                    Quay lại sản phẩm
+
+                </button>
+
+            </div>
+
+        </div>
+
+    }
+
+    else
+
+    {
+
+        <div class="product-detail-page">
+
+            <!-- Breadcrumb -->
+
+            <div class="product-breadcrumb">
+
+                <a href="/">Trang chủ</a>
+
+                <span>/</span>
+
+                <a href="/products">Sản phẩm</a>
+
+                <span>/</span>
+
+                <span>@product.Name</span>
+
+            </div>
+
+            <!-- Product detail -->
+
+            <div class="product-detail-card">
+
+                <!-- Product image gallery -->
+                <div class="product-detail-gallery">
+                    <div class="product-detail-image">
+                        @if (!string.IsNullOrWhiteSpace(productImageUrl))
+                        {
+                            <img src="@productImageUrl" alt="@product.Name" />
+                        }
+                        else
+                        {
+                            <div class="product-image-placeholder">
+                                <div class="product-image-icon">📦</div>
+                                <span>Hình ảnh sản phẩm</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (productImageUrls.Count > 1)
+                    {
+                        <div class="product-detail-thumbnails" aria-label="Ảnh sản phẩm">
+                            @foreach (var imageUrl in productImageUrls)
+                            {
+                                <button type="button"
+                                        class="product-detail-thumbnail @(productImageUrl == imageUrl ? "active" : "")"
+                                        @onclick="() => SelectProductImage(imageUrl)"
+                                        aria-label="Xem ảnh sản phẩm">
+                                    <img src="@imageUrl" alt="@product.Name" loading="lazy" />
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Product information -->
+
+                <div class="product-detail-info">
+
+                    <div class="product-detail-status">
+
+                        @product.Status
+
+                    </div>
+
+                    <h1 class="product-detail-name">
+
+                        @product.Name
+
+                    </h1>
+
+                    @if (!string.IsNullOrWhiteSpace(product.Description))
+
+                    {
+
+                        <p class="product-detail-description">
+
+                            @product.Description
+
+                        </p>
+
+                    }
+
+                    <div class="product-detail-meta">
+
+                        <div class="product-meta-item">
+
+                            <span class="meta-label">
+
+                                Product ID
+
+                            </span>
+
+                            <span class="meta-value">
+
+                                #@product.Id
+
+                            </span>
+
+                        </div>
+
+                        <div class="product-meta-item">
+
+                            <span class="meta-label">
+
+                                Shop ID
+
+                            </span>
+
+                            <span class="meta-value">
+
+                                #@product.ShopId
+
+                            </span>
+
+                        </div>
+
+                        <div class="product-meta-item">
+
+                            <span class="meta-label">
+
+                                Category ID
+
+                            </span>
+
+                            <span class="meta-value">
+
+                                #@product.CategoryId
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                    <hr />
+
+                    <!-- Variants -->
+
+                    @if (isLoadingVariants)
+
+                    {
+
+                        <div class="product-variant-loading">
+
+                            Đang tải phiên bản sản phẩm...
+
+                        </div>
+
+                    }
+
+                    else if (variants.Count == 0)
+
+                    {
+
+                        <div class="product-no-variant">
+
+                            <p>Sản phẩm hiện chưa có phiên bản.</p>
+
+                        </div>
+
+                    }
+
+                    else
+
+                    {
+
+                        <div class="product-variant-section">
+
+                            <h3>
+
+                                Chọn phiên bản
+
+                            </h3>
+
+                            <div class="product-variant-list">
+
+                                @foreach (var variant in variants)
+
+                                {
+
+                                    <button type="button"
+
+                                            class="product-variant-option @(selectedVariant?.Id == variant.Id ? "active" : "")"
+
+                                            @onclick="() => SelectVariant(variant)">
+
+                                        <span class="variant-option-name">
+
+                                            @variant.VariantName
+
+                                        </span>
+
+                                        <span class="variant-option-price">
+
+                                            @FormatPrice(variant.Price)
+
+                                        </span>
+
+                                        <span class="variant-option-stock">
+
+                                            Còn @variant.Stock
+
+                                        </span>
+
+                                    </button>
+
+                                }
+
+                            </div>
+
+                        </div>
+
+                        @if (selectedVariant != null)
+
+                        {
+
+                            <div class="selected-variant-card">
+
+                                <div class="selected-variant-header">
+
+                                    <h3>
+
+                                        @selectedVariant.VariantName
+
+                                    </h3>
+
+                                    @if (selectedVariant.IsActive)
+
+                                    {
+
+                                        <span class="product-status product-status-success">
+
+                                            Đang bán
+
+                                        </span>
+
+                                    }
+
+                                    else
+
+                                    {
+
+                                        <span class="product-status product-status-danger">
+
+                                            Ngừng bán
+
+                                        </span>
+
+                                    }
+
+                                </div>
+
+                                <div class="selected-variant-info">
+
+                                    <div>
+
+                                        <span class="meta-label">
+
+                                            SKU
+
+                                        </span>
+
+                                        <strong>
+
+                                            @selectedVariant.Sku
+
+                                        </strong>
+
+                                    </div>
+
+                                    <div>
+
+                                        <span class="meta-label">
+
+                                            Giá
+
+                                        </span>
+
+                                        <strong class="variant-price">
+
+                                            @FormatPrice(selectedVariant.Price)
+
+                                        </strong>
+
+                                    </div>
+
+                                    <div>
+
+                                        <span class="meta-label">
+
+                                            Tồn kho
+
+                                        </span>
+
+                                        <strong>
+
+                                            @selectedVariant.Stock
+
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+                                <!-- Attributes -->
+
+                                @if (GetAttributes(selectedVariant.AttributesJson).Count > 0)
+
+                                {
+
+                                    <div class="variant-attributes">
+
+                                        <span class="meta-label">
+
+                                            Thuộc tính
+
+                                        </span>
+
+                                        <div class="variant-attribute-list">
+
+                                            @foreach (var item in GetAttributes(selectedVariant.AttributesJson))
+
+                                            {
+
+                                                <div class="variant-attribute-item">
+
+                                                    <span>
+
+                                                        @item.Key
+
+                                                    </span>
+
+                                                    <strong>
+
+                                                        @item.Value
+
+                                                    </strong>
+
+                                                </div>
+
+                                            }
+
+                                        </div>
+
+                                    </div>
+
+                                }
+
+                                <!-- Quantity -->
+
+                                @if (selectedVariant.Stock > 0)
+
+                                {
+
+                                    <div class="product-quantity">
+
+                                        <span class="quantity-label">
+
+                                            Số lượng
+
+                                        </span>
+
+                                        <div class="quantity-control">
+
+                                            <button type="button" class="quantity-button" @onclick="DecreaseQuantity">
+
+                                                −
+
+                                            </button>
+
+                                            <span class="quantity-value">
+
+                                                @quantity
+
+                                            </span>
+
+                                            <button type="button" class="quantity-button" @onclick="IncreaseQuantity">
+
+                                                +
+
+                                            </button>
+
+                                        </div>
+
+                                        <span class="quantity-stock">
+
+                                            Tối đa @selectedVariant.Stock sản phẩm
+
+                                        </span>
+
+                                    </div>
+
+                                    <!-- Add to cart -->
+
+                                    <div class="product-detail-actions">
+
+                                        <button type="button" class="app-button app-button-primary product-add-cart-button"
+
+                                                @onclick="AddToCart" disabled="@isAddingToCart">
+
+                                            @if (isAddingToCart)
+
+                                            {
+
+                                                <span>Đang thêm...</span>
+
+                                            }
+
+                                            else
+
+                                            {
+
+                                                <span>🛒 Thêm vào giỏ hàng</span>
+
+                                            }
+
+                                        </button>
+
+                                    </div>
+
+                                }
+
+                                else
+
+                                {
+
+                                    <div class="product-out-of-stock">
+
+                                        <strong>Hết hàng</strong>
+
+                                        <span>Phiên bản này hiện đã hết hàng.</span>
+
+                                    </div>
+
+                                }
+
+                            </div>
+
+                        }
+
+                        <!-- Cart message -->
+
+                        @if (!string.IsNullOrWhiteSpace(cartMessage))
+
+                        {
+
+                            <div class="product-cart-message @(cartSuccess ? "success" : "error")">
+
+                                <span>
+
+                                    @cartMessage
+
+                                </span>
+
+                                @if (cartSuccess)
+
+                                {
+
+                                    <button type="button" class="app-button app-button-secondary" @onclick="GoToCart">
+
+                                        Xem giỏ hàng
+
+                                    </button>
+
+                                }
+
+                            </div>
+
+                        }
+
+                    }
+
+                </div>
+
+            </div>
+
+            <!-- Back button -->
+
+            <div class="product-detail-bottom">
+
+                <button type="button" class="app-button app-button-secondary" @onclick="GoBack">
+
+                    ← Quay lại danh sách sản phẩm
+
+                </button>
+
+            </div>
+
+        </div>
+
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+
+    public long Id { get; set; }
+
+    private ProductItem? product;
+
+    private List<ProductVariant> variants = new();
+
+    private string? productImageUrl;
+    private List<string> productImageUrls = new();
+
+    private ProductVariant? selectedVariant;
+
+    private int quantity = 1;
+
+    private bool isLoading = true;
+
+    private bool isLoadingVariants = false;
+
+    private bool isAddingToCart = false;
+
+    private string cartMessage = string.Empty;
+
+    private bool cartSuccess = false;
+
+    protected override async Task OnParametersSetAsync()
+
+    {
+
+        await LoadProductAsync();
+
+    }
+
+    private async Task LoadProductAsync()
+
+    {
+
+        try
+
+        {
+
+            isLoading = true;
+
+            product = await ProductService.GetProductByIdAsync(Id);
+
+            if (product == null)
+
+            {
+
+                return;
+
+            }
+
+            await LoadProductImageAsync();
+
+            await LoadVariantsAsync();
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage = $"Không thể tải sản phẩm: {ex.Message}";
+
+        }
+
+        finally
+
+        {
+
+            isLoading = false;
+
+        }
+
+    }
+
+    private async Task LoadProductImageAsync()
+    {
+        productImageUrl = null;
+        productImageUrls.Clear();
+
+        try
+        {
+            var images = await ProductService.GetImagesByProductIdAsync(Id);
+
+            productImageUrls = images
+                .Where(x => !string.IsNullOrWhiteSpace(x.Url))
+                .Select(x => x.Url.Trim())
+                .Distinct()
+                .ToList();
+
+            productImageUrl = productImageUrls.FirstOrDefault();
+        }
+        catch
+        {
+            // Nếu không tải được ảnh, trang vẫn hiển thị placeholder.
+        }
+    }
+
+    private void SelectProductImage(string imageUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(imageUrl))
+        {
+            productImageUrl = imageUrl;
+        }
+    }
+
+    private async Task LoadVariantsAsync()
+
+    {
+
+        try
+
+        {
+
+            isLoadingVariants = true;
+
+            variants = new List<ProductVariant>();
+
+            var result =
+
+                await ProductService.GetVariantsByProductIdAsync(product!.Id);
+
+            if (result != null)
+
+            {
+
+                variants = result
+
+                    .Where(x => x.IsActive)
+
+                    .ToList();
+
+            }
+
+            if (variants.Count > 0)
+
+            {
+
+                // Ưu tiên phiên bản còn hàng; nếu tất cả hết hàng,
+
+                // vẫn chọn phiên bản đầu tiên để hiển thị thông tin.
+
+                selectedVariant = variants.FirstOrDefault(x => x.Stock > 0)
+
+                    ?? variants.First();
+
+                quantity = 1;
+
+            }
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage =
+
+                $"Không thể tải phiên bản sản phẩm: {ex.Message}";
+
+        }
+
+        finally
+
+        {
+
+            isLoadingVariants = false;
+
+        }
+
+    }
+
+    private void SelectVariant(ProductVariant variant)
+
+    {
+
+        selectedVariant = variant;
+
+        quantity = 1;
+
+        cartMessage = string.Empty;
+
+    }
+
+    private void DecreaseQuantity()
+
+    {
+
+        if (quantity > 1)
+
+        {
+
+            quantity--;
+
+        }
+
+    }
+
+    private void IncreaseQuantity()
+
+    {
+
+        if (selectedVariant == null)
+
+        {
+
+            return;
+
+        }
+
+        if (quantity < selectedVariant.Stock)
+
+        {
+
+            quantity++;
+
+        }
+
+    }
+
+    private async Task AddToCart()
+
+    {
+
+        if (selectedVariant == null)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage = "Vui lòng chọn phiên bản sản phẩm.";
+
+            return;
+
+        }
+
+        if (selectedVariant.Stock <= 0)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage = "Sản phẩm đã hết hàng.";
+
+            return;
+
+        }
+
+        if (quantity <= 0)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage = "Số lượng không hợp lệ.";
+
+            return;
+
+        }
+
+        if (quantity > selectedVariant.Stock)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage = "Số lượng vượt quá tồn kho.";
+
+            return;
+
+        }
+
+        try
+
+        {
+
+            isAddingToCart = true;
+
+            cartMessage = string.Empty;
+
+            var request = new AddCartItemRequest
+
+            {
+
+                VariantId = selectedVariant.Id,
+
+                Quantity = quantity
+
+            };
+
+            var success =
+
+                await CartService.AddItemAsync(request);
+
+            if (success)
+
+            {
+
+                cartSuccess = true;
+
+                cartMessage =
+
+                    $"Đã thêm {quantity} sản phẩm vào giỏ hàng.";
+
+                quantity = 1;
+
+            }
+
+            else
+
+            {
+
+                cartSuccess = false;
+
+                cartMessage =
+
+                    "Không thể thêm sản phẩm vào giỏ hàng. " +
+
+                    "Vui lòng kiểm tra đăng nhập hoặc thử lại.";
+
+            }
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            cartSuccess = false;
+
+            cartMessage =
+
+                $"Có lỗi khi thêm vào giỏ hàng: {ex.Message}";
+
+        }
+
+        finally
+
+        {
+
+            isAddingToCart = false;
+
+        }
+
+    }
+
+    private Dictionary<string, string> GetAttributes(
+
+        string? attributesJson)
+
+    {
+
+        if (string.IsNullOrWhiteSpace(attributesJson))
+
+        {
+
+            return new Dictionary<string, string>();
+
+        }
+
+        try
+
+        {
+
+            var result =
+
+                JsonSerializer.Deserialize<Dictionary<string, string>>(
+
+                    attributesJson);
+
+            return result ??
+
+                   new Dictionary<string, string>();
+
+        }
+
+        catch
+
+        {
+
+            return new Dictionary<string, string>();
+
+        }
+
+    }
+
+    private string FormatPrice(decimal price)
+
+    {
+
+        return price.ToString("N0") + " ₫";
+
+    }
+
+    private void GoBack()
+
+    {
+
+        NavigationManager.NavigateTo("/products");
+
+    }
+
+    private void GoToCart()
+
+    {
+
+        NavigationManager.NavigateTo("/cart");
+
+    }
+
+}

@@ -1,0 +1,834 @@
+@page "/checkout"
+@layout CustomerLayout
+
+@using Microsoft.AspNetCore.Components
+@using MiniLogistics.Web.Models.Address
+@using MiniLogistics.Web.Models.Cart
+@using MiniLogistics.Web.Models.Order
+@using MiniLogistics.Web.Services.Address
+@using MiniLogistics.Web.Services.Cart
+@using MiniLogistics.Web.Services.Order
+
+@inject CartService CartService
+@inject AddressService AddressService
+@inject OrderService OrderService
+@inject NavigationManager Navigation
+
+<PageTitle>Thanh toán</PageTitle>
+
+<div class="checkout-page">
+
+    <!-- HEADER -->
+    <div class="checkout-header">
+
+        <div>
+            <h1>Thanh toán</h1>
+
+            <p>
+                Kiểm tra thông tin trước khi đặt hàng.
+            </p>
+        </div>
+
+        <button class="app-button app-button-secondary" @onclick="GoToCart">
+            ← Quay lại giỏ hàng
+        </button>
+
+    </div>
+
+
+    @if (isLoading)
+    {
+        <div class="checkout-state-card">
+
+            <div class="orders-spinner"></div>
+
+            <p>
+                Đang tải thông tin thanh toán...
+            </p>
+
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="checkout-state-card checkout-error">
+
+            <h3>
+                Không thể tải trang thanh toán
+            </h3>
+
+            <p>
+                @errorMessage
+            </p>
+
+            <button class="app-button app-button-primary" @onclick="LoadCheckoutAsync">
+                Thử lại
+            </button>
+
+        </div>
+    }
+    else if (cart == null || cart.Items.Count == 0)
+    {
+        <div class="checkout-state-card">
+
+            <div class="checkout-empty-icon">
+                🛒
+            </div>
+
+            <h3>
+                Giỏ hàng đang trống
+            </h3>
+
+            <p>
+                Bạn cần có sản phẩm trong giỏ hàng trước khi
+                thanh toán.
+            </p>
+
+            <button class="app-button app-button-primary" @onclick="GoToProducts">
+                Tiếp tục mua sắm
+            </button>
+
+        </div>
+    }
+    else
+    {
+        <div class="checkout-layout">
+
+            <!-- =========================
+                 LEFT
+                 ========================= -->
+
+            <div class="checkout-main">
+
+
+                <!-- 1. ADDRESS -->
+                <section class="checkout-card">
+
+                    <div class="checkout-card-header">
+
+                        <div>
+
+                            <h2>
+                                1. Địa chỉ giao hàng
+                            </h2>
+
+                            <p>
+                                Chọn địa chỉ nhận hàng của bạn.
+                            </p>
+
+                        </div>
+
+                        <button class="app-button app-button-secondary" @onclick="GoToAddresses">
+                            Quản lý địa chỉ
+                        </button>
+
+                    </div>
+
+
+                    @if (addresses.Count == 0)
+                    {
+                        <div class="checkout-no-address">
+
+                            <p>
+                                Bạn chưa có địa chỉ giao hàng.
+                            </p>
+
+                            <button class="app-button app-button-primary" @onclick="GoToAddresses">
+                                Thêm địa chỉ
+                            </button>
+
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="checkout-address-list">
+
+                            @foreach (var address in addresses)
+                            {
+                                <label class="checkout-address-item @(selectedAddressId == address.Id ? "selected" : "")">
+
+                                    <input type="radio" name="shippingAddress" value="@address.Id"
+                                           checked="@IsAddressSelected(address.Id)" @onchange="() => SelectAddress(address.Id)" />
+
+                                    <div class="checkout-address-content">
+
+                                        <div class="checkout-address-top">
+
+                                            <strong>
+                                                @address.ReceiverName
+                                            </strong>
+
+                                            @if (address.IsDefault)
+                                            {
+                                                <span class="checkout-default-badge">
+                                                    Mặc định
+                                                </span>
+                                            }
+
+                                        </div>
+
+                                        <span>
+                                            @address.ReceiverPhone
+                                        </span>
+
+                                        <span>
+                                            @address.Line1
+                                        </span>
+
+                                        @if (!string.IsNullOrWhiteSpace(address.Line2))
+                                        {
+                                            <span>
+                                                @address.Line2
+                                            </span>
+                                        }
+
+                                        <span>
+                                            @BuildAddress(address)
+                                        </span>
+
+                                    </div>
+
+                                </label>
+                            }
+
+                        </div>
+                    }
+
+                </section>
+
+
+                <!-- 2. PRODUCTS -->
+                <section class="checkout-card">
+
+                    <div class="checkout-card-header">
+
+                        <div>
+
+                            <h2>
+                                2. Sản phẩm
+                            </h2>
+
+                            <p>
+                                Sản phẩm bạn đang đặt mua.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="checkout-products">
+
+                        @foreach (var item in cart!.Items)
+                        {
+                            <div class="checkout-product">
+
+                                <div class="checkout-product-icon">
+                                    📦
+                                </div>
+
+                                <div class="checkout-product-info">
+
+                                    <strong>
+                                        @item.ProductName
+                                    </strong>
+
+                                    <span>
+                                        Phân loại: @item.VariantName
+                                    </span>
+
+                                    <span>
+                                        SKU: @item.Sku
+                                    </span>
+
+                                    <span>
+                                        Số lượng: @item.Quantity
+                                    </span>
+
+                                </div>
+
+                                <div class="checkout-product-price">
+
+                                    <span>
+                                        @FormatMoney(item.Price)
+                                    </span>
+
+                                    <strong>
+                                        @FormatMoney(item.TotalPrice)
+                                    </strong>
+
+                                </div>
+
+                            </div>
+                        }
+
+                    </div>
+
+                </section>
+
+
+                <!-- 3. PAYMENT -->
+                <section class="checkout-card">
+
+                    <div class="checkout-card-header">
+
+                        <div>
+
+                            <h2>
+                                3. Phương thức thanh toán
+                            </h2>
+
+                            <p>
+                                Chọn phương thức thanh toán.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="checkout-payment-list">
+
+                        <label class="checkout-payment-item @(selectedPaymentMethod == "COD" ? "selected" : "")">
+
+                            <input type="radio" name="paymentMethod" value="COD" checked="@IsCodSelected"
+                                   @onchange="SelectCod" />
+
+                            <div>
+
+                                <strong>
+                                    Thanh toán khi nhận hàng
+                                </strong>
+
+                                <span>
+                                    Bạn thanh toán cho shipper khi nhận được hàng.
+                                </span>
+
+                            </div>
+
+                        </label>
+
+                    </div>
+
+                </section>
+
+
+                <!-- 4. NOTE -->
+                <section class="checkout-card">
+
+                    <div class="checkout-card-header">
+
+                        <div>
+
+                            <h2>
+                                4. Ghi chú
+                            </h2>
+
+                            <p>
+                                Ghi chú cho đơn hàng nếu cần.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <textarea class="app-input checkout-note" rows="4" placeholder="Ví dụ: Giao hàng giờ hành chính..."
+                              @bind="note"></textarea>
+
+                </section>
+
+            </div>
+
+
+            <!-- =========================
+                 RIGHT
+                 ========================= -->
+
+            <aside class="checkout-sidebar">
+
+                <section class="checkout-card checkout-summary">
+
+                    <div class="checkout-card-header">
+
+                        <h2>
+                            Đơn hàng
+                        </h2>
+
+                    </div>
+
+
+                    <div class="checkout-summary-row">
+
+                        <span>
+                            Sản phẩm
+                        </span>
+
+                        <strong>
+                            @cart!.Items.Sum(x => x.Quantity)
+                        </strong>
+
+                    </div>
+
+
+                    <div class="checkout-summary-row">
+
+                        <span>
+                            Tạm tính
+                        </span>
+
+                        <strong>
+                            @FormatMoney(cart!.TotalAmount)
+                        </strong>
+
+                    </div>
+
+
+                    <div class="checkout-summary-row">
+
+                        <span>
+                            Phí vận chuyển
+                        </span>
+
+                        <strong>
+                            @FormatMoney(shippingFee)
+                        </strong>
+
+                    </div>
+
+
+                    <div class="checkout-summary-divider"></div>
+
+
+                    <div class="checkout-summary-total">
+
+                        <span>
+                            Tổng cộng
+                        </span>
+
+                        <strong>
+                            @FormatMoney(cart!.TotalAmount + shippingFee)
+                        </strong>
+
+                    </div>
+
+
+                    @if (!string.IsNullOrWhiteSpace(submitError))
+                    {
+                        <div class="checkout-submit-error">
+                            @submitError
+                        </div>
+                    }
+
+
+                    <button class="app-button app-button-primary checkout-submit-button" disabled="@IsSubmitDisabled"
+                            @onclick="PlaceOrderAsync">
+
+                        @if (isSubmitting)
+                        {
+                            <span>
+                                Đang đặt hàng...
+                            </span>
+                        }
+                        else
+                        {
+                            <span>
+                                Đặt hàng
+                            </span>
+                        }
+
+                    </button>
+
+
+                    <p class="checkout-secure-text">
+                        🔒 Thông tin đơn hàng của bạn được bảo mật.
+                    </p>
+
+                </section>
+
+            </aside>
+
+        </div>
+    }
+
+</div>
+
+
+
+@code {
+
+    // =============================================================
+    // STATE
+    // =============================================================
+
+    private CartResponse? cart;
+
+    private List<Address> addresses = new();
+
+    private long selectedAddressId;
+
+    private string selectedPaymentMethod = "COD";
+
+    private string note = string.Empty;
+
+    private decimal shippingFee = 0m;
+
+    private bool isLoading;
+
+    private bool isSubmitting;
+
+    private string? errorMessage;
+
+    private string? submitError;
+
+
+
+    // =============================================================
+    // INITIALIZE
+    // =============================================================
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCheckoutAsync();
+    }
+
+
+
+    // =============================================================
+    // LOAD CHECKOUT
+    // =============================================================
+
+    private async Task LoadCheckoutAsync()
+    {
+        isLoading = true;
+
+        errorMessage = null;
+
+        submitError = null;
+
+        try
+        {
+            // -----------------------------------------------------
+            // LOAD CART
+            // -----------------------------------------------------
+
+            cart = await CartService.GetCartAsync();
+
+            if (cart == null)
+            {
+                errorMessage =
+                    "Không thể tải giỏ hàng.";
+
+                return;
+            }
+
+
+            // -----------------------------------------------------
+            // LOAD ADDRESSES
+            // -----------------------------------------------------
+
+            var addressResult =
+                await AddressService.GetAddressesAsync();
+
+            addresses =
+                addressResult?.ToList()
+                ?? new List<Address>();
+
+
+            // -----------------------------------------------------
+            // SELECT DEFAULT ADDRESS
+            // -----------------------------------------------------
+
+            var defaultAddress =
+                addresses.FirstOrDefault(
+                    x => x.IsDefault);
+
+            if (defaultAddress != null)
+            {
+                selectedAddressId =
+                    defaultAddress.Id;
+            }
+            else
+            {
+                var firstAddress =
+                    addresses.FirstOrDefault();
+
+                if (firstAddress != null)
+                {
+                    selectedAddressId =
+                        firstAddress.Id;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Có lỗi xảy ra: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+
+    // =============================================================
+    // ADDRESS SELECTION
+    // =============================================================
+
+    private bool IsAddressSelected(long addressId)
+    {
+        return selectedAddressId == addressId;
+    }
+
+
+
+    private void SelectAddress(long addressId)
+    {
+        selectedAddressId = addressId;
+
+        submitError = null;
+    }
+
+
+
+    // =============================================================
+    // PAYMENT
+    // =============================================================
+
+    private bool IsCodSelected =>
+        selectedPaymentMethod == "COD";
+
+
+
+    private void SelectCod(ChangeEventArgs e)
+    {
+        selectedPaymentMethod = "COD";
+
+        submitError = null;
+    }
+
+
+
+    // =============================================================
+    // PLACE ORDER
+    // =============================================================
+
+    private async Task PlaceOrderAsync()
+    {
+        submitError = null;
+
+
+        // ---------------------------------------------------------
+        // CHECK CART
+        // ---------------------------------------------------------
+
+        if (cart == null || cart.Items.Count == 0)
+        {
+            submitError =
+                "Giỏ hàng đang trống.";
+
+            return;
+        }
+
+
+        // ---------------------------------------------------------
+        // CHECK ADDRESS
+        // ---------------------------------------------------------
+
+        if (selectedAddressId <= 0)
+        {
+            submitError =
+                "Vui lòng chọn địa chỉ giao hàng.";
+
+            return;
+        }
+
+
+        // ---------------------------------------------------------
+        // CHECK PAYMENT
+        // ---------------------------------------------------------
+
+        if (string.IsNullOrWhiteSpace(
+            selectedPaymentMethod))
+        {
+            submitError =
+                "Vui lòng chọn phương thức thanh toán.";
+
+            return;
+        }
+
+
+        // ---------------------------------------------------------
+        // PREVENT DOUBLE CLICK
+        // ---------------------------------------------------------
+
+        if (isSubmitting)
+        {
+            return;
+        }
+
+
+        isSubmitting = true;
+
+
+        try
+        {
+            // -----------------------------------------------------
+            // CREATE ORDER REQUEST
+            // -----------------------------------------------------
+
+            var request =
+                new CreateOrderRequest
+                {
+                    ShippingAddressId =
+                        selectedAddressId,
+
+                    PaymentMethod =
+                        selectedPaymentMethod,
+
+                    Note =
+                        note.Trim(),
+
+                    Items =
+                        cart.Items
+                            .Select(item =>
+                                new OrderItemRequest
+                                {
+                                    VariantId =
+                                        item.VariantId,
+
+                                    Quantity =
+                                        item.Quantity
+                                })
+                            .ToList()
+                };
+
+
+            // -----------------------------------------------------
+            // CALL ORDER API
+            // -----------------------------------------------------
+
+            var order =
+                await OrderService.CreateOrderAsync(
+                    request);
+
+
+            // -----------------------------------------------------
+            // CREATE ORDER FAILED
+            // -----------------------------------------------------
+
+            if (order == null)
+            {
+                submitError =
+                    "Không thể tạo đơn hàng. " +
+                    "Vui lòng thử lại.";
+
+                return;
+            }
+
+
+            // -----------------------------------------------------
+            // CREATE ORDER SUCCESS
+            // -----------------------------------------------------
+
+            Navigation.NavigateTo(
+                $"/orders/{order.Id}");
+        }
+        catch (Exception ex)
+        {
+            submitError =
+                $"Không thể đặt hàng: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+
+
+    // =============================================================
+    // NAVIGATION
+    // =============================================================
+
+    private void GoToCart()
+    {
+        Navigation.NavigateTo("/cart");
+    }
+
+
+
+    private void GoToProducts()
+    {
+        Navigation.NavigateTo("/products");
+    }
+
+
+
+    private void GoToAddresses()
+    {
+        Navigation.NavigateTo("/addresses");
+    }
+
+
+
+    // =============================================================
+    // BUILD ADDRESS TEXT
+    // =============================================================
+
+    private static string BuildAddress(
+        Address address)
+    {
+        var parts =
+            new List<string>();
+
+
+        if (!string.IsNullOrWhiteSpace(
+            address.Ward))
+        {
+            parts.Add(address.Ward);
+        }
+
+
+        if (!string.IsNullOrWhiteSpace(
+            address.District))
+        {
+            parts.Add(address.District);
+        }
+
+
+        if (!string.IsNullOrWhiteSpace(
+            address.Province))
+        {
+            parts.Add(address.Province);
+        }
+
+
+        return string.Join(", ", parts);
+    }
+
+
+
+    // =============================================================
+    // FORMAT MONEY
+    // =============================================================
+
+    private static string FormatMoney(
+        decimal value)
+    {
+        return $"{value:N0} ₫";
+    }
+
+
+
+    // =============================================================
+    // SUBMIT BUTTON STATE
+    // =============================================================
+
+    private bool IsSubmitDisabled =>
+        isSubmitting
+        || cart == null
+        || cart.Items.Count == 0
+        || selectedAddressId <= 0;
+}

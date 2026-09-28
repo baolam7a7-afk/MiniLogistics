@@ -1,0 +1,331 @@
+@page "/products"
+@layout CustomerLayout
+
+@using MiniLogistics.Web.Models.Product
+@using MiniLogistics.Web.Services.Product
+
+@inject ProductService ProductService
+
+<PageTitle>Products - MiniLogistics</PageTitle>
+
+<div class="customer-products">
+
+    <div class="customer-page-header">
+
+        <div>
+            <h1 class="customer-page-title">
+                Products
+            </h1>
+
+            <p class="customer-page-description">
+                Khám phá các sản phẩm đang được bán trên MiniLogistics
+            </p>
+        </div>
+
+    </div>
+
+
+    <!-- SEARCH -->
+    <div class="product-toolbar">
+
+        <div class="product-search">
+
+            <span class="product-search-icon">
+                🔍
+            </span>
+
+            <input type="text" placeholder="Tìm kiếm sản phẩm..." @bind="searchText" @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown" />
+
+        </div>
+
+
+        <button class="app-button app-button-primary" @onclick="SearchProducts">
+
+            Tìm kiếm
+
+        </button>
+
+    </div>
+
+
+    <!-- ERROR -->
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-alert auth-alert-error">
+            @errorMessage
+        </div>
+    }
+
+
+    <!-- LOADING -->
+    @if (isLoading)
+    {
+        <div class="product-loading">
+
+            <div class="loading-spinner"></div>
+
+            <p>
+                Đang tải sản phẩm...
+            </p>
+
+        </div>
+    }
+    else if (products.Count == 0)
+    {
+        <div class="customer-empty-state">
+
+            <div class="customer-empty-icon">
+                📦
+            </div>
+
+            <h3>
+                Không tìm thấy sản phẩm
+            </h3>
+
+            <p>
+                Hãy thử từ khóa tìm kiếm khác.
+            </p>
+
+        </div>
+    }
+    else
+    {
+        <!-- PRODUCT GRID -->
+
+        <div class="product-grid">
+
+            @foreach (var product in products)
+            {
+                <article class="product-card">
+
+                    <div class="product-image">
+                        @if (productImages.TryGetValue(product.Id, out var imageUrl)
+                            && !string.IsNullOrWhiteSpace(imageUrl))
+                        {
+                            <img src="@imageUrl" alt="@product.Name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span>📦</span>
+                        }
+                    </div>
+
+
+                    <div class="product-card-body">
+
+                        <div class="product-status">
+                            @product.Status
+                        </div>
+
+                        <h3 class="product-name">
+                            @product.Name
+                        </h3>
+
+                        @if (!string.IsNullOrWhiteSpace(product.Description))
+                        {
+                            <p class="product-description">
+                                @product.Description
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="product-description">
+                                Sản phẩm MiniLogistics
+                            </p>
+                        }
+
+
+                        <div class="product-card-footer">
+
+                            <span class="product-shop">
+                                Shop #@product.ShopId
+                            </span>
+
+                            <a href="@($"/products/{product.Id}")" class="app-button app-button-primary app-button-small">
+
+                                Xem
+
+                            </a>
+
+                        </div>
+
+                    </div>
+
+                </article>
+            }
+
+        </div>
+
+
+        <!-- PAGINATION -->
+
+        @if (totalPages > 1)
+        {
+            <div class="product-pagination">
+
+                <button class="pagination-button" disabled="@(currentPage <= 1)" @onclick="PreviousPage">
+
+                    ← Trước
+
+                </button>
+
+
+                <span class="pagination-info">
+
+                    Trang @currentPage / @totalPages
+
+                </span>
+
+
+                <button class="pagination-button" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
+
+                    Sau →
+
+                </button>
+
+            </div>
+        }
+    }
+
+</div>
+
+
+@code {
+
+    private List<ProductItem> products = new();
+
+    private Dictionary<long, string> productImages = new();
+
+    private string searchText = string.Empty;
+
+    private string? errorMessage;
+
+    private bool isLoading;
+
+    private int currentPage = 1;
+
+    private int pageSize = 12;
+
+    private int totalPages;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductsAsync();
+    }
+
+
+    private async Task LoadProductsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result =
+                await ProductService.GetProductsAsync(
+                    search: searchText,
+                    page: currentPage,
+                    pageSize: pageSize);
+
+            if (result == null)
+            {
+                errorMessage =
+                    "Không thể tải danh sách sản phẩm.";
+
+                products.Clear();
+                totalPages = 0;
+
+                return;
+            }
+
+            products = result.Items ?? new List<ProductItem>();
+
+            currentPage = result.Page;
+
+            totalPages = result.TotalPages;
+
+            productImages.Clear();
+
+            // Tải ảnh cho từng sản phẩm trong trang hiện tại.
+            foreach (var item in products)
+            {
+                try
+                {
+                    var images = await ProductService.GetImagesByProductIdAsync(item.Id);
+                    var firstImage = images.FirstOrDefault(x =>
+                        !string.IsNullOrWhiteSpace(x.Url));
+
+                    if (firstImage != null)
+                    {
+                        productImages[item.Id] = firstImage.Url;
+                    }
+                }
+                catch
+                {
+                    // Không để lỗi tải ảnh làm hỏng danh sách sản phẩm.
+                }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Không thể kết nối đến API.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Có lỗi xảy ra: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    private async Task SearchProducts()
+    {
+        currentPage = 1;
+
+        await LoadProductsAsync();
+    }
+
+
+    private async Task HandleSearchKeyDown(
+        KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchProducts();
+        }
+    }
+
+
+    private async Task PreviousPage()
+    {
+        if (currentPage <= 1)
+        {
+            return;
+        }
+
+        currentPage--;
+
+        await LoadProductsAsync();
+    }
+
+
+    private async Task NextPage()
+    {
+        if (currentPage >= totalPages)
+        {
+            return;
+        }
+
+        currentPage++;
+
+        await LoadProductsAsync();
+    }
+
+}

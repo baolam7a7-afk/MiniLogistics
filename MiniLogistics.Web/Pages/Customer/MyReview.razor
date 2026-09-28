@@ -1,0 +1,398 @@
+
+@page "/reviews"
+@layout CustomerLayout
+@using MiniLogistics.Web.Models.Review
+@using MiniLogistics.Web.Services.Review
+@inject ReviewService ReviewService
+
+<PageTitle>Đánh giá của tôi</PageTitle>
+
+<div class="my-reviews-page">
+    <div class="my-reviews-heading">
+        <div>
+            <span class="my-reviews-eyebrow">CUSTOMER CENTER</span>
+            <h1>Đánh giá của tôi</h1>
+            <p>Quản lý và theo dõi những đánh giá sản phẩm của bạn.</p>
+        </div>
+
+        <div class="my-reviews-total">
+            <span>Tổng đánh giá</span>
+            <strong>@totalItems</strong>
+        </div>
+    </div>
+
+    <div class="my-reviews-toolbar">
+        <div class="my-reviews-search">
+            <input @bind="searchText"
+                   @bind:event="oninput"
+                   placeholder="Tìm theo nội dung hoặc mã sản phẩm..." />
+
+            <button type="button" @onclick="SearchReviewsAsync">
+                Tìm kiếm
+            </button>
+        </div>
+
+        <select @bind="selectedRating" @bind:after="ApplyRatingAsync">
+            <option value="">Tất cả số sao</option>
+            <option value="5">5 sao</option>
+            <option value="4">4 sao</option>
+            <option value="3">3 sao</option>
+            <option value="2">2 sao</option>
+            <option value="1">1 sao</option>
+        </select>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="my-reviews-state">
+            <div class="my-reviews-spinner"></div>
+            <p>Đang tải đánh giá...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="my-reviews-alert">
+            @errorMessage
+            <button type="button" @onclick="LoadReviewsAsync">Thử lại</button>
+        </div>
+    }
+    else if (reviews.Count == 0)
+    {
+        <div class="my-reviews-empty">
+            <div class="my-reviews-empty-icon">☆</div>
+            <h3>Bạn chưa có đánh giá nào</h3>
+            <p>Các đánh giá sản phẩm của bạn sẽ xuất hiện tại đây.</p>
+        </div>
+    }
+    else
+    {
+        <div class="my-reviews-list">
+            @foreach (var review in reviews)
+            {
+                <article class="my-review-card" @key="review.Id">
+                    <div class="my-review-card-top">
+                        <div class="my-review-product-icon">P</div>
+
+                        <div class="my-review-product-info">
+                            <span class="my-review-label">Sản phẩm</span>
+                            <h3>Mã sản phẩm #@review.ProductId</h3>
+                            <span class="my-review-meta">
+                                Đơn hàng #@review.OrderId
+                                · @review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </span>
+                        </div>
+
+                        <span class="my-review-rating">
+                            @RenderStars(review.Rating)
+                            <b>@review.Rating/5</b>
+                        </span>
+                    </div>
+
+                    @if (editingReviewId == review.Id)
+                    {
+                        <div class="my-review-edit">
+                            <label>Đánh giá của bạn</label>
+
+                            <select @bind="editRating">
+                                <option value="5">5 sao - Rất hài lòng</option>
+                                <option value="4">4 sao - Hài lòng</option>
+                                <option value="3">3 sao - Bình thường</option>
+                                <option value="2">2 sao - Chưa hài lòng</option>
+                                <option value="1">1 sao - Không hài lòng</option>
+                            </select>
+
+                            <label>Nội dung</label>
+                            <textarea @bind="editContent"
+                                      rows="4"
+                                      placeholder="Chia sẻ trải nghiệm của bạn..."></textarea>
+
+                            <div class="my-review-actions">
+                                <button type="button"
+                                        class="my-review-btn my-review-btn-primary"
+                                        disabled="@isSaving"
+                                        @onclick="() => SaveReviewAsync(review.Id)">
+                                    @(isSaving ? "Đang lưu..." : "Lưu thay đổi")
+                                </button>
+
+                                <button type="button"
+                                        class="my-review-btn my-review-btn-light"
+                                        disabled="@isSaving"
+                                        @onclick="CancelEditing">
+                                    Hủy
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="my-review-content">
+                            @if (string.IsNullOrWhiteSpace(review.Content))
+                            {
+                                <p class="my-review-no-content">Bạn chưa viết nhận xét cho sản phẩm này.</p>
+                            }
+                            else
+                            {
+                                <p>@review.Content</p>
+                            }
+                        </div>
+
+                        @if (review.UpdatedAt.HasValue)
+                        {
+                            <div class="my-review-updated">
+                                Đã chỉnh sửa lần cuối:
+                                @review.UpdatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </div>
+                        }
+
+                        <div class="my-review-actions">
+                            <button type="button"
+                                    class="my-review-btn my-review-btn-light"
+                                    @onclick="() => StartEditing(review)">
+                                Chỉnh sửa
+                            </button>
+
+                            <button type="button"
+                                    class="my-review-btn my-review-btn-danger"
+                                    disabled="@deletingReviewId.HasValue"
+                                    @onclick="() => DeleteReviewAsync(review.Id)">
+                                @(deletingReviewId == review.Id ? "Đang xóa..." : "Xóa đánh giá")
+                            </button>
+                        </div>
+                    }
+                </article>
+            }
+        </div>
+
+        @if (totalPages > 1)
+        {
+            <div class="my-reviews-pagination">
+                <button type="button"
+                        disabled="@(currentPage <= 1)"
+                        @onclick="PreviousPageAsync">
+                    ← Trang trước
+                </button>
+
+                <span>
+                    Trang <strong>@currentPage</strong> / @totalPages
+                </span>
+
+                <button type="button"
+                        disabled="@(currentPage >= totalPages)"
+                        @onclick="NextPageAsync">
+                    Trang sau →
+                </button>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="my-reviews-toast my-reviews-toast-success">
+            @successMessage
+        </div>
+    }
+</div>
+
+@code {
+    private List<ReviewResponse> reviews = new();
+
+    private string searchText = string.Empty;
+    private string selectedRating = string.Empty;
+
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int totalItems;
+    private int totalPages;
+
+    private long? editingReviewId;
+    private long? deletingReviewId;
+
+    private int editRating = 5;
+    private string editContent = string.Empty;
+
+    private bool isLoading = true;
+    private bool isSaving;
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReviewsAsync();
+    }
+
+    private async Task LoadReviewsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            int? rating = int.TryParse(selectedRating, out var parsedRating)
+                ? parsedRating
+                : null;
+
+            var result = await ReviewService.GetMyReviewsAsync(
+                search: searchText.Trim(),
+                rating: rating,
+                page: currentPage,
+                pageSize: PageSize);
+
+            if (result is null)
+            {
+                reviews = new();
+                totalItems = 0;
+                totalPages = 0;
+                errorMessage =
+                    "Không tải được đánh giá. Hãy kiểm tra đăng nhập và kết nối API.";
+                return;
+            }
+
+            reviews = result.Items ?? new();
+            totalItems = result.TotalItems;
+            totalPages = result.TotalPages;
+        }
+        catch
+        {
+            reviews = new();
+            errorMessage = "Đã xảy ra lỗi khi tải danh sách đánh giá.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchReviewsAsync()
+    {
+        currentPage = 1;
+        await LoadReviewsAsync();
+    }
+
+    private async Task ApplyRatingAsync()
+    {
+        currentPage = 1;
+        await LoadReviewsAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (currentPage <= 1)
+            return;
+
+        currentPage--;
+        await LoadReviewsAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (currentPage >= totalPages)
+            return;
+
+        currentPage++;
+        await LoadReviewsAsync();
+    }
+
+    private void StartEditing(ReviewResponse review)
+    {
+        editingReviewId = review.Id;
+        editRating = review.Rating;
+        editContent = review.Content ?? string.Empty;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void CancelEditing()
+    {
+        editingReviewId = null;
+        editContent = string.Empty;
+        editRating = 5;
+    }
+
+    private async Task SaveReviewAsync(long id)
+    {
+        if (editRating < 1 || editRating > 5)
+        {
+            errorMessage = "Số sao phải nằm trong khoảng từ 1 đến 5.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var success = await ReviewService.UpdateReviewAsync(
+                id,
+                new UpdateReviewRequest
+                {
+                    Rating = editRating,
+                    Content = editContent.Trim()
+                });
+
+            if (!success)
+            {
+                errorMessage = "Không thể cập nhật đánh giá. Vui lòng thử lại.";
+                return;
+            }
+
+            editingReviewId = null;
+            successMessage = "Cập nhật đánh giá thành công.";
+            await LoadReviewsAsync();
+        }
+        catch
+        {
+            errorMessage = "Đã xảy ra lỗi khi cập nhật đánh giá.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteReviewAsync(long id)
+    {
+        deletingReviewId = id;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var success = await ReviewService.DeleteReviewAsync(id);
+
+            if (!success)
+            {
+                errorMessage = "Không thể xóa đánh giá. Vui lòng thử lại.";
+                return;
+            }
+
+            if (editingReviewId == id)
+                editingReviewId = null;
+
+            successMessage = "Xóa đánh giá thành công.";
+
+            await LoadReviewsAsync();
+
+            if (reviews.Count == 0 && currentPage > 1)
+            {
+                currentPage--;
+                await LoadReviewsAsync();
+            }
+        }
+        catch
+        {
+            errorMessage = "Đã xảy ra lỗi khi xóa đánh giá.";
+        }
+        finally
+        {
+            deletingReviewId = null;
+        }
+    }
+
+    private static string RenderStars(int rating)
+    {
+        rating = Math.Clamp(rating, 0, 5);
+        return new string('★', rating) + new string('☆', 5 - rating);
+    }
+}

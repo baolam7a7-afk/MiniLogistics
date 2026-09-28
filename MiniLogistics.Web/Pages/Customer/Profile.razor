@@ -1,0 +1,645 @@
+
+@page "/profile"
+@layout CustomerLayout
+
+@using Microsoft.AspNetCore.Components.Forms
+@using MiniLogistics.Web.Models.User
+@using MiniLogistics.Web.Services.User
+@using MiniLogistics.Web.Services.Auth
+
+@inject UserService UserService
+@inject AuthService AuthService
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Hồ sơ cá nhân</PageTitle>
+
+<div class="profile-page">
+    <header class="profile-page-heading">
+        <div>
+            <h1>Hồ sơ cá nhân</h1>
+            <p>Quản lý thông tin cá nhân và bảo mật tài khoản của bạn.</p>
+        </div>
+
+        <span class="profile-status">
+            <span class="status-dot"></span>
+            Tài khoản đang hoạt động
+        </span>
+    </header>
+
+    @if (isLoading)
+    {
+        <div class="profile-loading">
+            <span class="profile-spinner"></span>
+            <span>Đang tải thông tin tài khoản...</span>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="profile-alert profile-alert-error">
+                <span>!</span>
+                <div>@errorMessage</div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="profile-alert profile-alert-success">
+                <span>✓</span>
+                <div>@successMessage</div>
+            </div>
+        }
+
+        @if (profile is not null)
+        {
+            <div class="profile-grid">
+                <!-- AVATAR -->
+                <section class="profile-card profile-avatar-card">
+                    <div class="profile-card-heading">
+                        <div>
+                            <h2>Ảnh đại diện</h2>
+                            <p>Ảnh giúp bạn dễ dàng nhận diện tài khoản.</p>
+                        </div>
+                    </div>
+
+                    <div class="profile-avatar-preview">
+                        @if (!string.IsNullOrWhiteSpace(profile.AvatarUrl))
+                        {
+                            <img @key="profile.AvatarUrl"
+                                 src="@profile.AvatarUrl"
+                                 alt="Ảnh đại diện"
+                                 class="profile-avatar-image" />
+                        }
+                        else
+                        {
+                            <div class="profile-avatar-placeholder">
+                                @GetInitial(profile.FullName)
+                            </div>
+                        }
+                    </div>
+
+                    <div class="profile-avatar-name">
+                        <h3>
+                            @(string.IsNullOrWhiteSpace(profile.FullName)
+                                ? "Chưa cập nhật họ tên"
+                                : profile.FullName)
+                        </h3>
+                        <p>@profile.Email</p>
+                    </div>
+
+                    <div class="profile-upload-area">
+                        <label class="profile-label">Chọn ảnh từ máy tính</label>
+
+                        <InputFile OnChange="OnAvatarSelected"
+                                   accept=".jpg,.jpeg,.png,.webp"
+                                   class="profile-file-input" />
+
+                        @if (selectedAvatar is not null)
+                        {
+                            <div class="profile-selected-file">
+                                <div class="profile-file-icon">▧</div>
+                                <div class="profile-file-info">
+                                    <strong>@selectedAvatar.Name</strong>
+                                    <span>@FormatFileSize(selectedAvatar.Size)</span>
+                                </div>
+                            </div>
+                        }
+
+                        <p class="profile-hint">
+                            Định dạng JPG, JPEG, PNG hoặc WEBP. Tối đa 5 MB.
+                        </p>
+
+                        @if (!string.IsNullOrWhiteSpace(avatarError))
+                        {
+                            <div class="profile-inline-error">@avatarError</div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(avatarSuccess))
+                        {
+                            <div class="profile-inline-success">@avatarSuccess</div>
+                        }
+
+                        <button type="button"
+                                class="profile-btn profile-btn-primary profile-upload-btn"
+                                @onclick="UploadSelectedAvatar"
+                                disabled="@(selectedAvatar is null || isUploadingAvatar)">
+                            @if (isUploadingAvatar)
+                            {
+                                <span class="profile-button-spinner"></span>
+                                <span>Đang tải ảnh...</span>
+                            }
+                            else
+                            {
+                                <span>↑</span>
+                                <span>Upload ảnh đại diện</span>
+                            }
+                        </button>
+                    </div>
+                </section>
+
+                <!-- PERSONAL INFORMATION -->
+                <section class="profile-card profile-info-card">
+                    <div class="profile-card-heading">
+                        <div>
+                            <h2>Thông tin cá nhân</h2>
+                            <p>Cập nhật thông tin liên hệ của bạn.</p>
+                        </div>
+                        <span class="profile-section-icon">♙</span>
+                    </div>
+
+                    <EditForm Model="@editModel" OnValidSubmit="UpdateProfile">
+                        <DataAnnotationsValidator />
+
+                        <div class="profile-form-grid">
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="profileEmail">
+                                    Email
+                                </label>
+                                <input id="profileEmail"
+                                       class="profile-input"
+                                       value="@profile.Email"
+                                       readonly />
+                                <small class="profile-hint">
+                                    Email được sử dụng để đăng nhập.
+                                </small>
+                            </div>
+
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="fullName">
+                                    Họ và tên <span class="profile-required">*</span>
+                                </label>
+                                <InputText id="fullName"
+                                           class="profile-input"
+                                           @bind-Value="editModel.FullName"
+                                           maxlength="150"
+                                           placeholder="Nhập họ và tên" />
+                                <ValidationMessage For="@(() => editModel.FullName)" />
+                            </div>
+
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="phone">
+                                    Số điện thoại
+                                </label>
+                                <InputText id="phone"
+                                           class="profile-input"
+                                           @bind-Value="editModel.Phone"
+                                           maxlength="20"
+                                           placeholder="Nhập số điện thoại" />
+                                <ValidationMessage For="@(() => editModel.Phone)" />
+                            </div>
+                        </div>
+
+                        <div class="profile-form-actions">
+                            <button type="submit"
+                                    class="profile-btn profile-btn-primary"
+                                    disabled="@isSavingProfile">
+                                @if (isSavingProfile)
+                                {
+                                    <span class="profile-button-spinner"></span>
+                                    <span>Đang lưu...</span>
+                                }
+                                else
+                                {
+                                    <span>✓</span>
+                                    <span>Lưu thay đổi</span>
+                                }
+                            </button>
+
+                            <button type="button"
+                                    class="profile-btn profile-btn-secondary"
+                                    @onclick="ResetProfileForm"
+                                    disabled="@isSavingProfile">
+                                Hủy thay đổi
+                            </button>
+                        </div>
+                    </EditForm>
+                </section>
+
+                <!-- SECURITY -->
+                <section class="profile-card profile-security-card">
+                    <div class="profile-card-heading">
+                        <div>
+                            <h2>Bảo mật tài khoản</h2>
+                            <p>Thay đổi mật khẩu để bảo vệ tài khoản.</p>
+                        </div>
+                        <span class="profile-section-icon">♧</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(passwordError))
+                    {
+                        <div class="profile-alert profile-alert-error">
+                            <span>!</span>
+                            <div>@passwordError</div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(passwordSuccess))
+                    {
+                        <div class="profile-alert profile-alert-success">
+                            <span>✓</span>
+                            <div>@passwordSuccess</div>
+                        </div>
+                    }
+
+                    <EditForm Model="@passwordModel" OnValidSubmit="ChangePassword">
+                        <DataAnnotationsValidator />
+
+                        <div class="profile-form-grid">
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="currentPassword">
+                                    Mật khẩu hiện tại
+                                </label>
+                                <InputText id="currentPassword"
+                                           type="password"
+                                           class="profile-input"
+                                           @bind-Value="passwordModel.CurrentPassword"
+                                           autocomplete="current-password"
+                                           placeholder="Nhập mật khẩu hiện tại" />
+                                <ValidationMessage For="@(() => passwordModel.CurrentPassword)" />
+                            </div>
+
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="newPassword">
+                                    Mật khẩu mới
+                                </label>
+                                <InputText id="newPassword"
+                                           type="password"
+                                           class="profile-input"
+                                           @bind-Value="passwordModel.NewPassword"
+                                           autocomplete="new-password"
+                                           placeholder="Nhập mật khẩu mới" />
+                                <ValidationMessage For="@(() => passwordModel.NewPassword)" />
+                            </div>
+
+                            <div class="profile-form-group">
+                                <label class="profile-label" for="confirmPassword">
+                                    Xác nhận mật khẩu mới
+                                </label>
+                                <InputText id="confirmPassword"
+                                           type="password"
+                                           class="profile-input"
+                                           @bind-Value="passwordModel.ConfirmPassword"
+                                           autocomplete="new-password"
+                                           placeholder="Nhập lại mật khẩu mới" />
+                                <ValidationMessage For="@(() => passwordModel.ConfirmPassword)" />
+                            </div>
+                        </div>
+
+                        <div class="profile-form-actions">
+                            <button type="submit"
+                                    class="profile-btn profile-btn-primary"
+                                    disabled="@isChangingPassword">
+                                @if (isChangingPassword)
+                                {
+                                    <span class="profile-button-spinner"></span>
+                                    <span>Đang cập nhật...</span>
+                                }
+                                else
+                                {
+                                    <span>♧</span>
+                                    <span>Đổi mật khẩu</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </section>
+
+                <!-- ACCOUNT SUMMARY -->
+                <section class="profile-card profile-account-card">
+                    <div class="profile-card-heading">
+                        <div>
+                            <h2>Thông tin tài khoản</h2>
+                            <p>Thông tin nhận diện tài khoản hiện tại.</p>
+                        </div>
+                    </div>
+
+                    <div class="profile-account-row">
+                        <div class="profile-account-icon">✉</div>
+                        <div class="profile-account-content">
+                            <span>Email tài khoản</span>
+                            <strong>@profile.Email</strong>
+                        </div>
+                    </div>
+
+                    <div class="profile-account-row">
+                        <div class="profile-account-icon">♙</div>
+                        <div class="profile-account-content">
+                            <span>Họ và tên</span>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(profile.FullName)
+                                    ? "Chưa cập nhật"
+                                    : profile.FullName)
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="profile-account-row">
+                        <div class="profile-account-icon">☎</div>
+                        <div class="profile-account-content">
+                            <span>Số điện thoại</span>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(profile.Phone)
+                                    ? "Chưa cập nhật"
+                                    : profile.Phone)
+                            </strong>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private UserProfile? profile;
+    private UpdateMyProfileRequest editModel = new();
+    private ChangePasswordForm passwordModel = new();
+
+    private bool isLoading = true;
+    private bool isSavingProfile;
+    private bool isUploadingAvatar;
+    private bool isChangingPassword;
+
+    private string? errorMessage;
+    private string? successMessage;
+    private string? avatarError;
+    private string? avatarSuccess;
+    private string? passwordError;
+    private string? passwordSuccess;
+
+    private IBrowserFile? selectedAvatar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfile();
+    }
+
+    private async Task LoadProfile()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var token = await TokenStorage.GetAccessTokenAsync();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            profile = await UserService.GetMyProfileAsync();
+
+            if (profile is null)
+            {
+                errorMessage = "Không thể tải thông tin hồ sơ. Vui lòng thử lại.";
+                return;
+            }
+
+            ResetProfileModel();
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+        }
+        catch
+        {
+            errorMessage = "Đã xảy ra lỗi khi tải hồ sơ. Vui lòng thử lại.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ResetProfileModel()
+    {
+        if (profile is null)
+            return;
+
+        editModel = new UpdateMyProfileRequest
+        {
+            FullName = profile.FullName ?? string.Empty,
+            Phone = profile.Phone,
+            AvatarUrl = profile.AvatarUrl
+        };
+    }
+
+    private void OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        avatarError = null;
+        avatarSuccess = null;
+        selectedAvatar = null;
+
+        var file = e.File;
+
+        if (file is null)
+        {
+            avatarError = "Vui lòng chọn ảnh.";
+            return;
+        }
+
+        var allowedTypes = new[]
+        {
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+        };
+
+        if (!allowedTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+        {
+            avatarError = "Định dạng ảnh không hợp lệ. Chỉ hỗ trợ JPG, PNG hoặc WEBP.";
+            return;
+        }
+
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            avatarError = "Dung lượng ảnh vượt quá 5 MB.";
+            return;
+        }
+
+        selectedAvatar = file;
+    }
+
+    private async Task UploadSelectedAvatar()
+    {
+        if (selectedAvatar is null || profile is null)
+        {
+            avatarError = "Vui lòng chọn ảnh trước khi upload.";
+            return;
+        }
+
+        isUploadingAvatar = true;
+        avatarError = null;
+        avatarSuccess = null;
+        errorMessage = null;
+
+        try
+        {
+            await using var stream = selectedAvatar.OpenReadStream(
+                maxAllowedSize: 5 * 1024 * 1024);
+
+            var uploadResult = await UserService.UploadAvatarAsync(
+                stream,
+                selectedAvatar.Name,
+                selectedAvatar.ContentType);
+
+            if (uploadResult is null ||
+                string.IsNullOrWhiteSpace(uploadResult.AvatarUrl))
+            {
+                avatarError = "Upload ảnh thất bại. Vui lòng kiểm tra API và thử lại.";
+                return;
+            }
+
+            editModel.AvatarUrl = uploadResult.AvatarUrl;
+
+            var updatedProfile = await UserService.UpdateMyProfileAsync(editModel);
+
+            if (updatedProfile is null)
+            {
+                avatarError = "Ảnh đã upload nhưng chưa lưu được vào hồ sơ. Vui lòng thử lại.";
+                return;
+            }
+
+            profile = updatedProfile;
+            ResetProfileModel();
+
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+
+            selectedAvatar = null;
+            avatarSuccess = "Cập nhật ảnh đại diện thành công.";
+        }
+        catch
+        {
+            avatarError = "Không thể upload ảnh. Vui lòng kiểm tra kết nối và thử lại.";
+        }
+        finally
+        {
+            isUploadingAvatar = false;
+        }
+    }
+
+    private async Task UpdateProfile()
+    {
+        isSavingProfile = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await UserService.UpdateMyProfileAsync(editModel);
+
+            if (result is null)
+            {
+                errorMessage = "Cập nhật thông tin thất bại. Vui lòng thử lại.";
+                return;
+            }
+
+            profile = result;
+            ResetProfileModel();
+
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+            successMessage = "Cập nhật thông tin cá nhân thành công.";
+        }
+        catch
+        {
+            errorMessage = "Đã xảy ra lỗi khi cập nhật thông tin.";
+        }
+        finally
+        {
+            isSavingProfile = false;
+        }
+    }
+
+    private void ResetProfileForm()
+    {
+        ResetProfileModel();
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task ChangePassword()
+    {
+        isChangingPassword = true;
+        passwordError = null;
+        passwordSuccess = null;
+
+        try
+        {
+            if (passwordModel.NewPassword != passwordModel.ConfirmPassword)
+            {
+                passwordError = "Mật khẩu mới và xác nhận mật khẩu không khớp.";
+                return;
+            }
+
+            var token = await TokenStorage.GetAccessTokenAsync();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            var request = new ChangePasswordRequest
+            {
+                CurrentPassword = passwordModel.CurrentPassword,
+                NewPassword = passwordModel.NewPassword
+            };
+
+            var result = await AuthService.ChangePasswordAsync(request, token);
+
+            if (!result)
+            {
+                passwordError = "Đổi mật khẩu thất bại. Vui lòng kiểm tra mật khẩu hiện tại.";
+                return;
+            }
+
+            passwordModel = new ChangePasswordForm();
+            passwordSuccess = "Đổi mật khẩu thành công.";
+        }
+        catch
+        {
+            passwordError = "Đã xảy ra lỗi khi đổi mật khẩu. Vui lòng thử lại.";
+        }
+        finally
+        {
+            isChangingPassword = false;
+        }
+    }
+
+    private static string GetInitial(string? fullName)
+    {
+        return string.IsNullOrWhiteSpace(fullName)
+            ? "U"
+            : fullName.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private sealed class ChangePasswordForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Vui lòng nhập mật khẩu hiện tại.")]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Vui lòng nhập mật khẩu mới.")]
+        [System.ComponentModel.DataAnnotations.MinLength(
+            6, ErrorMessage = "Mật khẩu mới phải có ít nhất 6 ký tự.")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Vui lòng xác nhận mật khẩu mới.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

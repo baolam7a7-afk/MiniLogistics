@@ -1,3 +1,4 @@
+
 namespace MiniLogistics.Web.Models.Auth;
 
 public class UserInfo
@@ -7,6 +8,9 @@ public class UserInfo
     public string Email { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
+
+    // Ảnh đại diện của người dùng
+    public string? AvatarUrl { get; set; }
 
     public List<string> Roles { get; set; } = new();
 
