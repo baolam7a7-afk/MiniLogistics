@@ -1,984 +1,535 @@
 /* =========================================================
-   MINI LOGISTICS - LAYOUT
-   Main Layout + Customer Layout
-   ========================================================= */
-
-
-/* =========================================================
-   1. APP LAYOUT
-   ========================================================= */
-
-.app-layout {
-    display: flex;
-    min-height: 100vh;
-    background: var(--background);
-}
-
-
-/* =========================================================
-   2. DEFAULT SIDEBAR
-   ========================================================= */
-
-.app-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-
-    width: var(--sidebar-width);
-
-    display: flex;
-    flex-direction: column;
-
-    background: var(--sidebar-background);
-    border-right: 1px solid var(--border);
-
-    color: var(--sidebar-text);
-
-    z-index: 100;
-
-    overflow-y: auto;
-}
-
-
-/* =========================================================
-   3. DEFAULT SIDEBAR BRAND
-   ========================================================= */
-
-.sidebar-brand {
-    height: var(--header-height);
-
-    display: flex;
-    align-items: center;
-
-    gap: 12px;
-    padding: 0 20px;
-
-    border-bottom: 1px solid var(--border);
-
-    font-size: 18px;
-    font-weight: 700;
-
-    color: var(--text-white);
-
-    box-sizing: border-box;
-}
-
-.sidebar-brand-icon {
-    width: 36px;
-    height: 36px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: var(--radius-md);
-
-    background: var(--primary);
-    color: white;
-
-    font-weight: 700;
-
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-}
-
-
-/* =========================================================
-   4. DEFAULT SIDEBAR NAV
-   ========================================================= */
-
-.sidebar-nav {
-    flex: 1;
-
-    padding: 20px 12px;
-
-    overflow-y: auto;
-}
-
-.sidebar-section-title {
-    padding: 0 12px;
-
-    margin: 8px 0 10px;
-
-    font-size: 11px;
-    font-weight: 700;
-
-    color: var(--text-muted);
-
-    letter-spacing: 0.08em;
-}
-
-.sidebar-link {
-    display: flex;
-    align-items: center;
-
-    gap: 12px;
-
-    width: 100%;
-    min-height: 44px;
-
-    padding: 0 12px;
-    margin-bottom: 4px;
-
-    border-radius: var(--radius-md);
-
-    color: var(--sidebar-text);
-
-    text-decoration: none;
-
-    transition:
-        background 0.2s ease,
-        color 0.2s ease,
-        transform 0.2s ease;
-
-    box-sizing: border-box;
-}
-
-.sidebar-link:hover {
-    background: var(--sidebar-hover);
-    color: var(--text-white);
-
-    transform: translateX(2px);
-}
-
-.sidebar-link.active {
-    background: var(--sidebar-active);
-    color: var(--sidebar-text-active);
-
-    box-shadow:
-        0 4px 12px rgba(37, 99, 235, 0.25);
-}
-
-.sidebar-icon {
-    width: 24px;
-
-    text-align: center;
-
-    font-size: 17px;
-}
-
-
-/* =========================================================
-   5. DEFAULT SIDEBAR DIVIDER
-   ========================================================= */
-
-.sidebar-divider {
-    height: 1px;
-
-    margin: 20px 8px;
-
-    background: var(--border);
-}
-
-
-/* =========================================================
-   6. DEFAULT SIDEBAR FOOTER
-   ========================================================= */
-
-.sidebar-footer {
-    padding: 12px;
-
-    border-top: 1px solid var(--border);
-}
-
-.sidebar-logout {
-    width: 100%;
-    min-height: 44px;
-
-    display: flex;
-    align-items: center;
-
-    gap: 12px;
-
-    padding: 0 12px;
-
-    border: none;
-    border-radius: var(--radius-md);
-
-    background: transparent;
-
-    color: var(--sidebar-text);
-
-    cursor: pointer;
-
-    font: inherit;
-    text-align: left;
-
-    transition:
-        background 0.2s ease,
-        color 0.2s ease;
-}
-
-.sidebar-logout:hover {
-    background: rgba(239, 68, 68, 0.12);
-    color: #fca5a5;
-}
-
-
-/* =========================================================
-   7. DEFAULT MAIN
-   ========================================================= */
-
-.app-main {
-    flex: 1;
-
-    min-width: 0;
-
-    margin-left: var(--sidebar-width);
-
-    background: var(--background);
-}
-
-
-/* =========================================================
-   8. DEFAULT HEADER
-   ========================================================= */
-
-.app-header {
-    position: sticky;
-    top: 0;
-
-    height: var(--header-height);
-    min-height: var(--header-height);
-
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding: 0 28px;
-
-    background: rgba(17, 24, 39, 0.96);
-
-    backdrop-filter: blur(10px);
-
-    border-bottom: 1px solid var(--border);
-
-    z-index: 50;
-
-    box-sizing: border-box;
-}
-
-.header-left {
-    display: flex;
-    align-items: center;
-}
-
-.header-title {
-    font-size: 18px;
-
-    font-weight: 600;
-
-    color: var(--text);
-}
-
-.header-right {
-    display: flex;
-    align-items: center;
-
-    gap: 16px;
-}
-
-
-/* =========================================================
-   9. DEFAULT HEADER NOTIFICATION
-   ========================================================= */
-
-.header-icon-button {
-    width: 40px;
-    height: 40px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border: 1px solid var(--border);
-    border-radius: 50%;
-
-    background: var(--surface);
-
-    color: var(--text-secondary);
-
-    cursor: pointer;
-
-    transition:
-        background 0.2s ease,
-        color 0.2s ease,
-        border-color 0.2s ease;
-}
-
-.header-icon-button:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-
-    border-color: var(--border-hover);
-}
-
-
-/* =========================================================
-   10. DEFAULT HEADER USER
-   ========================================================= */
-
-.header-user {
-    display: flex;
-    align-items: center;
-
-    gap: 10px;
-}
-
-.header-avatar {
-    width: 40px;
-    height: 40px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 50%;
-
-    background: var(--primary);
-
-    color: white;
-
-    font-weight: 700;
-}
-
-.header-user-info {
-    line-height: 1.3;
-}
-
-.header-user-name {
-    font-size: 14px;
-
-    font-weight: 600;
-
-    color: var(--text);
-}
-
-.header-user-role {
-    font-size: 12px;
-
-    color: var(--text-muted);
-}
-
-
-/* =========================================================
-   11. DEFAULT CONTENT
-   ========================================================= */
-
-.app-content {
-    padding: 32px;
-
-    box-sizing: border-box;
-}
-
-
-/* =========================================================
-   =========================================================
-   CUSTOMER LAYOUT
-   =========================================================
-   ========================================================= */
-
-
-/* =========================================================
-   12. CUSTOMER LAYOUT
+   STOREFRONT LAYOUT — top nav, no sidebar
    ========================================================= */
 
 .customer-layout {
     display: flex;
-
+    flex-direction: column;
+    min-height: 100dvh;
     width: 100%;
-    min-height: 100vh;
-
     background: var(--background);
 }
 
+/* ---------- Sticky store header ---------- */
 
-/* =========================================================
-   13. CUSTOMER SIDEBAR
-   ========================================================= */
-
-.customer-sidebar {
-    width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
-
-    height: 100vh;
-
+.store-header {
     position: sticky;
     top: 0;
-
-    display: flex;
-    flex-direction: column;
-
-    flex-shrink: 0;
-
-    background: var(--sidebar-background);
-
-    border-right: 1px solid var(--border);
-
-    overflow-y: auto;
-    overflow-x: hidden;
-
     z-index: 200;
-
-    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
 }
 
-
-/* =========================================================
-   14. CUSTOMER BRAND
-   ========================================================= */
-
-.customer-brand {
-    min-height: 76px;
-    height: 76px;
-
+.store-header-inner {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    min-height: var(--header-height);
+    padding: 0 24px;
     display: flex;
     align-items: center;
-
-    padding: 0 22px;
-
-    border-bottom: 1px solid var(--border);
-
-    box-sizing: border-box;
+    gap: 20px;
 }
 
-.customer-brand-icon {
-    width: 38px;
-    height: 38px;
+.store-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    text-decoration: none;
+    color: var(--text);
+}
 
+.store-brand:hover {
+    color: var(--text);
+    opacity: 0.92;
+}
+
+.store-brand-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(145deg, var(--primary), var(--primary-hover));
+    color: #fff;
+    font-weight: 800;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-
-    flex-shrink: 0;
-
-    border-radius: var(--radius-md);
-
-    background: var(--primary);
-
-    color: white;
-
-    font-size: 18px;
-    font-weight: 800;
-
-    box-shadow:
-        0 4px 12px rgba(59, 130, 246, 0.30);
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.28);
 }
 
-.customer-brand-text {
-    min-width: 0;
-
-    margin-left: 12px;
+.store-brand-name {
+    font-size: 17px;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
 }
 
-.customer-brand-name {
-    color: var(--text);
-
-    font-size: 16px;
-    font-weight: 700;
-
-    white-space: nowrap;
-}
-
-.customer-brand-subtitle {
+.store-brand-tag {
+    display: block;
     margin-top: 2px;
-
-    color: var(--text-muted);
-
     font-size: 11px;
-}
-
-
-/* =========================================================
-   15. CUSTOMER NAVIGATION
-   ========================================================= */
-
-.customer-nav {
-    flex: 1;
-
-    padding: 20px 12px;
-
-    overflow-y: auto;
-}
-
-.customer-nav-section {
-    padding: 0 12px;
-
-    margin: 0 0 9px;
-
+    font-weight: 500;
     color: var(--text-muted);
-
-    font-size: 10px;
-    font-weight: 700;
-
-    letter-spacing: 1px;
 }
 
-.customer-nav-section-spaced {
-    margin-top: 26px;
-}
+/* Nav links */
 
-.customer-nav-item {
+.store-nav {
     display: flex;
     align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
 
-    width: 100%;
-    min-height: 44px;
-
-    padding: 0 12px;
-    margin-bottom: 5px;
-
-    gap: 0;
-
+.store-nav-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 14px;
     border-radius: var(--radius-md);
-
-    color: var(--text-secondary);
-
-    text-decoration: none;
-
     font-size: 14px;
-    font-weight: 500;
-
-    transition:
-        background 0.2s ease,
-        color 0.2s ease,
-        transform 0.2s ease;
-
-    box-sizing: border-box;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease;
 }
 
-.customer-nav-item:hover {
+.store-nav-link:hover {
     background: var(--surface-hover);
-
     color: var(--text);
-
-    transform: translateX(2px);
 }
 
-.customer-nav-item.active {
+.store-nav-link.active {
     background: var(--primary-soft);
-
     color: var(--primary);
 }
 
-.customer-nav-icon {
-    width: 28px;
+/* Header search */
 
+.store-search {
+    flex: 1;
+    max-width: 520px;
+    position: relative;
+    min-width: 0;
+}
+
+.store-search input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px 0 42px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full, 999px);
+    border-radius: 999px;
+    background: var(--background);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.store-search input::placeholder {
+    color: var(--text-muted);
+}
+
+.store-search input:focus {
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.store-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* Actions */
+
+.store-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.store-icon-btn {
+    position: relative;
+    width: 44px;
+    height: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-
-    flex-shrink: 0;
-
-    margin-right: 8px;
-
-    font-size: 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
-
-/* =========================================================
-   16. CUSTOMER SIDEBAR FOOTER
-   ========================================================= */
-
-.customer-sidebar-footer {
-    padding: 16px 12px;
-
-    border-top: 1px solid var(--border);
-
-    flex-shrink: 0;
+.store-icon-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-hover);
+    color: var(--primary);
 }
 
-.customer-logout-button {
-    width: 100%;
-    height: 44px;
+.store-icon-btn:active {
+    transform: scale(0.97);
+}
 
+.store-icon-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.store-icon-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-soft);
+}
+
+/* Avatar menu */
+
+.store-avatar-wrap {
+    position: relative;
+}
+
+.store-avatar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px 4px 4px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    font: inherit;
+    color: var(--text);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.store-avatar-btn:hover,
+.store-avatar-btn[aria-expanded="true"] {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.store-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: linear-gradient(145deg, var(--primary), var(--primary-hover));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
     display: flex;
     align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
 
+.store-avatar-img {
+    display: block;
+}
+
+.store-avatar-meta {
+    text-align: left;
+    min-width: 0;
+    max-width: 140px;
+}
+
+.store-avatar-name {
+    font-size: 13px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-avatar-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.store-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.store-avatar-btn[aria-expanded="true"] .store-chevron {
+    transform: rotate(180deg);
+}
+
+.store-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    padding: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 300;
+    animation: storeDropdownIn 0.16s ease;
+}
+
+@keyframes storeDropdownIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.store-dropdown-label {
+    padding: 8px 12px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.store-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 42px;
     padding: 0 12px;
-
     border: 0;
     border-radius: var(--radius-md);
-
     background: transparent;
-
-    color: var(--text-secondary);
-
-    font-family: inherit;
+    color: var(--text);
+    font: inherit;
     font-size: 14px;
-
+    font-weight: 500;
+    text-decoration: none;
+    text-align: left;
     cursor: pointer;
-
-    transition:
-        background 0.2s ease,
-        color 0.2s ease;
-
-    box-sizing: border-box;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
-.customer-logout-button .customer-nav-icon {
-    margin-right: 8px;
+.store-dropdown-item:hover {
+    background: var(--surface-hover);
+    color: var(--primary);
 }
 
-.customer-logout-button:hover {
-    background: rgba(239, 68, 68, 0.12);
-
-    color: #f87171;
+.store-dropdown-item.active {
+    background: var(--primary-soft);
+    color: var(--primary);
 }
 
+.store-dropdown-item svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
 
-/* =========================================================
-   17. CUSTOMER MAIN
-   ========================================================= */
+.store-dropdown-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: var(--border);
+}
+
+.store-dropdown-item.danger {
+    color: var(--danger);
+}
+
+.store-dropdown-item.danger:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.store-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: transparent;
+}
+
+/* ---------- Main content ---------- */
 
 .customer-main {
     flex: 1;
-
     min-width: 0;
-    min-height: 100vh;
-
-    background: var(--background);
-
-    box-sizing: border-box;
+    width: 100%;
 }
-
-
-/* =========================================================
-   18. CUSTOMER HEADER
-   ========================================================= */
-
-.customer-header {
-    height: var(--header-height);
-    min-height: var(--header-height);
-
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding: 0 24px;
-
-    background: var(--surface);
-
-    border-bottom: 1px solid var(--border);
-
-    position: sticky;
-    top: 0;
-
-    z-index: 100;
-
-    box-sizing: border-box;
-}
-
-.customer-header-left {
-    min-width: 0;
-}
-
-.customer-header-title {
-    color: var(--text);
-
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.customer-header-subtitle {
-    margin-top: 3px;
-
-    color: var(--text-muted);
-
-    font-size: 12px;
-}
-
-.customer-header-right {
-    display: flex;
-    align-items: center;
-
-    gap: 16px;
-
-    flex-shrink: 0;
-}
-
-
-/* =========================================================
-   19. CUSTOMER HEADER BUTTON
-   ========================================================= */
-
-.customer-header-button {
-    width: 40px;
-    height: 40px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius-md);
-
-    background: var(--surface-secondary);
-
-    color: var(--text-secondary);
-
-    cursor: pointer;
-
-    transition:
-        background 0.2s ease,
-        border-color 0.2s ease,
-        color 0.2s ease;
-}
-
-.customer-header-button:hover {
-    background: var(--surface-hover);
-
-    border-color: var(--border-hover);
-
-    color: var(--text);
-}
-
-
-/* =========================================================
-   20. CUSTOMER USER
-   ========================================================= */
-
-.customer-user {
-    display: flex;
-    align-items: center;
-
-    gap: 10px;
-}
-
-.customer-user-avatar {
-    width: 40px;
-    height: 40px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    flex-shrink: 0;
-
-    border-radius: 50%;
-
-    background: var(--primary);
-
-    color: white;
-
-    font-size: 14px;
-    font-weight: 700;
-
-    box-shadow:
-        0 4px 10px rgba(59, 130, 246, 0.25);
-}
-
-.customer-user-info {
-    min-width: 0;
-}
-
-.customer-user-name {
-    max-width: 180px;
-
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    color: var(--text);
-
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.customer-user-role {
-    margin-top: 2px;
-
-    color: var(--text-muted);
-
-    font-size: 11px;
-}
-
-
-/* =========================================================
-   21. CUSTOMER CONTENT
-   ========================================================= */
 
 .customer-content {
     width: 100%;
-
-    padding: 32px;
-
-    min-height: calc(100vh - var(--header-height));
-
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 28px 24px 48px;
     box-sizing: border-box;
+    animation: pageFadeIn 280ms ease;
 }
 
-
-/* =========================================================
-   22. CUSTOMER SCROLLBAR
-   ========================================================= */
-
-.customer-sidebar::-webkit-scrollbar,
-.customer-nav::-webkit-scrollbar {
-    width: 6px;
+@keyframes pageFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
 
-.customer-sidebar::-webkit-scrollbar-track,
-.customer-nav::-webkit-scrollbar-track {
-    background: transparent;
+.product-card,
+.store-product-card {
+    transition: transform 220ms ease, box-shadow 220ms ease;
 }
 
-.customer-sidebar::-webkit-scrollbar-thumb,
-.customer-nav::-webkit-scrollbar-thumb {
-    background: var(--border);
-
-    border-radius: 10px;
+.product-variant-option {
+    transition: background 200ms ease, border-color 200ms ease, transform 200ms ease;
 }
 
-.customer-sidebar::-webkit-scrollbar-thumb:hover,
-.customer-nav::-webkit-scrollbar-thumb:hover {
-    background: var(--border-hover);
+.product-variant-option.active {
+    transform: scale(1.03);
 }
 
+.customer-content.is-home {
+    max-width: none;
+    padding: 0;
+}
 
-/* =========================================================
-   23. RESPONSIVE - TABLET
-   ========================================================= */
+/* Mobile menu toggle */
 
-@media (max-width: 1100px) {
+.store-menu-toggle {
+    display: none;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
 
-    .customer-sidebar {
-        width: 220px;
-        min-width: 220px;
+.store-mobile-panel {
+    display: none;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 12px 24px 16px;
+}
+
+.store-mobile-panel.open {
+    display: block;
+}
+
+.store-mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.store-mobile-search input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--background);
+    color: var(--text);
+}
+
+/* ---------- Footer ---------- */
+
+.store-footer {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 28px 24px;
+    margin-top: auto;
+}
+
+.store-footer-inner {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.store-footer strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 960px) {
+    .store-nav,
+    .store-search,
+    .store-avatar-meta,
+    .store-brand-tag {
+        display: none;
     }
 
-    .customer-header {
-        padding: 0 20px;
+    .store-menu-toggle {
+        display: inline-flex;
+    }
+
+    .store-header-inner {
+        padding: 0 16px;
+        gap: 12px;
     }
 
     .customer-content {
-        padding: 24px;
+        padding: 20px 16px 40px;
     }
 }
 
-
-/* =========================================================
-   24. RESPONSIVE - MOBILE
-   ========================================================= */
-
-@media (max-width: 700px) {
-
-    .customer-sidebar {
-        width: 70px;
-        min-width: 70px;
+@media (max-width: 480px) {
+    .store-avatar-btn {
+        padding: 3px;
     }
 
-    .customer-brand {
-        justify-content: center;
-
-        padding: 0;
-    }
-
-    .customer-brand-text {
+    .store-chevron {
         display: none;
     }
 
-    .customer-nav {
-        padding: 18px 10px;
-    }
-
-    .customer-nav-section {
-        display: none;
-    }
-
-    .customer-nav-item {
-        justify-content: center;
-
-        padding: 0;
-    }
-
-    .customer-nav-item span:not(.customer-nav-icon) {
-        display: none;
-    }
-
-    .customer-nav-icon {
-        margin-right: 0;
-    }
-
-    .customer-sidebar-footer {
-        padding: 10px;
-    }
-
-    .customer-logout-button {
-        justify-content: center;
-
-        padding: 0;
-    }
-
-    .customer-logout-button span:not(.customer-nav-icon) {
-        display: none;
-    }
-
-    .customer-main {
-        min-width: 0;
-    }
-
-    .customer-header {
-        padding: 0 15px;
-    }
-
-    .customer-header-subtitle {
-        display: none;
-    }
-
-    .customer-user-info {
-        display: none;
-    }
-
-    .customer-content {
-        padding: 20px 15px;
+    .store-dropdown {
+        right: -8px;
+        width: min(260px, calc(100vw - 24px));
     }
 }
 
-
-/* =========================================================
-   25. RESPONSIVE - VERY SMALL SCREEN
-   ========================================================= */
-
-@media (max-width: 420px) {
-
-    .customer-sidebar {
-        width: 60px;
-        min-width: 60px;
-    }
-
-    .customer-brand-icon {
-        width: 34px;
-        height: 34px;
-
-        font-size: 16px;
-    }
-
-    .customer-nav {
-        padding-left: 8px;
-        padding-right: 8px;
-    }
-
-    .customer-header {
-        padding: 0 10px;
-    }
-
-    .customer-header-button {
-        width: 36px;
-        height: 36px;
-    }
-
-    .customer-user-avatar {
-        width: 36px;
-        height: 36px;
-    }
-
-    .customer-header-right {
-        gap: 8px;
-    }
-
-    .customer-content {
-        padding: 16px 12px;
-    }
+/* Legacy MainLayout stubs (unused by customer pages) */
+.app-layout { display: block; min-height: 100dvh; background: var(--background); }
+.app-sidebar, .sidebar-brand, .sidebar-nav, .sidebar-footer { display: none !important; }
+.app-main { margin-left: 0; }
+.app-header {
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
 }
+.app-content { padding: 24px; max-width: var(--content-max); margin: 0 auto; }

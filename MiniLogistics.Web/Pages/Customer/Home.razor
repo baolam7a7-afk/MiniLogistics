@@ -1,6 +1,7 @@
 @page "/"
 
 @using Microsoft.AspNetCore.Components.Web
+@using MiniLogistics.Web.Components
 @using MiniLogistics.Web.Models.Product
 @using MiniLogistics.Web.Services.Product
 
@@ -9,393 +10,150 @@
 @inject ProductService ProductService
 @inject NavigationManager Navigation
 
-<PageTitle>Mua sắm - MiniLogistics</PageTitle>
+<PageTitle>MiniLogistics — Mua sắm</PageTitle>
 
-<div class="customer-products">
+<div class="store-home">
 
-    <!-- ===================================================== -->
-    <!-- PAGE HEADER -->
-    <!-- ===================================================== -->
-
-    <div class="customer-page-header">
-
-        <h1 class="customer-page-title">
-            Mua sắm
-        </h1>
-
-        <p class="customer-page-description">
-            Khám phá các sản phẩm đang được bán trên MiniLogistics
-        </p>
-
-    </div>
-
-
-    <!-- ===================================================== -->
-    <!-- SEARCH + FILTER -->
-    <!-- ===================================================== -->
-
-    <div class="product-toolbar">
-
-        <!-- SEARCH -->
-
-        <div class="product-search">
-
-            <span class="product-search-icon">
-                🔍
-            </span>
-
-            <input
-                type="text"
-                placeholder="Tìm kiếm sản phẩm..."
-                @bind="searchText"
-                @bind:event="oninput"
-                @onkeydown="HandleSearchKeyDown" />
-
-        </div>
-
-
-        <!-- CATEGORY -->
-
-        <select
-            class="app-input"
-            @bind="selectedCategoryId">
-
-            <option value="">
-                Tất cả danh mục
-            </option>
-
-            @foreach (var categoryId in categoryIds)
-            {
-                <option value="@categoryId">
-                    Danh mục @categoryId
-                </option>
-            }
-
-        </select>
-
-
-        <!-- SHOP -->
-
-        <select
-            class="app-input"
-            @bind="selectedShopId">
-
-            <option value="">
-                Tất cả shop
-            </option>
-
-            @foreach (var shopId in shopIds)
-            {
-                <option value="@shopId">
-                    Shop @shopId
-                </option>
-            }
-
-        </select>
-
-
-        <!-- STATUS -->
-
-        <select
-            class="app-input"
-            @bind="selectedStatus">
-
-            <option value="">
-                Tất cả trạng thái
-            </option>
-
-            <option value="active">
-                Đang bán
-            </option>
-
-            <option value="inactive">
-                Ngừng bán
-            </option>
-
-        </select>
-
-
-        <!-- SEARCH BUTTON -->
-
-        <button
-            type="button"
-            class="app-button app-button-primary"
-            @onclick="SearchProducts">
-
-            Tìm kiếm
-
-        </button>
-
-    </div>
-
-
-    <!-- ===================================================== -->
-    <!-- ERROR -->
-    <!-- ===================================================== -->
-
-    @if (!string.IsNullOrWhiteSpace(errorMessage))
-    {
-        <div class="app-alert app-alert-error">
-
-            @errorMessage
-
-        </div>
-    }
-
-
-    <!-- ===================================================== -->
-    <!-- LOADING -->
-    <!-- ===================================================== -->
-
-    @if (isLoading)
-    {
-        <div class="app-loading">
-
-            <div class="app-loading-spinner"></div>
-
-            <span>
-                Đang tải sản phẩm...
-            </span>
-
-        </div>
-    }
-    else
-    {
-
-        <!-- ================================================= -->
-        <!-- RESULT INFO -->
-        <!-- ================================================= -->
-
-        <div class="product-result-info">
-
-            <span>
-                @totalItems sản phẩm
-            </span>
-
-        </div>
-
-
-        <!-- ================================================= -->
-        <!-- EMPTY -->
-        <!-- ================================================= -->
-
-        @if (products.Count == 0)
-        {
-            <div class="app-empty">
-
-                <div class="app-empty-icon">
-                    🛍️
-                </div>
-
-                <h3>
-                    Không tìm thấy sản phẩm
-                </h3>
-
-                <p>
-                    Hãy thử thay đổi từ khóa hoặc bộ lọc.
+    <section class="store-hero">
+        <div class="store-hero-inner">
+            <div class="store-hero-copy">
+                <p class="store-hero-eyebrow">MiniLogistics</p>
+                <h1 class="store-hero-title">Mua sắm dễ dàng, giao hàng tin cậy</h1>
+                <p class="store-hero-subtitle">
+                    Khám phá sản phẩm từ các shop trên nền tảng — thanh toán COD, theo dõi đơn hàng mọi lúc.
                 </p>
 
+                <form class="store-hero-search"
+                      @onsubmit="SearchFromHero"
+                      @onsubmit:preventDefault>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+                    </svg>
+                    <input type="search"
+                           placeholder="Bạn đang tìm gì hôm nay?"
+                           @bind="searchText"
+                           @bind:event="oninput"
+                           @onkeydown="HandleSearchKeyDown"
+                           aria-label="Tìm kiếm sản phẩm" />
+                    <button type="submit" class="app-button app-button-primary">
+                        Tìm kiếm
+                    </button>
+                </form>
+
+                <div class="store-hero-chips">
+                    <button type="button" class="store-chip" @onclick='() => QuickFilter("")'>Tất cả</button>
+                    <button type="button" class="store-chip" @onclick='() => QuickFilter("active")'>Đang bán</button>
+                    <a class="store-chip" href="/products">Xem toàn bộ →</a>
+                </div>
+            </div>
+
+            <div class="store-hero-panel" aria-hidden="true">
+                <div class="store-hero-stat">
+                    <span class="store-hero-stat-value">@totalItems+</span>
+                    <span class="store-hero-stat-label">Sản phẩm</span>
+                </div>
+                <div class="store-hero-stat">
+                    <span class="store-hero-stat-value">COD</span>
+                    <span class="store-hero-stat-label">Thanh toán khi nhận</span>
+                </div>
+                <div class="store-hero-stat">
+                    <span class="store-hero-stat-value">24/7</span>
+                    <span class="store-hero-stat-label">Theo dõi đơn</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="store-home-body">
+
+        <div class="store-section-head">
+            <div>
+                <h2 class="store-section-title">Sản phẩm nổi bật</h2>
+                <p class="store-section-desc">Chọn sản phẩm và thêm vào giỏ chỉ với vài bước</p>
+            </div>
+
+            <div class="store-section-filters">
+                <select class="app-input store-filter-select" @bind="selectedStatus">
+                    <option value="">Trạng thái</option>
+                    <option value="active">Đang bán</option>
+                    <option value="inactive">Ngừng bán</option>
+                </select>
+                <button type="button" class="app-button app-button-secondary" @onclick="SearchProducts">
+                    Lọc
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="app-alert app-alert-error">@errorMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <div class="store-product-skeleton-grid">
+                @for (var i = 0; i < 8; i++)
+                {
+                    <div class="store-skeleton-card"></div>
+                }
+            </div>
+        }
+        else if (products.Count == 0)
+        {
+            <div class="app-empty store-empty">
+                <div class="app-empty-icon">📦</div>
+                <h3>Không tìm thấy sản phẩm</h3>
+                <p>Thử từ khóa khác hoặc xem toàn bộ danh mục.</p>
+                <a href="/products" class="app-button app-button-primary">Đến trang sản phẩm</a>
             </div>
         }
         else
         {
-
-            <!-- ============================================= -->
-            <!-- PRODUCT GRID -->
-            <!-- ============================================= -->
-
-            <div class="product-grid">
-
+            <div class="product-grid store-product-grid">
                 @foreach (var product in products)
                 {
-                    <div class="product-card">
-
-                        <!-- IMAGE -->
-
-                        <div class="product-image">
-
-                            <span>
-                                📦
-                            </span>
-
-                        </div>
-
-
-                        <!-- BODY -->
-
-                        <div class="product-card-body">
-
-                            <!-- STATUS -->
-
-                            <span class="product-status">
-                                @GetStatusText(product.Status)
-                            </span>
-
-
-                            <!-- PRODUCT NAME -->
-
-                            <h3 class="product-name">
-                                @product.Name
-                            </h3>
-
-
-                            <!-- DESCRIPTION -->
-
-                            @if (!string.IsNullOrWhiteSpace(product.Description))
-                            {
-                                <p class="product-description">
-                                    @product.Description
-                                </p>
-                            }
-                            else
-                            {
-                                <p class="product-description">
-                                    Sản phẩm chất lượng trên MiniLogistics.
-                                </p>
-                            }
-
-
-                            <!-- FOOTER -->
-
-                            <div class="product-card-footer">
-
-                                <span class="product-shop">
-                                    Shop @product.ShopId
-                                </span>
-
-                                <button
-                                    type="button"
-                                    class="app-button app-button-primary app-button-small"
-                                    @onclick="() => ViewProduct(product.Id)">
-
-                                    Xem sản phẩm
-
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                    </div>
+                    <ProductCard Product="product" @key="product.Id" />
                 }
-
             </div>
-
-
-            <!-- ============================================= -->
-            <!-- PAGINATION -->
-            <!-- ============================================= -->
 
             @if (totalPages > 1)
             {
-                <div class="orders-pagination">
-
-                    <button
-                        type="button"
-                        class="app-button app-button-secondary"
-                        disabled="@(currentPage <= 1)"
-                        @onclick="PreviousPage">
-
-                        ← Trước
-
+                <div class="orders-pagination store-pagination">
+                    <button type="button"
+                            class="app-button app-button-secondary"
+                            disabled="@(currentPage <= 1)"
+                            @onclick="PreviousPage">
+                        Trước
                     </button>
-
-
-                    <span class="orders-page-number">
-                        Trang @currentPage / @totalPages
-                    </span>
-
-
-                    <button
-                        type="button"
-                        class="app-button app-button-secondary"
-                        disabled="@(currentPage >= totalPages)"
-                        @onclick="NextPage">
-
-                        Sau →
-
+                    <span class="orders-page-number">Trang @currentPage / @totalPages</span>
+                    <button type="button"
+                            class="app-button app-button-secondary"
+                            disabled="@(currentPage >= totalPages)"
+                            @onclick="NextPage">
+                        Sau
                     </button>
-
                 </div>
             }
-
         }
-    }
-
+    </div>
 </div>
 
-
 @code {
-
-    // =========================================================
-    // SEARCH
-    // =========================================================
-
     private string searchText = string.Empty;
-
-
-    // =========================================================
-    // FILTER
-    // =========================================================
-
-    private long? selectedCategoryId = null;
-
-    private long? selectedShopId = null;
-
-    private string selectedStatus = string.Empty;
-
-
-    // =========================================================
-    // PRODUCTS
-    // =========================================================
-
+    private string selectedStatus = "active";
     private List<ProductItem> products = new();
-
-
-    // =========================================================
-    // FILTER OPTIONS
-    // =========================================================
-
-    private List<long> categoryIds = new();
-
-    private List<long> shopIds = new();
-
-
-    // =========================================================
-    // PAGINATION
-    // =========================================================
-
     private int currentPage = 1;
-
     private int pageSize = 12;
-
-    private int totalItems = 0;
-
-    private int totalPages = 0;
-
-
-    // =========================================================
-    // STATE
-    // =========================================================
-
-    private bool isLoading = false;
-
+    private int totalItems;
+    private int totalPages;
+    private bool isLoading;
     private string? errorMessage;
-
-
-    // =========================================================
-    // INITIALIZE
-    // =========================================================
 
     protected override async Task OnInitializedAsync()
     {
         await LoadProducts();
     }
-
-
-    // =========================================================
-    // LOAD PRODUCTS
-    // =========================================================
 
     private async Task LoadProducts()
     {
@@ -403,97 +161,37 @@
             return;
 
         isLoading = true;
-
         errorMessage = null;
 
         try
         {
-            var result =
-                await ProductService.GetProductsAsync(
-                    searchText,
-                    selectedCategoryId,
-                    selectedShopId,
-                    selectedStatus,
-                    currentPage,
-                    pageSize);
-
-
-            // =================================================
-            // NULL RESULT
-            // =================================================
+            var result = await ProductService.GetProductsAsync(
+                searchText,
+                null,
+                null,
+                string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus,
+                currentPage,
+                pageSize);
 
             if (result == null)
             {
                 products = new();
-
                 totalItems = 0;
-
                 totalPages = 0;
-
                 return;
             }
 
-
-            // =================================================
-            // PRODUCTS
-            // =================================================
-
-            products =
-                result.Items?
-                    .ToList()
-                ?? new List<ProductItem>();
-
-
-            // =================================================
-            // PAGINATION
-            // =================================================
-
-            totalItems =
-                result.TotalItems;
-
-            totalPages =
-                result.TotalPages;
-
-
-            // =================================================
-            // BUILD CATEGORY FILTER
-            // =================================================
-
-            if (categoryIds.Count == 0)
-            {
-                categoryIds =
-                    products
-                        .Select(x => x.CategoryId)
-                        .Distinct()
-                        .OrderBy(x => x)
-                        .ToList();
-            }
-
-
-            // =================================================
-            // BUILD SHOP FILTER
-            // =================================================
-
-            if (shopIds.Count == 0)
-            {
-                shopIds =
-                    products
-                        .Select(x => x.ShopId)
-                        .Distinct()
-                        .OrderBy(x => x)
-                        .ToList();
-            }
+            products = result.Items?.ToList() ?? new List<ProductItem>();
+            totalItems = result.TotalItems;
+            totalPages = result.TotalPages;
         }
         catch (HttpRequestException)
         {
-            errorMessage =
-                "Không thể kết nối đến API. " +
-                "Vui lòng kiểm tra Backend.";
+            errorMessage = "Không thể kết nối đến API. Vui lòng kiểm tra Backend.";
         }
         catch (Exception ex)
         {
-            errorMessage =
-                $"Không thể tải sản phẩm: {ex.Message}";
+            errorMessage = $"Không thể tải sản phẩm: {ex.Message}";
         }
         finally
         {
@@ -501,106 +199,49 @@
         }
     }
 
-
-    // =========================================================
-    // SEARCH
-    // =========================================================
-
     private async Task SearchProducts()
     {
         currentPage = 1;
-
         await LoadProducts();
     }
 
+    private async Task SearchFromHero()
+    {
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            Navigation.NavigateTo($"/products?q={Uri.EscapeDataString(searchText.Trim())}");
+            return;
+        }
 
-    // =========================================================
-    // SEARCH WITH ENTER
-    // =========================================================
+        await SearchProducts();
+    }
 
-    private async Task HandleSearchKeyDown(
-        KeyboardEventArgs e)
+    private async Task QuickFilter(string status)
+    {
+        selectedStatus = status;
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
-        {
-            await SearchProducts();
-        }
+            await SearchFromHero();
     }
-
-
-    // =========================================================
-    // VIEW PRODUCT DETAIL
-    // =========================================================
-
-    private void ViewProduct(long productId)
-    {
-        Navigation.NavigateTo(
-            $"/products/{productId}");
-    }
-
-
-    // =========================================================
-    // PREVIOUS PAGE
-    // =========================================================
 
     private async Task PreviousPage()
     {
         if (currentPage <= 1)
             return;
-
         currentPage--;
-
         await LoadProducts();
     }
-
-
-    // =========================================================
-    // NEXT PAGE
-    // =========================================================
 
     private async Task NextPage()
     {
         if (currentPage >= totalPages)
             return;
-
         currentPage++;
-
         await LoadProducts();
-    }
-
-
-    // =========================================================
-    // STATUS TEXT
-    // =========================================================
-
-    private string GetStatusText(
-        string? status)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-            return "Không xác định";
-
-        return status
-            .Trim()
-            .ToLowerInvariant()
-            switch
-        {
-            "active" =>
-                "Đang bán",
-
-            "inactive" =>
-                "Ngừng bán",
-
-            "pending" =>
-                "Chờ xử lý",
-
-            "confirmed" =>
-                "Đã xác nhận",
-
-            "processing" =>
-                "Đang xử lý",
-
-            _ =>
-                status
-        };
     }
 }

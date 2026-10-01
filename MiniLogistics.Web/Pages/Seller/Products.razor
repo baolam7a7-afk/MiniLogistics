@@ -1,0 +1,193 @@
+@page "/seller/products"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Sản phẩm Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Sản phẩm</h1>
+        <p>Danh sách sản phẩm của cửa hàng đang chọn.</p>
+    </div>
+    <a class="app-button app-button-primary" href="/seller/products/new">Thêm sản phẩm</a>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Bạn chưa có cửa hàng. Hãy tạo shop trước khi thêm sản phẩm.</div>
+}
+else
+{
+    <div class="seller-filters">
+        <input class="seller-input" placeholder="Tìm theo tên" @bind="search" @bind:event="oninput" />
+        <select class="seller-select" @bind="status">
+            <option value="">Mọi trạng thái</option>
+            <option value="active">Đang bán</option>
+            <option value="draft">Nháp</option>
+            <option value="inactive">Ngừng bán</option>
+        </select>
+        <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải sản phẩm...</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="seller-empty">Chưa có sản phẩm phù hợp bộ lọc.</div>
+    }
+    else
+    {
+        <div class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Tên</th>
+                            <th>Danh mục</th>
+                            <th>Giá từ</th>
+                            <th>Trạng thái</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                    {
+                                        <img class="seller-thumb" src="@item.ImageUrl" alt="" />
+                                    }
+                                </td>
+                                <td>@item.Name</td>
+                                <td>@(item.CategoryName ?? item.CategoryId.ToString())</td>
+                                <td>@(item.MinPrice.HasValue ? SellerText.Money(item.MinPrice.Value) : "—")</td>
+                                <td><span class="seller-badge">@SellerText.ProductStatus(item.Status)</span></td>
+                                <td class="seller-actions">
+                                    <a class="app-button app-button-secondary" href="@($"/seller/products/{item.Id}/edit")">Sửa</a>
+                                    <button class="app-button app-button-secondary" @onclick="() => ToggleSale(item)">
+                                        @(item.Status == "active" ? "Ngừng bán" : "Hiện bán")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="seller-pager">
+                <button class="app-button app-button-secondary" disabled="@(pageIndex <= 1)" @onclick="PreviousPage">Trước</button>
+                <span>Trang @pageIndex / @Math.Max(totalPages, 1)</span>
+                <button class="app-button app-button-secondary" disabled="@(pageIndex >= totalPages)" @onclick="NextPage">Sau</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<SellerProduct> items = new();
+    private string search = "";
+    private string status = "";
+    private int pageIndex = 1;
+    private int totalPages = 1;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        pageIndex = 1;
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private Task PreviousPage() => Go(pageIndex - 1);
+
+    private Task NextPage() => Go(pageIndex + 1);
+
+    private async Task Go(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            items = new();
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/products?ShopId={Session.Shop.Id}&Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<SellerProduct>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = Math.Max(result.Data.TotalPages, 1);
+    }
+
+    private Task ToggleSale(SellerProduct item) =>
+        SetStatus(item, item.Status == "active" ? "inactive" : "active");
+
+    private async Task SetStatus(SellerProduct item, string next)
+    {
+        var result = await Api.PutAsync<SellerProduct>($"api/products/{item.Id}", new
+        {
+            item.ShopId,
+            item.CategoryId,
+            item.Name,
+            item.Slug,
+            item.Description,
+            Status = next
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật trạng thái sản phẩm." : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

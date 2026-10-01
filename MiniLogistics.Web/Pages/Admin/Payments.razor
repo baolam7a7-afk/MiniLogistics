@@ -1,0 +1,153 @@
+@page "/admin/payments"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Thanh toán</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Thanh toán</h1>
+        <p>Admin chỉ đổi được giao dịch đang chờ sang đã thanh toán hoặc thất bại. Giao dịch đã chốt không đổi lại.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <input class="seller-input" placeholder="Mã đơn" @bind="search" />
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="pending">Chờ thanh toán</option>
+        <option value="paid">Đã thanh toán</option>
+        <option value="failed">Thất bại</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải thanh toán...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có giao dịch phù hợp.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Phương thức</th>
+                        <th>Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Tạo lúc</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.OrderCode <span class="seller-muted">#@item.OrderId</span></td>
+                            <td>@item.Method</td>
+                            <td>@SellerText.Money(item.Amount)</td>
+                            <td><span class="seller-badge">@AdminText.PaymentStatus(item.Status)</span></td>
+                            <td>@SellerText.When(item.CreatedAt)</td>
+                            <td>
+                                @if (item.Status == "pending")
+                                {
+                                    <div class="seller-actions">
+                                        <button class="app-button app-button-primary" @onclick="() => MarkPaid(item.Id)">Đã thu</button>
+                                        <button class="app-button app-button-danger" @onclick="() => MarkFailed(item.Id)">Thất bại</button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<PaymentRecord> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string search = "";
+    private string status = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/payments?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<PaymentRecord>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private Task MarkPaid(long id) => SetStatus(id, "paid");
+
+    private Task MarkFailed(long id) => SetStatus(id, "failed");
+
+    private async Task SetStatus(long id, string next)
+    {
+        var result = await Api.PutAsync<PaymentRecord>($"api/payments/{id}/status", new { Status = next });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật thanh toán." : result.Error;
+        await LoadAsync();
+    }
+}

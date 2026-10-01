@@ -288,23 +288,22 @@
 
                     <div class="checkout-payment-list">
 
-                        <label class="checkout-payment-item @(selectedPaymentMethod == "COD" ? "selected" : "")">
-
-                            <input type="radio" name="paymentMethod" value="COD" checked="@IsCodSelected"
-                                   @onchange="SelectCod" />
-
+                        <label class="checkout-payment-item @(selectedPaymentMethod == "cod" ? "selected" : "")">
+                            <input type="radio" name="paymentMethod" value="cod" checked="@(selectedPaymentMethod == "cod")"
+                                   @onchange="@(() => selectedPaymentMethod = "cod")" />
                             <div>
-
-                                <strong>
-                                    Thanh toán khi nhận hàng
-                                </strong>
-
-                                <span>
-                                    Bạn thanh toán cho shipper khi nhận được hàng.
-                                </span>
-
+                                <strong>Thanh toán khi nhận hàng (COD)</strong>
+                                <span>Bạn thanh toán cho shipper khi nhận được hàng.</span>
                             </div>
+                        </label>
 
+                        <label class="checkout-payment-item @(selectedPaymentMethod == "qr" ? "selected" : "")">
+                            <input type="radio" name="paymentMethod" value="qr" checked="@(selectedPaymentMethod == "qr")"
+                                   @onchange="@(() => selectedPaymentMethod = "qr")" />
+                            <div>
+                                <strong>Thanh toán QR</strong>
+                                <span>Quét mã VietQR để thanh toán đơn hàng.</span>
+                            </div>
                         </label>
 
                     </div>
@@ -466,7 +465,7 @@
 
     private long selectedAddressId;
 
-    private string selectedPaymentMethod = "COD";
+    private string selectedPaymentMethod = "cod";
 
     private string note = string.Empty;
 
@@ -732,9 +731,14 @@
             // CREATE ORDER SUCCESS
             // -----------------------------------------------------
 
-            Navigation.NavigateTo(
-                $"/orders/{order.Id}");
-        }
+            if (string.Equals(selectedPaymentMethod, "qr", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo($"/orders/{order.Id}/qr-payment");
+            }
+            else
+            {
+                Navigation.NavigateTo($"/orders/{order.Id}");
+            }        }
         catch (Exception ex)
         {
             submitError =

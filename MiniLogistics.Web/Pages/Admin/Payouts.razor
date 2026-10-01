@@ -1,0 +1,128 @@
+@page "/admin/payouts"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Rút tiền</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Yêu cầu rút tiền</h1>
+        <p>Duyệt hoặc từ chối yêu cầu đang chờ. Seller là người tạo yêu cầu.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải yêu cầu...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Chưa có yêu cầu rút tiền.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Shop</th>
+                        <th>Số tiền</th>
+                        <th>Ngân hàng</th>
+                        <th>Trạng thái</th>
+                        <th>Gửi lúc</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@(item.ShopName ?? $"#{item.ShopId}")</td>
+                            <td>@SellerText.Money(item.Amount)</td>
+                            <td>@item.BankName · @item.BankAccountName · @item.BankAccountNumber</td>
+                            <td><span class="seller-badge">@SellerText.PayoutStatus(item.Status)</span></td>
+                            <td>@SellerText.When(item.RequestedAt)</td>
+                            <td>
+                                @if (item.Status == "requested")
+                                {
+                                    <div class="seller-actions">
+                                        <button class="app-button app-button-primary" @onclick="() => Approve(item.Id)">Duyệt</button>
+                                        <button class="app-button app-button-danger" @onclick="() => Reject(item.Id)">Từ chối</button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<PayoutRecord> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<PayoutRecord>>($"api/payout-requests?Page={pageIndex}&PageSize=10");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private async Task Approve(long id)
+    {
+        var result = await Api.PutAsync<PayoutRecord>($"api/payout-requests/{id}/approve");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã duyệt yêu cầu rút tiền." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Reject(long id)
+    {
+        var result = await Api.PutAsync<PayoutRecord>($"api/payout-requests/{id}/reject");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã từ chối yêu cầu rút tiền." : result.Error;
+        await LoadAsync();
+    }
+}

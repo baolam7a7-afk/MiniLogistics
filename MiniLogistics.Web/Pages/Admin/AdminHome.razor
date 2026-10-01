@@ -1,0 +1,143 @@
+@page "/admin"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Tổng quan Admin</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Tổng quan</h1>
+        <p>Số liệu toàn sàn từ API admin dashboard.</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải dashboard...</div>
+}
+else if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="app-alert app-alert-danger">@errorMessage</div>
+}
+else if (data != null)
+{
+    <div class="seller-grid">
+        <article class="seller-stat"><span>Doanh thu</span><strong>@SellerText.Money(data.Overview.TotalRevenue)</strong></article>
+        <article class="seller-stat"><span>Đơn hàng</span><strong>@data.Overview.TotalOrders</strong></article>
+        <article class="seller-stat"><span>Đơn hôm nay</span><strong>@data.Overview.TodayOrders</strong></article>
+        <article class="seller-stat"><span>Đơn tháng này</span><strong>@data.Overview.ThisMonthOrders</strong></article>
+        <article class="seller-stat"><span>Người dùng</span><strong>@data.Overview.TotalUsers</strong></article>
+        <article class="seller-stat"><span>Seller</span><strong>@data.Overview.TotalSellers</strong></article>
+        <article class="seller-stat"><span>Cửa hàng</span><strong>@data.Overview.TotalShops</strong></article>
+        <article class="seller-stat"><span>Sản phẩm</span><strong>@data.Overview.TotalProducts</strong></article>
+        <article class="seller-stat"><span>Hoàn tiền</span><strong>@data.Overview.TotalRefunds</strong></article>
+        <article class="seller-stat"><span>Tiền đã hoàn</span><strong>@SellerText.Money(data.Overview.TotalRefundAmount)</strong></article>
+    </div>
+
+    <div class="seller-split">
+        <section class="seller-card">
+            <h2>7 ngày gần nhất</h2>
+            <div class="seller-bars">
+                @foreach (var day in data.ByDay)
+                {
+                    <div class="seller-bar-row">
+                        <span>@day.Date.ToLocalTime().ToString("dd/MM")</span>
+                        <div class="seller-bar-track">
+                            <span style="@BarStyle(day.Revenue)"></span>
+                        </div>
+                        <strong>@SellerText.Money(day.Revenue)</strong>
+                    </div>
+                }
+            </div>
+        </section>
+        <section class="seller-card">
+            <h2>Theo trạng thái đơn</h2>
+            @if (data.ByOrderStatus.Count == 0)
+            {
+                <p class="seller-muted">Chưa có đơn.</p>
+            }
+            else
+            {
+                @foreach (var row in data.ByOrderStatus)
+                {
+                    <p>@SellerText.OrderStatus(row.Status): <strong>@row.TotalOrders</strong> · @SellerText.Money(row.TotalAmount)</p>
+                }
+            }
+        </section>
+    </div>
+
+    <section class="seller-card">
+        <h2>Cửa hàng</h2>
+        @if (data.ByShop.Count == 0)
+        {
+            <p class="seller-muted">Chưa có thống kê shop.</p>
+        }
+        else
+        {
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Shop</th>
+                            <th>Seller</th>
+                            <th>Đơn</th>
+                            <th>Đã giao</th>
+                            <th>Doanh thu</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var shop in data.ByShop)
+                        {
+                            <tr>
+                                <td>@shop.ShopName</td>
+                                <td>@shop.SellerName</td>
+                                <td>@shop.TotalOrders</td>
+                                <td>@shop.DeliveredOrders</td>
+                                <td>@SellerText.Money(shop.Revenue)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private AdminDashboard? data;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var result = await Api.GetAsync<AdminDashboard>("api/admin/dashboard");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error ?? "Không tải được dashboard.";
+            return;
+        }
+
+        data = result.Data;
+    }
+
+    private string BarStyle(decimal value)
+    {
+        var max = data?.ByDay.Select(day => day.Revenue).DefaultIfEmpty(1).Max() ?? 1;
+        if (max <= 0)
+        {
+            max = 1;
+        }
+
+        var width = Math.Clamp((double)(value / max) * 100, value > 0 ? 4 : 0, 100);
+        return $"width:{width.ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
+}

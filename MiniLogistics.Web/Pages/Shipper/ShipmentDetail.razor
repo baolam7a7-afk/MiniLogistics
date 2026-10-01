@@ -1,0 +1,198 @@
+@page "/shipper/shipments/{ShipmentId:long}"
+@layout ShipperLayout
+@using MiniLogistics.Web.Services.Seller
+@inject SellerApi Api
+@inject ShipperSession Session
+
+<PageTitle>Chi tiết giao hàng</PageTitle>
+
+<a class="app-button app-button-secondary" href="/shipper/shipments">Về danh sách</a>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")" style="margin-top:12px">@message</div>
+}
+
+@if (isLoading)
+{
+    <p class="shipper-muted">Đang tải shipment...</p>
+}
+else if (shipment == null)
+{
+    <div class="shipper-card"><p>Không có dữ liệu giao hàng.</p></div>
+}
+else
+{
+    <section class="shipper-card">
+        <div class="shipper-row">
+            <h2 style="margin:0">@(shipment.TrackingCode ?? $"Shipment #{shipment.Id}")</h2>
+            <span class="shipper-badge @ShipperText.Badge(shipment.Status)">@ShipperText.Status(shipment.Status)</span>
+        </div>
+        <p>Mã đơn: <strong>@(shipment.OrderCode ?? $"#{shipment.OrderId}")</strong></p>
+        <p>Shop: <strong>@(shipment.ShopName ?? "—")</strong></p>
+        <p>Người nhận: <strong>@(shipment.ReceiverName ?? "—")</strong> · @(shipment.ReceiverPhone ?? "—")</p>
+        <p>Địa chỉ: @(string.IsNullOrWhiteSpace(shipment.AddressLine) ? "—" : shipment.AddressLine)</p>
+        <p>Thanh toán: @shipment.PaymentMethod · Phí ship @SellerText.Money(shipment.ShippingFee)</p>
+        <p>COD: <strong>@SellerText.Money(shipment.CodAmount)</strong></p>
+        @if (!string.IsNullOrWhiteSpace(shipment.Note))
+        {
+            <p>Ghi chú: @shipment.Note</p>
+        }
+        <p class="shipper-muted">Gán: @(shipment.AssignedAt.HasValue ? SellerText.When(shipment.AssignedAt.Value) : "—")</p>
+        <p class="shipper-muted">Lấy hàng: @(shipment.PickedAt.HasValue ? SellerText.When(shipment.PickedAt.Value) : "—")</p>
+        <p class="shipper-muted">Giao xong: @(shipment.DeliveredAt.HasValue ? SellerText.When(shipment.DeliveredAt.Value) : "—")</p>
+        @if (shipment.Items.Count > 0)
+        {
+            <ul>
+                @foreach (var item in shipment.Items)
+                {
+                    <li>@item.ProductName · @item.VariantName · SL @item.Quantity</li>
+                }
+            </ul>
+        }
+        @if (shipment.CodAmount > 0)
+        {
+            <p class="shipper-muted">Khi chuyển sang đã giao, backend tự ghi nhận thanh toán COD nếu đơn đang xử lý. Không sửa số tiền tại đây.</p>
+        }
+    </section>
+
+    <section class="shipper-card">
+        <h2>Cập nhật trạng thái</h2>
+        @if (nextStatus == null)
+        {
+            <p class="shipper-muted">Không còn bước nào shipper được chuyển từ trạng thái này.</p>
+        }
+        else if (!confirming)
+        {
+            <div class="shipper-actions">
+                <button class="app-button app-button-primary" disabled="@isSaving" @onclick="AskConfirm">
+                    @ShipperText.Action(nextStatus)
+                </button>
+            </div>
+        }
+        else
+        {
+            <p>Xác nhận chuyển sang <strong>@ShipperText.Status(nextStatus)</strong>?</p>
+            <label class="shipper-muted">Địa điểm (chữ)
+                <input class="shipper-input" @bind="location" maxlength="200" />
+            </label>
+            <label class="shipper-muted">Ghi chú
+                <textarea class="shipper-textarea" @bind="note" maxlength="500"></textarea>
+            </label>
+            <div class="shipper-actions">
+                <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Submit">
+                    @(isSaving ? "Đang gửi..." : "Xác nhận")
+                </button>
+                <button class="app-button app-button-secondary" disabled="@isSaving" @onclick="CancelConfirm">Hủy</button>
+            </div>
+        }
+    </section>
+
+    <section class="shipper-card">
+        <h2>Hành trình</h2>
+        @if (shipment.Events.Count == 0)
+        {
+            <p class="shipper-muted">Chưa có sự kiện.</p>
+        }
+        else
+        {
+            <ol class="shipper-timeline">
+                @foreach (var item in shipment.Events.OrderBy(evt => evt.CreatedAt))
+                {
+                    <li>
+                        <strong>@ShipperText.Status(item.Status)</strong>
+                        <div class="shipper-muted">@SellerText.When(item.CreatedAt)</div>
+                        @if (!string.IsNullOrWhiteSpace(item.Location))
+                        {
+                            <div>@item.Location</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.Note))
+                        {
+                            <div>@item.Note</div>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public long ShipmentId { get; set; }
+
+    private ShipmentRecord? shipment;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool isError;
+    private bool confirming;
+    private string? message;
+    private string? location;
+    private string? note;
+    private string? nextStatus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<ShipmentRecord>($"api/shipments/{ShipmentId}");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error ?? "Không tải được shipment.";
+            shipment = null;
+            return;
+        }
+
+        shipment = result.Data;
+        nextStatus = ShipperText.Next(shipment.Status);
+        confirming = false;
+    }
+
+    private void AskConfirm() => confirming = true;
+
+    private void CancelConfirm()
+    {
+        confirming = false;
+        location = null;
+        note = null;
+    }
+
+    private async Task Submit()
+    {
+        if (isSaving || nextStatus == null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        var result = await Api.PutAsync<ShipmentRecord>($"api/shipments/{ShipmentId}/status", new
+        {
+            Status = nextStatus,
+            Location = location,
+            Note = note
+        });
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok
+            ? "Đã cập nhật trạng thái giao hàng."
+            : result.Error;
+        if (result.Ok)
+        {
+            location = null;
+            note = null;
+            await LoadAsync();
+        }
+    }
+}

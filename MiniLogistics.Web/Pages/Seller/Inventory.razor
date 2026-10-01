@@ -1,0 +1,183 @@
+@page "/seller/inventory"
+@layout SellerLayout
+@using System.Text.Json
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Tồn kho Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Tồn kho</h1>
+        <p>Số có thể bán lấy từ biến thể của shop đang chọn. API không có lịch sử nhập xuất.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+    @if (lowStockCount > 0)
+    {
+        <div class="app-alert app-alert-warning">@lowStockCount biến thể sắp hết hoặc đã hết (còn từ 5 trở xuống).</div>
+    }
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải tồn kho...</div>
+    }
+    else if (rows.Count == 0)
+    {
+        <div class="seller-empty">Shop chưa có biến thể để theo dõi tồn kho.</div>
+    }
+    else
+    {
+        <div class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Sản phẩm</th>
+                            <th>Biến thể</th>
+                            <th>SKU</th>
+                            <th>Có thể bán</th>
+                            <th>Số lượng</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                <td>@row.ProductName</td>
+                                <td>@row.Variant.VariantName</td>
+                                <td>@(row.Variant.Sku ?? "—")</td>
+                                <td>
+                                    <span class="seller-badge @(row.Variant.Stock <= 5 ? "warn" : "ok")">@row.Variant.Stock</span>
+                                </td>
+                                <td>
+                                    <input class="seller-input" type="number" min="1" @bind="row.Quantity" />
+                                </td>
+                                <td class="seller-actions">
+                                    <button class="app-button app-button-secondary" @onclick="() => Increase(row)">Nhập</button>
+                                    <button class="app-button app-button-secondary" @onclick="() => Decrease(row)">Xuất</button>
+                                    <button class="app-button app-button-secondary" @onclick="() => Adjust(row)">Điều chỉnh</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private readonly List<StockRow> rows = new();
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    private int lowStockCount => rows.Count(row => row.Variant.Stock <= 5);
+
+    private Task Increase(StockRow row) => Change(row, "increase");
+
+    private Task Decrease(StockRow row) => Change(row, "decrease");
+
+    private Task Adjust(StockRow row) => Change(row, "adjust");
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        rows.Clear();
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var products = await Api.GetAsync<PagedResult<SellerProduct>>(
+            $"api/products?ShopId={Session.Shop.Id}&Page=1&PageSize=100");
+        if (!products.Ok || products.Data == null)
+        {
+            isLoading = false;
+            isError = true;
+            message = products.Error;
+            return;
+        }
+
+        foreach (var product in products.Data.Items)
+        {
+            var variants = await Api.GetAsync<List<SellerVariant>>(
+                $"api/product-variants/product/{product.Id}");
+            foreach (var variant in variants.Data ?? new())
+            {
+                rows.Add(new StockRow
+                {
+                    ProductName = product.Name,
+                    Variant = variant,
+                    Quantity = 1
+                });
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task Change(StockRow row, string action)
+    {
+        if (action != "adjust" && row.Quantity < 1)
+        {
+            isError = true;
+            message = "Số lượng nhập hoặc xuất phải lớn hơn 0.";
+            return;
+        }
+
+        var url = action switch
+        {
+            "increase" => $"api/inventory/variant/{row.Variant.Id}/increase",
+            "decrease" => $"api/inventory/variant/{row.Variant.Id}/decrease",
+            _ => $"api/inventory/variant/{row.Variant.Id}/adjust"
+        };
+        var methodResult = action == "adjust"
+            ? await Api.PutAsync<JsonElement>(url, new { Quantity = row.Quantity })
+            : await Api.PostAsync<JsonElement>(url, new { Quantity = row.Quantity });
+
+        isError = !methodResult.Ok;
+        message = methodResult.Ok
+            ? "Đã cập nhật tồn kho."
+            : methodResult.Error;
+        if (methodResult.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+
+    private sealed class StockRow
+    {
+        public string ProductName { get; set; } = "";
+        public SellerVariant Variant { get; set; } = new();
+        public int Quantity { get; set; } = 1;
+    }
+}

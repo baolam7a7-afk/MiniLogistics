@@ -7,6 +7,7 @@ using MiniLogistics.DAL.UnitOfWork;
 
 using ShipmentModel = MiniLogistics.DAL.Models.Shipment;
 using ShipmentEventModel = MiniLogistics.DAL.Models.ShipmentEvent;
+using OrderEntity = MiniLogistics.DAL.Models.Order;
 
 namespace MiniLogistics.BLL.Services.Shipment;
 
@@ -1044,6 +1045,8 @@ public class ShipmentService : IShipmentService
                                         payment);
                             }
                         }
+
+                        await SettleDeliveredOrderAsync(order);
                     }
 
                     // =====================================
@@ -1277,6 +1280,9 @@ public class ShipmentService : IShipmentService
                         x.ShipmentId ==
                         shipment.Id);
 
+        var delivery =
+            await LoadDeliveryAsync(shipment.OrderId);
+
         // =================================================
         // BUILD RESPONSE
         // =================================================
@@ -1319,6 +1325,16 @@ public class ShipmentService : IShipmentService
             UpdatedAt =
                 shipment.UpdatedAt,
 
+            OrderCode = delivery?.OrderCode,
+            ShopName = delivery?.ShopName,
+            PaymentMethod = delivery?.PaymentMethod,
+            ShippingFee = delivery?.ShippingFee ?? 0,
+            Note = delivery?.Note,
+            ReceiverName = delivery?.ReceiverName,
+            ReceiverPhone = delivery?.ReceiverPhone,
+            AddressLine = delivery?.AddressLine,
+            Items = delivery?.Items ?? new(),
+
             Events =
                 events
                     .OrderBy(
@@ -1344,6 +1360,115 @@ public class ShipmentService : IShipmentService
                                     x.CreatedAt
                             })
                     .ToList()
+        };
+    }
+
+    private async Task SettleDeliveredOrderAsync(OrderEntity order)
+    {
+        var items = await _unitOfWork.OrderItems
+            .FindAsync(item => item.OrderId == order.Id);
+
+        foreach (var item in items)
+        {
+            var inventories = await _unitOfWork.Inventories
+                .FindAsync(row => row.ProductVariantId == item.VariantId);
+
+            var inventory = inventories.FirstOrDefault()
+                ?? throw new NotFoundException(
+                    $"Inventory của Variant {item.VariantId} không tồn tại.");
+
+            if (item.Quantity > inventory.ReservedQuantity ||
+                item.Quantity > inventory.Quantity)
+            {
+                throw new BadRequestException(
+                    $"Tồn kho của Variant {item.VariantId} không đủ để hoàn tất giao hàng.");
+            }
+
+            inventory.ReservedQuantity -= item.Quantity;
+            inventory.Quantity -= item.Quantity;
+            inventory.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.Inventories.Update(inventory);
+        }
+
+        var credits = await _unitOfWork.ShopWalletTransactions
+            .FindAsync(row =>
+                row.OrderId == order.Id &&
+                row.Type == "SALE_CREDIT");
+
+        if (credits.Any())
+        {
+            return;
+        }
+
+        var wallets = await _unitOfWork.ShopWallets
+            .FindAsync(row => row.ShopId == order.ShopId);
+
+        var wallet = wallets.FirstOrDefault();
+        if (wallet == null)
+        {
+            wallet = new MiniLogistics.DAL.Models.ShopWallet
+            {
+                ShopId = order.ShopId,
+                Balance = 0,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _unitOfWork.ShopWallets.AddAsync(wallet);
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        wallet.Balance += order.Total;
+        wallet.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.ShopWallets.Update(wallet);
+
+        await _unitOfWork.ShopWalletTransactions.AddAsync(
+            new MiniLogistics.DAL.Models.ShopWalletTransaction
+            {
+                WalletId = wallet.Id,
+                OrderId = order.Id,
+                Type = "SALE_CREDIT",
+                Amount = order.Total,
+                Description = $"Doanh thu đơn {order.OrderCode}",
+                CreatedAt = DateTime.UtcNow
+            });
+    }
+
+    private async Task<ShipmentResponseDTO?> LoadDeliveryAsync(long orderId)
+    {
+        var order = await _unitOfWork.Orders.GetByIdAsync(orderId);
+        if (order == null)
+        {
+            return null;
+        }
+
+        var shop = await _unitOfWork.Shops.GetByIdAsync(order.ShopId);
+        var address = await _unitOfWork.Addresses.GetByIdAsync(order.ShippingAddressId);
+        var items = await _unitOfWork.OrderItems
+            .FindAsync(item => item.OrderId == order.Id);
+
+        var line = new[]
+        {
+            address?.Line1,
+            address?.Ward,
+            address?.District,
+            address?.Province
+        };
+
+        return new ShipmentResponseDTO
+        {
+            OrderCode = order.OrderCode,
+            ShopName = shop?.Name,
+            PaymentMethod = order.PaymentMethod,
+            ShippingFee = order.ShippingFee,
+            Note = order.Note,
+            ReceiverName = address?.ReceiverName,
+            ReceiverPhone = address?.ReceiverPhone,
+            AddressLine = string.Join(", ", line.Where(part => !string.IsNullOrWhiteSpace(part))),
+            Items = items.Select(item => new ShipmentLineDTO
+            {
+                ProductName = item.ProductNameSnapshot,
+                VariantName = item.VariantNameSnapshot,
+                Quantity = item.Quantity
+            }).ToList()
         };
     }
 }

@@ -1,0 +1,195 @@
+@page "/seller/orders/{OrderId:long}"
+@layout SellerLayout
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Chi tiết đơn</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>@(order?.OrderCode ?? "Chi tiết đơn")</h1>
+        <p>Seller chỉ được xác nhận, chuyển xử lý hoặc hủy theo đúng bước của API.</p>
+    </div>
+    <a class="app-button app-button-secondary" href="/seller/orders">Về danh sách</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải đơn hàng...</div>
+}
+else if (order == null)
+{
+    <div class="seller-empty">Không có dữ liệu đơn hàng.</div>
+}
+else
+{
+    <section class="seller-card">
+        <h2>@SellerText.OrderStatus(order.Status)</h2>
+        <div class="seller-two">
+            <p>Khách hàng: <strong>#@order.CustomerId</strong></p>
+            <p>Địa chỉ giao: <strong>#@order.ShippingAddressId</strong></p>
+            <p>Shop: <strong>#@order.ShopId</strong></p>
+            <p>Thanh toán: <strong>@order.PaymentMethod</strong></p>
+            <p>Tạm tính: <strong>@SellerText.Money(order.Subtotal)</strong></p>
+            <p>Phí ship: <strong>@SellerText.Money(order.ShippingFee)</strong></p>
+            <p>Giảm giá: <strong>@SellerText.Money(order.DiscountTotal)</strong></p>
+            <p>Tổng: <strong>@SellerText.Money(order.Total)</strong></p>
+        </div>
+        <p class="seller-muted">API đơn hàng trả mã khách và mã địa chỉ, không trả tên hoặc địa chỉ chữ.</p>
+        @if (!string.IsNullOrWhiteSpace(order.Note))
+        {
+            <p>Ghi chú: @order.Note</p>
+        }
+    </section>
+
+    <section class="seller-card">
+        <h2>Sản phẩm</h2>
+        @if (order.Items.Count == 0)
+        {
+            <p class="seller-empty">Đơn không có dòng hàng.</p>
+        }
+        else
+        {
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Sản phẩm</th>
+                            <th>Biến thể</th>
+                            <th>Giá</th>
+                            <th>SL</th>
+                            <th>Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in order.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.VariantName</td>
+                                <td>@SellerText.Money(item.UnitPrice)</td>
+                                <td>@item.Quantity</td>
+                                <td>@SellerText.Money(item.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="seller-card">
+        <h2>Cập nhật trạng thái</h2>
+        @if (!nextStatuses.Any())
+        {
+            <p class="seller-muted">Không có bước nào seller được chuyển từ trạng thái hiện tại.</p>
+        }
+        else
+        {
+            <div class="seller-form">
+                <label>Trạng thái mới
+                    <select class="seller-select" @bind="nextStatus">
+                        @foreach (var item in nextStatuses)
+                        {
+                            <option value="@item">@SellerText.OrderStatus(item)</option>
+                        }
+                    </select>
+                </label>
+                <label>Ghi chú
+                    <input class="seller-input" @bind="statusMessage" />
+                </label>
+                <button class="app-button app-button-primary" @onclick="UpdateStatus">Cập nhật</button>
+            </div>
+        }
+        @if (order.StatusLogs.Count > 0)
+        {
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Từ</th>
+                            <th>Đến</th>
+                            <th>Ghi chú</th>
+                            <th>Lúc</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in order.StatusLogs)
+                        {
+                            <tr>
+                                <td>@SellerText.OrderStatus(log.FromStatus)</td>
+                                <td>@SellerText.OrderStatus(log.ToStatus)</td>
+                                <td>@(log.Message ?? "—")</td>
+                                <td>@SellerText.When(log.CreatedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public long OrderId { get; set; }
+
+    private SellerOrder? order;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+    private string nextStatus = "";
+    private string? statusMessage;
+
+    private IEnumerable<string> nextStatuses => order?.Status switch
+    {
+        "pending" or "paid" => new[] { "confirmed", "cancelled" },
+        "confirmed" => new[] { "processing", "cancelled" },
+        "processing" => new[] { "cancelled" },
+        _ => Array.Empty<string>()
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var result = await Api.GetAsync<SellerOrder>($"api/orders/{OrderId}");
+        isLoading = false;
+        if (!result.Ok)
+        {
+            isError = true;
+            message = result.Error;
+            order = null;
+            return;
+        }
+
+        order = result.Data;
+        nextStatus = nextStatuses.FirstOrDefault() ?? "";
+    }
+
+    private async Task UpdateStatus()
+    {
+        var result = await Api.PutAsync<SellerOrder>($"api/orders/{OrderId}/status", new
+        {
+            Status = nextStatus,
+            Message = statusMessage
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật trạng thái đơn." : result.Error;
+        if (result.Ok)
+        {
+            order = result.Data;
+            statusMessage = "";
+            nextStatus = nextStatuses.FirstOrDefault() ?? "";
+        }
+    }
+}

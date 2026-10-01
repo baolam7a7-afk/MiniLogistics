@@ -223,6 +223,31 @@ public class UnitOfWork : IUnitOfWork
             new Repository<OrderVoucher>(_context);
 
 
+    private IRepository<UserVoucher>? _userVouchers;
+
+    public IRepository<UserVoucher> UserVouchers =>
+        _userVouchers ??=
+            new Repository<UserVoucher>(_context);
+
+
+    // =====================================================
+    // CHAT
+    // =====================================================
+
+    private IRepository<Conversation>? _conversations;
+
+    public IRepository<Conversation> Conversations =>
+        _conversations ??=
+            new Repository<Conversation>(_context);
+
+
+    private IRepository<ChatMessage>? _chatMessages;
+
+    public IRepository<ChatMessage> ChatMessages =>
+        _chatMessages ??=
+            new Repository<ChatMessage>(_context);
+
+
     // =====================================================
     // SUPPORT TICKET
     // =====================================================

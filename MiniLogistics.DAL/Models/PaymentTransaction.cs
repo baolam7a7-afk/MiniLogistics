@@ -14,5 +14,14 @@ public class PaymentTransaction
     public string? ProviderTxnId { get; set; }
     public DateTime? PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Nội dung/payload QR (VietQR URL hoặc EMV).</summary>
+    public string? QrPayload { get; set; }
+
+    /// <summary>Mã tham chiếu thanh toán hiển thị cho user.</summary>
+    public string? PaymentRef { get; set; }
+
+    public DateTime? ExpiresAt { get; set; }
+
     public Order Order { get; set; } = null!;
 }

@@ -1,0 +1,144 @@
+@page "/admin/reports"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Báo cáo</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Ảnh chụp báo cáo</h1>
+        <p>API lưu snapshot theo scope system hoặc shop. MetricsJson phải là JSON hợp lệ.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+<section class="seller-card">
+    <h2>Tạo snapshot</h2>
+    <div class="seller-two">
+        <label class="seller-field">Phạm vi
+            <select class="seller-select" @bind="scope">
+                <option value="system">Toàn hệ thống</option>
+                <option value="shop">Một cửa hàng</option>
+            </select>
+        </label>
+        <label class="seller-field">Mã shop (khi phạm vi là shop)
+            <input class="seller-input" @bind="shopText" />
+        </label>
+        <label class="seller-field">Từ ngày
+            <input class="seller-input" type="date" @bind="dateFrom" />
+        </label>
+        <label class="seller-field">Đến ngày
+            <input class="seller-input" type="date" @bind="dateTo" />
+        </label>
+    </div>
+    <label class="seller-field">Metrics JSON
+        <textarea class="seller-input" @bind="metricsJson"></textarea>
+    </label>
+    <button class="app-button app-button-primary" @onclick="Create">Lưu snapshot</button>
+</section>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải báo cáo...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Chưa có snapshot.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Thời điểm</th>
+                        <th>Phạm vi</th>
+                        <th>Shop</th>
+                        <th>Khoảng ngày</th>
+                        <th>Metrics</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@SellerText.When(item.CreatedAt)</td>
+                            <td>@item.Scope</td>
+                            <td>@(item.ShopId?.ToString() ?? "—")</td>
+                            <td>@item.DateFrom.ToString("dd/MM/yyyy") – @item.DateTo.ToString("dd/MM/yyyy")</td>
+                            <td>@Trim(item.MetricsJson)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private List<ReportRecord> items = new();
+    private string scope = "system";
+    private string shopText = "";
+    private DateTime dateFrom = DateTime.Today.AddDays(-7);
+    private DateTime dateTo = DateTime.Today;
+    private string metricsJson = "{\"note\":\"manual snapshot\"}";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<List<ReportRecord>>("api/report-snapshots");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.OrderByDescending(item => item.CreatedAt).ToList();
+    }
+
+    private async Task Create()
+    {
+        long? shopId = long.TryParse(shopText, out var parsed) ? parsed : null;
+        var result = await Api.PostAsync<ReportRecord>("api/report-snapshots", new
+        {
+            Scope = scope,
+            ShopId = shopId,
+            DateFrom = DateOnly.FromDateTime(dateFrom),
+            DateTo = DateOnly.FromDateTime(dateTo),
+            MetricsJson = metricsJson
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu snapshot." : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private static string Trim(string value) =>
+        value.Length <= 80 ? value : value[..80] + "…";
+}

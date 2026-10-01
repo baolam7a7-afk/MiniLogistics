@@ -1,0 +1,211 @@
+@page "/seller/vouchers"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Voucher Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Voucher cửa hàng</h1>
+        <p>Seller chỉ tạo voucher scope shop cho cửa hàng của mình.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+
+    <section class="seller-card">
+        <h2>Tạo voucher</h2>
+        <div class="seller-two">
+            <label class="seller-field">Mã
+                <input class="seller-input" @bind="code" />
+            </label>
+            <label class="seller-field">Tên
+                <input class="seller-input" @bind="voucherName" />
+            </label>
+            <label class="seller-field">Loại giảm
+                <select class="seller-select" @bind="discountType">
+                    <option value="percent">Phần trăm</option>
+                    <option value="amount">Số tiền</option>
+                </select>
+            </label>
+            <label class="seller-field">Giá trị
+                <input class="seller-input" type="number" min="0.01" step="0.01" @bind="discountValue" />
+            </label>
+            <label class="seller-field">Giảm tối đa
+                <input class="seller-input" type="number" min="0" @bind="maxDiscount" />
+            </label>
+            <label class="seller-field">Đơn tối thiểu
+                <input class="seller-input" type="number" min="0" @bind="minOrder" />
+            </label>
+            <label class="seller-field">Số lượt
+                <input class="seller-input" type="number" min="1" @bind="usageLimit" />
+            </label>
+            <label class="seller-field">Bắt đầu
+                <input class="seller-input" type="datetime-local" @bind="startAt" />
+            </label>
+            <label class="seller-field">Kết thúc
+                <input class="seller-input" type="datetime-local" @bind="endAt" />
+            </label>
+        </div>
+        <label class="seller-field">Mô tả
+            <textarea class="seller-textarea" @bind="description"></textarea>
+        </label>
+        <button class="app-button app-button-primary" @onclick="Create">Tạo voucher</button>
+    </section>
+
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải voucher...</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="seller-empty">Shop chưa có voucher.</div>
+    }
+    else
+    {
+        <section class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Mã</th>
+                            <th>Giá trị</th>
+                            <th>Đơn tối thiểu</th>
+                            <th>Lượt</th>
+                            <th>Hạn</th>
+                            <th>Trạng thái</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td>@item.Code</td>
+                                <td>@(item.DiscountType == "percent" ? $"{item.DiscountValue}%" : SellerText.Money(item.DiscountValue))</td>
+                                <td>@(item.MinOrderValue.HasValue ? SellerText.Money(item.MinOrderValue.Value) : "—")</td>
+                                <td>@item.UsedCount / @(item.UsageLimit?.ToString() ?? "∞")</td>
+                                <td>@SellerText.When(item.StartAt) – @SellerText.When(item.EndAt)</td>
+                                <td><span class="seller-badge">@SellerText.VoucherStatus(item.Status)</span></td>
+                                <td>
+                                    <button class="app-button app-button-secondary" @onclick="() => Toggle(item)">
+                                        @(item.Status == "active" ? "Tắt" : "Bật")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private List<SellerVoucher> items = new();
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+    private string code = "";
+    private string? voucherName;
+    private string? description;
+    private string discountType = "percent";
+    private decimal discountValue = 10;
+    private decimal? maxDiscount;
+    private decimal? minOrder;
+    private int? usageLimit = 100;
+    private DateTime startAt = DateTime.Now;
+    private DateTime endAt = DateTime.Now.AddDays(30);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<SellerVoucher>>(
+            $"api/vouchers/shop/{Session.Shop.Id}?Page=1&PageSize=50");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+    }
+
+    private async Task Create()
+    {
+        if (Session.Shop == null)
+        {
+            return;
+        }
+
+        var result = await Api.PostAsync<SellerVoucher>("api/vouchers", new
+        {
+            Scope = "shop",
+            ShopId = Session.Shop.Id,
+            Code = code.Trim(),
+            Name = voucherName,
+            Description = description,
+            DiscountType = discountType,
+            DiscountValue = discountValue,
+            MaxDiscount = maxDiscount,
+            MinOrderValue = minOrder,
+            UsageLimit = usageLimit,
+            StartAt = startAt,
+            EndAt = endAt
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã tạo voucher." : result.Error;
+        if (result.Ok)
+        {
+            code = "";
+            await LoadAsync();
+        }
+    }
+
+    private async Task Toggle(SellerVoucher item)
+    {
+        var next = item.Status == "active" ? "inactive" : "active";
+        var result = await Api.PutAsync<SellerVoucher>($"api/vouchers/{item.Id}", new { Status = next });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã đổi trạng thái voucher." : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

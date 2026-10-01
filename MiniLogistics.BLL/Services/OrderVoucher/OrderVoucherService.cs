@@ -1,6 +1,7 @@
 using MiniLogistics.BLL.DTOs.OrderVoucher;
 using MiniLogistics.BLL.Exceptions;
 using MiniLogistics.DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 
 using OrderModel = MiniLogistics.DAL.Models.Order;
 using OrderVoucherModel = MiniLogistics.DAL.Models.OrderVoucher;
@@ -377,6 +378,19 @@ foreach (var payment in payments)
 
                 _unitOfWork.Vouchers
                     .Update(voucher);
+
+                var userVoucher = await _unitOfWork.UserVouchers.Query()
+                    .FirstOrDefaultAsync(uv =>
+                        uv.UserId == customerId &&
+                        uv.VoucherId == voucher.Id &&
+                        uv.Status == "available");
+
+                if (userVoucher != null)
+                {
+                    userVoucher.Status = "used";
+                    userVoucher.UsedAt = DateTime.UtcNow;
+                    userVoucher.UsedOrderId = order.Id;
+                }
 
 
                 // =========================================

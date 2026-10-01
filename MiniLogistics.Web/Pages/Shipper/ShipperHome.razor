@@ -1,0 +1,158 @@
+@page "/shipper"
+@layout ShipperLayout
+@using MiniLogistics.Web.Services.Seller
+@inject SellerApi Api
+@inject ShipperSession Session
+
+<PageTitle>Tổng quan giao hàng</PageTitle>
+
+<div class="shipper-head">
+    <h1>Tổng quan</h1>
+    <p>Số liệu lấy từ các đơn đã được gán cho tài khoản đang đăng nhập.</p>
+</div>
+
+@if (isLoading)
+{
+    <p class="shipper-muted">Đang tải đơn giao...</p>
+}
+else if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="app-alert app-alert-danger">@errorMessage</div>
+}
+else
+{
+    <div class="shipper-stats">
+        <article class="shipper-stat"><span>Được phân công</span><strong>@total</strong></article>
+        <article class="shipper-stat"><span>Chờ lấy</span><strong>@assigned</strong></article>
+        <article class="shipper-stat"><span>Đang giao</span><strong>@(pickedUp + shipping)</strong></article>
+        <article class="shipper-stat"><span>Đã giao</span><strong>@delivered</strong></article>
+    </div>
+
+    <section class="shipper-card">
+        <h2>Tỷ lệ giao thành công</h2>
+        @if (total == 0)
+        {
+            <p class="shipper-muted">Chưa đủ đơn để tính tỷ lệ.</p>
+        }
+        else
+        {
+            <p><strong>@successRate%</strong> trên @total đơn được gán (@delivered đã giao).</p>
+        }
+        <p class="shipper-muted">Hôm nay, trong @recent.Count đơn mới nhất: @todayCount đơn có thời điểm gán hoặc tạo trong ngày. API chưa lọc theo ngày.</p>
+    </section>
+
+    <section class="shipper-card">
+        <h2>Cần xử lý</h2>
+        @if (actionable.Count == 0)
+        {
+            <p class="shipper-muted">Không có đơn chờ lấy hoặc đang giao trong trang mới nhất.</p>
+        }
+        else
+        {
+            @foreach (var item in actionable)
+            {
+                <a class="shipper-card shipper-job" href="@($"/shipper/shipments/{item.Id}")">
+                    <div class="shipper-row">
+                        <strong>@(item.TrackingCode ?? $"Shipment #{item.Id}")</strong>
+                        <span class="shipper-badge @ShipperText.Badge(item.Status)">@ShipperText.Status(item.Status)</span>
+                    </div>
+                    <span class="shipper-muted">Đơn #@item.OrderId · COD @SellerText.Money(item.CodAmount)</span>
+                </a>
+            }
+        }
+        <a class="app-button app-button-secondary" href="/shipper/shipments">Xem tất cả đơn</a>
+    </section>
+
+    <section class="shipper-card">
+        <h2>Gần đây</h2>
+        @if (recent.Count == 0)
+        {
+            <p class="shipper-muted">Chưa có đơn được phân công.</p>
+        }
+        else
+        {
+            @foreach (var item in recent)
+            {
+                <a class="shipper-card shipper-job" href="@($"/shipper/shipments/{item.Id}")">
+                    <div class="shipper-row">
+                        <strong>@(item.TrackingCode ?? $"#{item.Id}")</strong>
+                        <span class="shipper-badge @ShipperText.Badge(item.Status)">@ShipperText.Status(item.Status)</span>
+                    </div>
+                    <span class="shipper-muted">@SellerText.When(item.UpdatedAt ?? item.CreatedAt)</span>
+                </a>
+            }
+        }
+    </section>
+}
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private int total;
+    private int assigned;
+    private int pickedUp;
+    private int shipping;
+    private int delivered;
+    private int todayCount;
+    private int successRate;
+    private List<ShipmentRecord> recent = new();
+    private List<ShipmentRecord> actionable = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var all = await LoadCount(null);
+        if (all.Error != null && !all.Ok)
+        {
+            isLoading = false;
+            errorMessage = all.Error;
+            return;
+        }
+
+        total = all.Total;
+        assigned = (await LoadCount("assigned")).Total;
+        pickedUp = (await LoadCount("picked_up")).Total;
+        shipping = (await LoadCount("shipping")).Total;
+        delivered = (await LoadCount("delivered")).Total;
+        successRate = total == 0 ? 0 : (int)Math.Round(delivered * 100d / total);
+
+        var list = await Api.GetAsync<PagedResult<ShipmentRecord>>("api/shipments/my?Page=1&PageSize=20");
+        isLoading = false;
+        if (!list.Ok || list.Data == null)
+        {
+            errorMessage = list.Error;
+            return;
+        }
+
+        recent = list.Data.Items;
+        var today = DateTime.Now.Date;
+        todayCount = recent.Count(item =>
+        {
+            var mark = item.AssignedAt ?? item.CreatedAt;
+            var local = mark.Kind == DateTimeKind.Utc ? mark.ToLocalTime() : mark;
+            return local.Date == today;
+        });
+        actionable = recent
+            .Where(item => item.Status is "assigned" or "picked_up" or "shipping")
+            .Take(5)
+            .ToList();
+    }
+
+    private async Task<(bool Ok, int Total, string? Error)> LoadCount(string? status)
+    {
+        var url = "api/shipments/my?Page=1&PageSize=1";
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            url += $"&Status={status}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<ShipmentRecord>>(url);
+        return (result.Ok, result.Data?.TotalItems ?? 0, result.Error);
+    }
+}

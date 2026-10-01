@@ -1,0 +1,386 @@
+@page "/seller/products/new"
+@page "/seller/products/{ProductId:long}/edit"
+@layout SellerLayout
+@using MiniLogistics.Web.Models.Category
+@using MiniLogistics.Web.Services.Category
+@inject SellerApi Api
+@inject SellerSession Session
+@inject CategoryService Categories
+@inject NavigationManager Navigation
+
+<PageTitle>@(ProductId == null ? "Thêm sản phẩm" : "Sửa sản phẩm")</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>@(ProductId == null ? "Thêm sản phẩm" : product?.Name ?? "Sửa sản phẩm")</h1>
+        <p>Giá, SKU và tồn kho nằm ở biến thể. Ảnh sản phẩm lưu bằng URL.</p>
+    </div>
+    <a class="app-button app-button-secondary" href="/seller/products">Về danh sách</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải sản phẩm...</div>
+}
+else if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng để gắn sản phẩm.</div>
+}
+else
+{
+    <div class="seller-product-layout">
+        <section class="seller-card">
+            <h2>Thông tin</h2>
+            <div class="seller-form">
+                <label>Tên
+                    <input class="seller-input" @bind="name" @bind:event="oninput" @onkeyup="SyncSlug" />
+                </label>
+                <label>Slug
+                    <input class="seller-input" @bind="slug" />
+                </label>
+                <label>Danh mục
+                    <select class="seller-select" @bind="categoryId">
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category.Id">@category.Name</option>
+                        }
+                    </select>
+                </label>
+                <label>Mô tả
+                    <textarea class="seller-textarea" @bind="description"></textarea>
+                </label>
+                <label>Trạng thái
+                    <select class="seller-select" @bind="status">
+                        <option value="active">Đang bán</option>
+                        <option value="draft">Nháp</option>
+                        <option value="inactive">Ngừng bán</option>
+                    </select>
+                </label>
+                <div class="seller-actions">
+                    <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">Lưu sản phẩm</button>
+                    @if (ProductId != null)
+                    {
+                        <button class="app-button app-button-danger" @onclick="DeleteProduct">Xóa sản phẩm</button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="seller-card">
+            <h2>Hình ảnh</h2>
+            @if (ProductId == null)
+            {
+                <p class="seller-muted">Lưu sản phẩm trước khi thêm ảnh.</p>
+            }
+            else
+            {
+                @foreach (var image in images)
+                {
+                    <div class="seller-actions" style="margin-bottom:8px">
+                        <img class="seller-thumb" src="@image.Url" alt="" />
+                        <button class="app-button app-button-danger" @onclick="() => DeleteImage(image.Id)">Xóa</button>
+                    </div>
+                }
+                <label>URL ảnh
+                    <input class="seller-input" @bind="imageUrl" />
+                </label>
+                <button class="app-button app-button-secondary" @onclick="AddImage">Thêm ảnh</button>
+            }
+        </section>
+    </div>
+
+    @if (ProductId != null)
+    {
+        <section class="seller-card">
+            <h2>Biến thể</h2>
+            <p class="seller-muted">Mỗi biến thể có SKU, tên, giá và trạng thái. Tồn kho tạo mới bằng 0, điều chỉnh ở trang Tồn kho.</p>
+            @if (variants.Count == 0)
+            {
+                <p class="seller-empty">Chưa có biến thể.</p>
+            }
+            else
+            {
+                <div class="seller-table-wrap">
+                    <table class="seller-table">
+                        <thead>
+                            <tr>
+                                <th>Tên</th>
+                                <th>SKU</th>
+                                <th>Giá</th>
+                                <th>Có thể bán</th>
+                                <th>Trạng thái</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var variant in variants)
+                            {
+                                <tr>
+                                    <td>@variant.VariantName</td>
+                                    <td>@(variant.Sku ?? "—")</td>
+                                    <td>@SellerText.Money(variant.Price)</td>
+                                    <td>@variant.Stock</td>
+                                    <td>@(variant.IsActive ? "Đang bán" : "Ẩn")</td>
+                                    <td>
+                                        <button class="app-button app-button-danger" @onclick="() => DeleteVariant(variant.Id)">Xóa</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="seller-two" style="margin-top:12px">
+                <label class="seller-field">Tên biến thể
+                    <input class="seller-input" @bind="variantName" />
+                </label>
+                <label class="seller-field">SKU
+                    <input class="seller-input" @bind="variantSku" />
+                </label>
+                <label class="seller-field">Giá
+                    <input class="seller-input" type="number" min="0" @bind="variantPrice" />
+                </label>
+                <label class="seller-field">Thuộc tính JSON
+                    <input class="seller-input" @bind="variantAttributes" placeholder='{"option":"Đen"}' />
+                </label>
+            </div>
+            <label class="seller-field">
+                <span><input type="checkbox" @bind="variantActive" /> Đang bán</span>
+            </label>
+            <button class="app-button app-button-primary" @onclick="AddVariant">Thêm biến thể</button>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public long? ProductId { get; set; }
+
+    private SellerProduct? product;
+    private List<CategoryItem> categories = new();
+    private List<SellerVariant> variants = new();
+    private List<SellerProductImage> images = new();
+    private string name = "";
+    private string slug = "";
+    private string? description;
+    private string status = "draft";
+    private long categoryId;
+    private bool slugEdited;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool isError;
+    private string? message;
+    private string imageUrl = "";
+    private string variantName = "";
+    private string? variantSku;
+    private decimal variantPrice;
+    private string? variantAttributes;
+    private bool variantActive = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        categories = await Categories.GetActiveCategoriesAsync();
+        categoryId = categories.FirstOrDefault()?.Id ?? 0;
+        if (ProductId == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await LoadProductAsync();
+    }
+
+    private async Task LoadProductAsync()
+    {
+        isLoading = true;
+        var result = await Api.GetAsync<SellerProduct>($"api/products/{ProductId}");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error ?? "Không tải được sản phẩm.";
+            return;
+        }
+
+        if (Session.Shop != null && result.Data.ShopId != Session.Shop.Id &&
+            Session.Shops.All(shop => shop.Id != result.Data.ShopId))
+        {
+            isError = true;
+            message = "Sản phẩm không thuộc cửa hàng của bạn.";
+            return;
+        }
+
+        product = result.Data;
+        name = product.Name;
+        slug = product.Slug;
+        description = product.Description;
+        status = product.Status;
+        categoryId = product.CategoryId;
+        slugEdited = true;
+        await LoadChildrenAsync();
+    }
+
+    private async Task LoadChildrenAsync()
+    {
+        if (ProductId == null)
+        {
+            return;
+        }
+
+        var variantResult = await Api.GetAsync<List<SellerVariant>>($"api/product-variants/product/{ProductId}");
+        variants = variantResult.Data ?? new();
+        var imageResult = await Api.GetAsync<List<SellerProductImage>>($"api/product-images/product/{ProductId}");
+        images = imageResult.Data ?? new();
+    }
+
+    private void SyncSlug()
+    {
+        if (!slugEdited || string.IsNullOrWhiteSpace(slug))
+        {
+            slug = SellerText.Slugify(name);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (Session.Shop == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            slug = SellerText.Slugify(name);
+        }
+
+        isSaving = true;
+        var body = new
+        {
+            ShopId = product?.ShopId ?? Session.Shop.Id,
+            CategoryId = categoryId,
+            Name = name,
+            Slug = slug,
+            Description = description,
+            Status = status
+        };
+
+        if (ProductId == null)
+        {
+            var created = await Api.PostAsync<SellerProduct>("api/products", body);
+            isSaving = false;
+            isError = !created.Ok;
+            message = created.Ok ? "Đã tạo sản phẩm." : created.Error;
+            if (created.Ok && created.Data != null)
+            {
+                Navigation.NavigateTo($"/seller/products/{created.Data.Id}/edit");
+            }
+            return;
+        }
+
+        var updated = await Api.PutAsync<SellerProduct>($"api/products/{ProductId}", body);
+        isSaving = false;
+        isError = !updated.Ok;
+        message = updated.Ok ? "Đã lưu sản phẩm." : updated.Error;
+        if (updated.Data != null)
+        {
+            product = updated.Data;
+        }
+    }
+
+    private async Task DeleteProduct()
+    {
+        if (ProductId == null)
+        {
+            return;
+        }
+
+        var result = await Api.DeleteAsync($"api/products/{ProductId}");
+        if (!result.Ok)
+        {
+            isError = true;
+            message = result.Error;
+            return;
+        }
+
+        Navigation.NavigateTo("/seller/products");
+    }
+
+    private async Task AddImage()
+    {
+        if (ProductId == null || string.IsNullOrWhiteSpace(imageUrl))
+        {
+            return;
+        }
+
+        var result = await Api.PostAsync<SellerProductImage>("api/product-images", new
+        {
+            ProductId,
+            Url = imageUrl.Trim()
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã thêm ảnh." : result.Error;
+        if (result.Ok)
+        {
+            imageUrl = "";
+            await LoadChildrenAsync();
+        }
+    }
+
+    private async Task DeleteImage(long id)
+    {
+        var result = await Api.DeleteAsync($"api/product-images/{id}");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã xóa ảnh." : result.Error;
+        if (result.Ok)
+        {
+            await LoadChildrenAsync();
+        }
+    }
+
+    private async Task AddVariant()
+    {
+        if (ProductId == null || string.IsNullOrWhiteSpace(variantName))
+        {
+            isError = true;
+            message = "Nhập tên biến thể.";
+            return;
+        }
+
+        var result = await Api.PostAsync<SellerVariant>("api/product-variants", new
+        {
+            ProductId,
+            Sku = string.IsNullOrWhiteSpace(variantSku) ? null : variantSku.Trim(),
+            VariantName = variantName.Trim(),
+            AttributesJson = string.IsNullOrWhiteSpace(variantAttributes) ? null : variantAttributes,
+            Price = variantPrice,
+            IsActive = variantActive
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã thêm biến thể." : result.Error;
+        if (result.Ok)
+        {
+            variantName = "";
+            variantSku = "";
+            variantAttributes = "";
+            variantPrice = 0;
+            await LoadChildrenAsync();
+        }
+    }
+
+    private async Task DeleteVariant(long id)
+    {
+        var result = await Api.DeleteAsync($"api/product-variants/{id}");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã xóa biến thể." : result.Error;
+        if (result.Ok)
+        {
+            await LoadChildrenAsync();
+        }
+    }
+}

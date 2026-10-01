@@ -1,0 +1,170 @@
+@page "/seller/reviews"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Đánh giá</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Đánh giá sản phẩm</h1>
+        <p>API đánh giá theo từng sản phẩm. Seller được trả lời đánh giá của shop mình.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else
+{
+    <div class="seller-filters">
+        <select class="seller-select" @bind="productId" @bind:after="LoadReviews">
+            @foreach (var product in products)
+            {
+                <option value="@product.Id">@product.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải đánh giá...</div>
+    }
+    else if (products.Count == 0)
+    {
+        <div class="seller-empty">Shop chưa có sản phẩm.</div>
+    }
+    else if (reviews.Count == 0)
+    {
+        <div class="seller-empty">Sản phẩm này chưa có đánh giá.</div>
+    }
+    else
+    {
+        @foreach (var review in reviews)
+        {
+            <section class="seller-card">
+                <h2>@review.Rating / 5</h2>
+                <p>@(string.IsNullOrWhiteSpace(review.Content) ? "Không có nội dung." : review.Content)</p>
+                <p class="seller-muted">Khách #@review.CustomerId · @SellerText.When(review.CreatedAt)</p>
+                @if (replies.TryGetValue(review.Id, out var reply) && reply != null)
+                {
+                    <p><strong>Phản hồi:</strong> @reply.Content</p>
+                }
+                else
+                {
+                    <div class="seller-actions">
+                        <input class="seller-input" placeholder="Trả lời đánh giá" @bind="drafts[review.Id]" />
+                        <button class="app-button app-button-primary" @onclick="() => Reply(review.Id)">Gửi</button>
+                    </div>
+                }
+            </section>
+        }
+    }
+}
+
+@code {
+    private List<SellerProduct> products = new();
+    private List<SellerReview> reviews = new();
+    private Dictionary<long, ReviewReplyRecord?> replies = new();
+    private Dictionary<long, string> drafts = new();
+    private long productId;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadProductsAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadProductsAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadProductsAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<SellerProduct>>(
+            $"api/products?ShopId={Session.Shop.Id}&Page=1&PageSize=100");
+        products = result.Data?.Items ?? new();
+        productId = products.FirstOrDefault()?.Id ?? 0;
+        if (!result.Ok)
+        {
+            isError = true;
+            message = result.Error;
+        }
+        await LoadReviews();
+    }
+
+    private async Task LoadReviews()
+    {
+        reviews = new();
+        replies = new();
+        if (productId <= 0)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<SellerReview>>(
+            $"api/reviews/product/{productId}?Page=1&PageSize=20");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            return;
+        }
+
+        reviews = result.Data.Items;
+        foreach (var review in reviews)
+        {
+            drafts[review.Id] = "";
+            var reply = await Api.GetAsync<ReviewReplyRecord>($"api/review-replies/review/{review.Id}");
+            replies[review.Id] = reply.Ok ? reply.Data : null;
+        }
+    }
+
+    private async Task Reply(long reviewId)
+    {
+        if (Session.Shop == null || !drafts.TryGetValue(reviewId, out var content) ||
+            string.IsNullOrWhiteSpace(content))
+        {
+            isError = true;
+            message = "Nhập nội dung phản hồi.";
+            return;
+        }
+
+        var result = await Api.PostAsync<ReviewReplyRecord>("api/review-replies", new
+        {
+            ReviewId = reviewId,
+            ShopId = Session.Shop.Id,
+            Content = content.Trim()
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã gửi phản hồi." : result.Error;
+        if (result.Ok)
+        {
+            await LoadReviews();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

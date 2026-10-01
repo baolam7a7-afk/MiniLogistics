@@ -1,5 +1,7 @@
 using System.Linq.Expressions;
 
+using Microsoft.EntityFrameworkCore;
+
 using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Product;
 using MiniLogistics.BLL.Exceptions;
@@ -31,197 +33,89 @@ public class ProductService : IProductService
         GetAllAsync(
             ProductPaginationRequestDTO request)
     {
-        // =================================================
-        // VALIDATE REQUEST
-        // =================================================
-
         if (request == null)
         {
-            request =
-                new ProductPaginationRequestDTO();
+            request = new ProductPaginationRequestDTO();
         }
-
-
-        // =================================================
-        // VALIDATE PAGINATION
-        // =================================================
 
         if (request.Page < 1)
-        {
             request.Page = 1;
-        }
 
         if (request.PageSize < 1)
-        {
             request.PageSize = 10;
-        }
 
         if (request.PageSize > 100)
-        {
             request.PageSize = 100;
-        }
 
+        var search = request.Search?.Trim().ToLower();
+        var status = request.Status?.Trim().ToLower();
 
-        // =================================================
-        // PREPARE FILTER
-        // =================================================
-
-        var search =
-            request.Search?
-                .Trim()
-                .ToLower();
-
-        var status =
-            request.Status?
-                .Trim()
-                .ToLower();
-
-
-        // =================================================
-        // BUILD FILTER
-        // =================================================
-
-        Expression<Func<ProductEntity, bool>>? predicate =
-            null;
-
-
-        // -------------------------------------------------
-        // SEARCH
-        // -------------------------------------------------
+        Expression<Func<ProductEntity, bool>>? predicate = null;
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            predicate =
-                product =>
-                    product.Name
-                        .ToLower()
-                        .Contains(search)
-                    ||
-                    product.Slug
-                        .ToLower()
-                        .Contains(search);
+            predicate = product =>
+                product.Name.ToLower().Contains(search)
+                || product.Slug.ToLower().Contains(search)
+                || (product.Description != null
+                    && product.Description.ToLower().Contains(search));
         }
-
-
-        // -------------------------------------------------
-        // CATEGORY
-        // -------------------------------------------------
 
         if (request.CategoryId.HasValue)
         {
-            var categoryId =
-                request.CategoryId.Value;
-
-            Expression<Func<ProductEntity, bool>>
-                categoryPredicate =
-                    product =>
-                        product.CategoryId == categoryId;
-
-            predicate =
-                CombinePredicates(
-                    predicate,
-                    categoryPredicate);
+            var categoryId = request.CategoryId.Value;
+            Expression<Func<ProductEntity, bool>> categoryPredicate =
+                product => product.CategoryId == categoryId;
+            predicate = CombinePredicates(predicate, categoryPredicate);
         }
-
-
-        // -------------------------------------------------
-        // SHOP
-        // -------------------------------------------------
 
         if (request.ShopId.HasValue)
         {
-            var shopId =
-                request.ShopId.Value;
-
-            Expression<Func<ProductEntity, bool>>
-                shopPredicate =
-                    product =>
-                        product.ShopId == shopId;
-
-            predicate =
-                CombinePredicates(
-                    predicate,
-                    shopPredicate);
+            var shopId = request.ShopId.Value;
+            Expression<Func<ProductEntity, bool>> shopPredicate =
+                product => product.ShopId == shopId;
+            predicate = CombinePredicates(predicate, shopPredicate);
         }
-
-
-        // -------------------------------------------------
-        // STATUS
-        // -------------------------------------------------
 
         if (!string.IsNullOrWhiteSpace(status))
         {
-            Expression<Func<ProductEntity, bool>>
-                statusPredicate =
-                    product =>
-                        product.Status
-                            .ToLower()
-                            .Equals(status);
-
-            predicate =
-                CombinePredicates(
-                    predicate,
-                    statusPredicate);
+            Expression<Func<ProductEntity, bool>> statusPredicate =
+                product => product.Status.ToLower().Equals(status);
+            predicate = CombinePredicates(predicate, statusPredicate);
         }
 
+        var query = _unitOfWork.Products.Query()
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductImages)
+            .Include(p => p.ProductVariants)
+            .AsSplitQuery()
+            .AsQueryable();
 
-        // =================================================
-        // QUERY DATABASE
-        // =================================================
+        if (predicate != null)
+            query = query.Where(predicate);
 
-        var result =
-            await _unitOfWork.Products
-                .GetPagedAsync(
-                    request.Page,
-                    request.PageSize,
-                    predicate,
-                    query =>
-                        query.OrderByDescending(
-                            x => x.Id));
+        var totalItems = await query.CountAsync();
 
+        var entities = await query
+            .OrderByDescending(x => x.Id)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToListAsync();
 
-        // =================================================
-        // MAP
-        // =================================================
+        var items = entities.Select(MapToDTO).ToList();
 
-        var items =
-            result.Items
-                .Select(MapToDTO)
-                .ToList();
-
-
-        // =================================================
-        // CALCULATE TOTAL PAGES
-        // =================================================
-
-        var totalPages =
-            result.TotalItems == 0
-                ? 0
-                : (int)Math.Ceiling(
-                    result.TotalItems /
-                    (double)request.PageSize);
-
-
-        // =================================================
-        // RETURN
-        // =================================================
+        var totalPages = totalItems == 0
+            ? 0
+            : (int)Math.Ceiling(totalItems / (double)request.PageSize);
 
         return new PagedResponseDTO<ProductResponseDTO>
         {
-            Items =
-                items,
-
-            Page =
-                request.Page,
-
-            PageSize =
-                request.PageSize,
-
-            TotalItems =
-                result.TotalItems,
-
-            TotalPages =
-                totalPages
+            Items = items,
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
         };
     }
 
@@ -235,9 +129,12 @@ public class ProductService : IProductService
         GetByIdAsync(
             long id)
     {
-        var product =
-            await _unitOfWork.Products
-                .GetByIdAsync(id);
+        var product = await _unitOfWork.Products.Query()
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductImages)
+            .Include(p => p.ProductVariants)
+            .FirstOrDefaultAsync(p => p.Id == id);
 
         if (product == null)
         {
@@ -277,15 +174,16 @@ public class ProductService : IProductService
         // GET PRODUCTS
         // =================================================
 
-        var products =
-            await _unitOfWork.Products
-                .FindAsync(
-                    p =>
-                        p.CategoryId == categoryId);
+        var products = await _unitOfWork.Products.Query()
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductImages)
+            .Include(p => p.ProductVariants)
+            .Where(p => p.CategoryId == categoryId)
+            .OrderByDescending(p => p.Id)
+            .ToListAsync();
 
-
-        return products
-            .Select(MapToDTO);
+        return products.Select(MapToDTO);
     }
 
 
@@ -298,35 +196,27 @@ public class ProductService : IProductService
         SearchAsync(
             string keyword)
     {
-        // =================================================
-        // VALIDATE KEYWORD
-        // =================================================
-
         if (string.IsNullOrWhiteSpace(keyword))
         {
             throw new BadRequestException(
                 "Keyword không được để trống.");
         }
 
-        keyword =
-            keyword.Trim();
+        keyword = keyword.Trim();
 
+        var products = await _unitOfWork.Products.Query()
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductImages)
+            .Include(p => p.ProductVariants)
+            .Where(p =>
+                p.Name.Contains(keyword)
+                || p.Slug.Contains(keyword)
+                || (p.Description != null && p.Description.Contains(keyword)))
+            .OrderByDescending(p => p.Id)
+            .ToListAsync();
 
-        // =================================================
-        // SEARCH
-        // =================================================
-
-        var products =
-            await _unitOfWork.Products
-                .FindAsync(
-                    p =>
-                        p.Name.Contains(keyword)
-                        ||
-                        p.Slug.Contains(keyword));
-
-
-        return products
-            .Select(MapToDTO);
+        return products.Select(MapToDTO);
     }
 
 
@@ -894,34 +784,36 @@ public class ProductService : IProductService
         MapToDTO(
             ProductEntity product)
     {
+        var imageUrl = product.ProductImages?
+            .OrderBy(i => i.SortOrder)
+            .Select(i => i.Url)
+            .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u));
+
+        var minPrice = product.ProductVariants?
+            .Where(v => v.IsActive)
+            .Select(v => (decimal?)v.Price)
+            .DefaultIfEmpty()
+            .Min();
+
+        if (minPrice is null && product.ProductVariants?.Count > 0)
+        {
+            minPrice = product.ProductVariants.Min(v => v.Price);
+        }
+
         return new ProductResponseDTO
         {
-            Id =
-                product.Id,
-
-            ShopId =
-                product.ShopId,
-
-            CategoryId =
-                product.CategoryId,
-
-            Name =
-                product.Name,
-
-            Slug =
-                product.Slug,
-
-            Description =
-                product.Description,
-
-            Status =
-                product.Status,
-
-            CreatedAt =
-                product.CreatedAt,
-
-            UpdatedAt =
-                product.UpdatedAt
+            Id = product.Id,
+            ShopId = product.ShopId,
+            CategoryId = product.CategoryId,
+            CategoryName = product.Category?.Name,
+            Name = product.Name,
+            Slug = product.Slug,
+            Description = product.Description,
+            Status = product.Status,
+            ImageUrl = imageUrl,
+            MinPrice = minPrice,
+            CreatedAt = product.CreatedAt,
+            UpdatedAt = product.UpdatedAt
         };
     }
 }

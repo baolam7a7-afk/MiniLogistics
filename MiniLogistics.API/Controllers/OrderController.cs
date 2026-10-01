@@ -216,16 +216,27 @@ public class OrderController : ControllerBase
 
     private string GetCurrentRole()
     {
-        var role =
-            User.FindFirstValue(
-                ClaimTypes.Role);
+        var roles = User.FindAll(ClaimTypes.Role)
+            .Select(claim => claim.Value)
+            .Where(role => !string.IsNullOrWhiteSpace(role))
+            .ToList();
 
-        if (string.IsNullOrWhiteSpace(role))
+        if (roles.Count == 0)
         {
             throw new UnauthorizedAccessException(
                 "Không xác định được Role.");
         }
 
-        return role;
+        foreach (var preferred in new[] { "admin", "seller", "shipper", "customer" })
+        {
+            var match = roles.FirstOrDefault(role =>
+                role.Equals(preferred, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return roles[0];
     }
 }

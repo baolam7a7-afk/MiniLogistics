@@ -1,0 +1,203 @@
+@page "/admin/users"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Người dùng</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Người dùng</h1>
+        <p>Khóa, mở khóa và đổi role. Đổi role sẽ thay toàn bộ role hiện tại bằng một role mới. Không khóa được tài khoản admin.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <input class="seller-input" placeholder="Email hoặc tên" @bind="search" />
+    <select class="seller-select" @bind="role">
+        <option value="">Mọi role</option>
+        <option value="customer">customer</option>
+        <option value="seller">seller</option>
+        <option value="shipper">shipper</option>
+        <option value="admin">admin</option>
+    </select>
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="active">Đang hoạt động</option>
+        <option value="locked">Đã khóa</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải người dùng...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có người dùng phù hợp.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Người dùng</th>
+                        <th>Role</th>
+                        <th>Trạng thái</th>
+                        <th>Đổi role</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in items)
+                    {
+                        var isSelf = user.Id == Session.Profile?.Id;
+                        var isAdmin = user.Roles.Any(item => item.Equals("admin", StringComparison.OrdinalIgnoreCase));
+                        <tr>
+                            <td>
+                                <strong>@(user.FullName ?? user.Email)</strong>
+                                <div class="seller-muted">@user.Email · #@user.Id</div>
+                            </td>
+                            <td>@string.Join(", ", user.Roles)</td>
+                            <td><span class="seller-badge @(user.Status == "locked" ? "bad" : "ok")">@AdminText.UserStatus(user.Status)</span></td>
+                            <td>
+                                @if (isSelf)
+                                {
+                                    <span class="seller-muted">Tài khoản đang đăng nhập</span>
+                                }
+                                else
+                                {
+                                    <select class="seller-select" value="@SelectedRole(user)" @onchange="args => ChangeRole(user, args)">
+                                        <option value="customer">customer</option>
+                                        <option value="seller">seller</option>
+                                        <option value="shipper">shipper</option>
+                                        <option value="admin">admin</option>
+                                    </select>
+                                }
+                            </td>
+                            <td>
+                                @if (!isSelf && !isAdmin && user.Status != "locked")
+                                {
+                                    <button class="app-button app-button-danger" @onclick="() => Lock(user.Id)">Khóa</button>
+                                }
+                                else if (!isSelf && user.Status == "locked")
+                                {
+                                    <button class="app-button app-button-secondary" @onclick="() => Unlock(user.Id)">Mở khóa</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<UserProfile> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string search = "";
+    private string role = "";
+    private string status = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/users?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            query += $"&Role={Uri.EscapeDataString(role)}";
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<UserProfile>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private static string SelectedRole(UserProfile user) =>
+        user.Roles.FirstOrDefault() ?? "customer";
+
+    private async Task ChangeRole(UserProfile user, ChangeEventArgs args)
+    {
+        var next = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(next) || user.Roles.Any(item => item.Equals(next, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var result = await Api.PutAsync<UserProfile>($"api/users/{user.Id}/role", new { Role = next });
+        isError = !result.Ok;
+        message = result.Ok ? $"Đã đổi role của {user.Email} thành {next}." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Lock(long id)
+    {
+        var result = await Api.PutAsync<UserProfile>($"api/users/{id}/lock");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã khóa tài khoản." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Unlock(long id)
+    {
+        var result = await Api.PutAsync<UserProfile>($"api/users/{id}/unlock");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã mở khóa tài khoản." : result.Error;
+        await LoadAsync();
+    }
+}

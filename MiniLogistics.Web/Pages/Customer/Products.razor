@@ -1,220 +1,256 @@
 @page "/products"
 @layout CustomerLayout
+@implements IDisposable
 
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using MiniLogistics.Web.Components
+@using MiniLogistics.Web.Models.Category
 @using MiniLogistics.Web.Models.Product
+@using MiniLogistics.Web.Services.Category
 @using MiniLogistics.Web.Services.Product
 
 @inject ProductService ProductService
+@inject CategoryService CategoryService
+@inject NavigationManager Navigation
 
-<PageTitle>Products - MiniLogistics</PageTitle>
+<PageTitle>Sản phẩm - MiniLogistics</PageTitle>
 
 <div class="customer-products">
 
     <div class="customer-page-header">
-
-        <div>
-            <h1 class="customer-page-title">
-                Products
-            </h1>
-
-            <p class="customer-page-description">
-                Khám phá các sản phẩm đang được bán trên MiniLogistics
-            </p>
-        </div>
-
+        <h1 class="customer-page-title">Sản phẩm</h1>
+        <p class="customer-page-description">
+            Lọc theo danh mục, tìm kiếm và khám phá hàng mẫu trên MiniLogistics
+        </p>
     </div>
 
-
-    <!-- SEARCH -->
-    <div class="product-toolbar">
-
-        <div class="product-search">
-
-            <span class="product-search-icon">
-                🔍
-            </span>
-
-            <input type="text" placeholder="Tìm kiếm sản phẩm..." @bind="searchText" @bind:event="oninput"
-                   @onkeydown="HandleSearchKeyDown" />
-
-        </div>
-
-
-        <button class="app-button app-button-primary" @onclick="SearchProducts">
-
-            Tìm kiếm
-
+    <div class="product-category-bar" role="tablist" aria-label="Danh mục sản phẩm">
+        <button type="button"
+                class="product-category-chip @(selectedCategoryId is null ? "active" : null)"
+                @onclick="() => SelectCategory(null)">
+            Tất cả
         </button>
 
+        @foreach (var category in categories)
+        {
+            <button type="button"
+                    class="product-category-chip @(selectedCategoryId == category.Id ? "active" : null)"
+                    @onclick="() => SelectCategory(category.Id)">
+                @category.Name
+            </button>
+        }
     </div>
 
+    <div class="product-toolbar product-toolbar-filters">
+        <div class="product-search">
+            <span class="product-search-icon">⌕</span>
+            <input type="text"
+                   placeholder="Tìm theo tên, mô tả..."
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown" />
+        </div>
 
-    <!-- ERROR -->
+        <select class="app-input" @bind="selectedStatus">
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Đang bán</option>
+            <option value="inactive">Ngừng bán</option>
+            <option value="draft">Nháp</option>
+        </select>
+
+        <select class="app-input" @bind="groupByCategory">
+            <option value="false">Hiển thị dạng lưới</option>
+            <option value="true">Nhóm theo danh mục</option>
+        </select>
+
+        <button type="button" class="app-button app-button-primary" @onclick="SearchProducts">
+            Áp dụng
+        </button>
+
+        <button type="button" class="app-button app-button-secondary" @onclick="ResetFilters">
+            Đặt lại
+        </button>
+    </div>
+
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="auth-alert auth-alert-error">
-            @errorMessage
-        </div>
+        <div class="app-alert app-alert-error">@errorMessage</div>
     }
 
-
-    <!-- LOADING -->
     @if (isLoading)
     {
-        <div class="product-loading">
-
-            <div class="loading-spinner"></div>
-
-            <p>
-                Đang tải sản phẩm...
-            </p>
-
+        <div class="store-product-skeleton-grid">
+            @for (var i = 0; i < 8; i++)
+            {
+                <div class="store-skeleton-card"></div>
+            }
         </div>
     }
     else if (products.Count == 0)
     {
-        <div class="customer-empty-state">
-
-            <div class="customer-empty-icon">
-                📦
-            </div>
-
-            <h3>
-                Không tìm thấy sản phẩm
-            </h3>
-
-            <p>
-                Hãy thử từ khóa tìm kiếm khác.
-            </p>
-
+        <div class="customer-empty-state store-empty">
+            <div class="customer-empty-icon">📦</div>
+            <h3>Không tìm thấy sản phẩm</h3>
+            <p>Thử đổi danh mục hoặc từ khóa tìm kiếm.</p>
         </div>
     }
     else
     {
-        <!-- PRODUCT GRID -->
-
-        <div class="product-grid">
-
-            @foreach (var product in products)
+        <div class="product-result-info product-result-row">
+            <span>@totalItems sản phẩm</span>
+            @if (selectedCategoryId is not null)
             {
-                <article class="product-card">
-
-                    <div class="product-image">
-                        @if (productImages.TryGetValue(product.Id, out var imageUrl)
-                            && !string.IsNullOrWhiteSpace(imageUrl))
-                        {
-                            <img src="@imageUrl" alt="@product.Name" loading="lazy" />
-                        }
-                        else
-                        {
-                            <span>📦</span>
-                        }
-                    </div>
-
-
-                    <div class="product-card-body">
-
-                        <div class="product-status">
-                            @product.Status
-                        </div>
-
-                        <h3 class="product-name">
-                            @product.Name
-                        </h3>
-
-                        @if (!string.IsNullOrWhiteSpace(product.Description))
-                        {
-                            <p class="product-description">
-                                @product.Description
-                            </p>
-                        }
-                        else
-                        {
-                            <p class="product-description">
-                                Sản phẩm MiniLogistics
-                            </p>
-                        }
-
-
-                        <div class="product-card-footer">
-
-                            <span class="product-shop">
-                                Shop #@product.ShopId
-                            </span>
-
-                            <a href="@($"/products/{product.Id}")" class="app-button app-button-primary app-button-small">
-
-                                Xem
-
-                            </a>
-
-                        </div>
-
-                    </div>
-
-                </article>
+                <span class="product-result-filter">
+                    · @GetCategoryName(selectedCategoryId.Value)
+                </span>
             }
-
         </div>
 
-
-        <!-- PAGINATION -->
-
-        @if (totalPages > 1)
+        @if (IsGrouped)
         {
-            <div class="product-pagination">
+            @foreach (var group in GroupedProducts)
+            {
+                <section class="product-category-section">
+                    <div class="product-category-section-head">
+                        <h2>@group.Key</h2>
+                        <span>@group.Count() sản phẩm</span>
+                    </div>
 
-                <button class="pagination-button" disabled="@(currentPage <= 1)" @onclick="PreviousPage">
+                    <div class="product-grid store-product-grid">
+                        @foreach (var product in group)
+                        {
+                            <ProductCard Product="product" @key="product.Id" />
+                        }
+                    </div>
+                </section>
+            }
+        }
+        else
+        {
+            <div class="product-grid store-product-grid">
+                @foreach (var product in products)
+                {
+                    <ProductCard Product="product" @key="product.Id" />
+                }
+            </div>
+        }
 
-                    ← Trước
-
+        @if (totalPages > 1 && !IsGrouped)
+        {
+            <div class="product-pagination store-pagination">
+                <button type="button"
+                        class="app-button app-button-secondary"
+                        disabled="@(currentPage <= 1)"
+                        @onclick="PreviousPage">
+                    Trước
                 </button>
 
-
-                <span class="pagination-info">
-
+                <span class="orders-page-number">
                     Trang @currentPage / @totalPages
-
                 </span>
 
-
-                <button class="pagination-button" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
-
-                    Sau →
-
+                <button type="button"
+                        class="app-button app-button-secondary"
+                        disabled="@(currentPage >= totalPages)"
+                        @onclick="NextPage">
+                    Sau
                 </button>
-
             </div>
         }
     }
 
 </div>
 
-
 @code {
-
     private List<ProductItem> products = new();
-
-    private Dictionary<long, string> productImages = new();
-
+    private List<CategoryItem> categories = new();
     private string searchText = string.Empty;
-
+    private string selectedStatus = "active";
+    private string groupByCategory = "false";
+    private long? selectedCategoryId;
     private string? errorMessage;
-
     private bool isLoading;
-
     private int currentPage = 1;
-
     private int pageSize = 12;
-
     private int totalPages;
+    private int totalItems;
+    private string lastQueryKey = string.Empty;
 
+    private bool IsGrouped =>
+        groupByCategory == "true" && selectedCategoryId is null;
+
+    private IEnumerable<IGrouping<string, ProductItem>> GroupedProducts =>
+        products
+            .GroupBy(p => string.IsNullOrWhiteSpace(p.CategoryName)
+                ? "Khác"
+                : p.CategoryName!)
+            .OrderBy(g => g.Key);
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        ApplyQuerySearch();
+        lastQueryKey = BuildQueryKey();
+        categories = await CategoryService.GetActiveCategoriesAsync();
         await LoadProductsAsync();
     }
 
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        ApplyQuerySearch();
+        var key = BuildQueryKey();
+
+        if (!string.Equals(lastQueryKey, key, StringComparison.Ordinal))
+        {
+            lastQueryKey = key;
+            currentPage = 1;
+            _ = InvokeAsync(LoadProductsAsync);
+        }
+    }
+
+    private string BuildQueryKey() =>
+        $"{searchText}|{selectedCategoryId}|{selectedStatus}";
+
+    private void ApplyQuerySearch()
+    {
+        var absolute = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = absolute.Query.TrimStart('?');
+
+        if (string.IsNullOrWhiteSpace(query))
+            return;
+
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pair = part.Split('=', 2);
+            if (pair.Length != 2)
+                continue;
+
+            var key = Uri.UnescapeDataString(pair[0]);
+            var value = Uri.UnescapeDataString(pair[1].Replace('+', ' '));
+
+            if (string.Equals(key, "q", StringComparison.OrdinalIgnoreCase))
+                searchText = value;
+            else if (string.Equals(key, "categoryId", StringComparison.OrdinalIgnoreCase)
+                     && long.TryParse(value, out var catId))
+                selectedCategoryId = catId;
+        }
+    }
+
+    private async Task SelectCategory(long? categoryId)
+    {
+        selectedCategoryId = categoryId;
+        currentPage = 1;
+        lastQueryKey = BuildQueryKey();
+        await LoadProductsAsync();
+    }
+
+    private string GetCategoryName(long id) =>
+        categories.FirstOrDefault(c => c.Id == id)?.Name ?? $"Danh mục #{id}";
 
     private async Task LoadProductsAsync()
     {
@@ -223,60 +259,38 @@
 
         try
         {
-            var result =
-                await ProductService.GetProductsAsync(
-                    search: searchText,
-                    page: currentPage,
-                    pageSize: pageSize);
+            var effectivePageSize = IsGrouped ? 100 : pageSize;
+            var effectivePage = IsGrouped ? 1 : currentPage;
+
+            var result = await ProductService.GetProductsAsync(
+                search: searchText,
+                categoryId: selectedCategoryId,
+                shopId: null,
+                status: string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus,
+                page: effectivePage,
+                pageSize: effectivePageSize);
 
             if (result == null)
             {
-                errorMessage =
-                    "Không thể tải danh sách sản phẩm.";
-
+                errorMessage = "Không thể tải danh sách sản phẩm.";
                 products.Clear();
                 totalPages = 0;
-
+                totalItems = 0;
                 return;
             }
 
             products = result.Items ?? new List<ProductItem>();
-
             currentPage = result.Page;
-
             totalPages = result.TotalPages;
-
-            productImages.Clear();
-
-            // Tải ảnh cho từng sản phẩm trong trang hiện tại.
-            foreach (var item in products)
-            {
-                try
-                {
-                    var images = await ProductService.GetImagesByProductIdAsync(item.Id);
-                    var firstImage = images.FirstOrDefault(x =>
-                        !string.IsNullOrWhiteSpace(x.Url));
-
-                    if (firstImage != null)
-                    {
-                        productImages[item.Id] = firstImage.Url;
-                    }
-                }
-                catch
-                {
-                    // Không để lỗi tải ảnh làm hỏng danh sách sản phẩm.
-                }
-            }
+            totalItems = result.TotalItems;
         }
         catch (HttpRequestException)
         {
-            errorMessage =
-                "Không thể kết nối đến API.";
+            errorMessage = "Không thể kết nối đến API.";
         }
         catch (Exception ex)
         {
-            errorMessage =
-                $"Có lỗi xảy ra: {ex.Message}";
+            errorMessage = $"Có lỗi xảy ra: {ex.Message}";
         }
         finally
         {
@@ -284,48 +298,50 @@
         }
     }
 
-
     private async Task SearchProducts()
     {
         currentPage = 1;
-
+        lastQueryKey = BuildQueryKey();
         await LoadProductsAsync();
     }
 
-
-    private async Task HandleSearchKeyDown(
-        KeyboardEventArgs e)
+    private async Task ResetFilters()
     {
-        if (e.Key == "Enter")
-        {
-            await SearchProducts();
-        }
+        searchText = string.Empty;
+        selectedStatus = "active";
+        selectedCategoryId = null;
+        groupByCategory = "false";
+        currentPage = 1;
+        lastQueryKey = BuildQueryKey();
+        await LoadProductsAsync();
     }
 
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchProducts();
+    }
 
     private async Task PreviousPage()
     {
         if (currentPage <= 1)
-        {
             return;
-        }
 
         currentPage--;
-
         await LoadProductsAsync();
     }
-
 
     private async Task NextPage()
     {
         if (currentPage >= totalPages)
-        {
             return;
-        }
 
         currentPage++;
-
         await LoadProductsAsync();
     }
 
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
 }

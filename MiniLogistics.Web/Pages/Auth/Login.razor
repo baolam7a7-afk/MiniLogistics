@@ -1,353 +1,163 @@
 @page "/login"
 @layout AuthLayout
+@implements IAsyncDisposable
 
+@using Microsoft.JSInterop
+@using System.Net.Http.Json
 
 @inject AuthService AuthService
 @inject TokenStorageService TokenStorage
 @inject AuthStateService AuthState
 @inject NavigationManager Navigation
+@inject IJSRuntime Js
+@inject IConfiguration Configuration
+@inject HttpClient Http
 
 <PageTitle>Đăng nhập - MiniLogistics</PageTitle>
 
 <div class="login-page">
 
-    <!-- =====================================================
-         HEADER
-         ===================================================== -->
-
     <div class="login-header">
-
         <h1>Welcome back</h1>
-
-        <p>
-            Đăng nhập vào tài khoản MiniLogistics
-        </p>
-
+        <p>Đăng nhập vào tài khoản MiniLogistics</p>
     </div>
-
-
-    <!-- =====================================================
-         REGISTER SUCCESS MESSAGE
-         ===================================================== -->
 
     @if (!string.IsNullOrWhiteSpace(successMessage))
     {
-        <div class="auth-alert auth-alert-success">
-
-            @successMessage
-
-        </div>
+        <div class="auth-alert auth-alert-success">@successMessage</div>
     }
-
-
-    <!-- =====================================================
-         ERROR MESSAGE
-         ===================================================== -->
 
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="auth-alert auth-alert-error">
-
-            @errorMessage
-
-        </div>
+        <div class="auth-alert auth-alert-error">@errorMessage</div>
     }
 
-
-    <!-- =====================================================
-         LOGIN FORM
-         ===================================================== -->
-
-    <EditForm Model="@loginModel" OnValidSubmit="@HandleLogin">
-
+    <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
         <DataAnnotationsValidator />
 
-
-        <!-- =================================================
-             EMAIL
-             ================================================= -->
-
         <div class="auth-field">
-
-            <label>
-                Email
-            </label>
-
+            <label>Email</label>
             <InputText @bind-Value="loginModel.Email" type="email" class="auth-input"
-                       placeholder="Nhập email của bạn" />
-
+                       placeholder="you@email.com" />
+            <ValidationMessage For="() => loginModel.Email" />
         </div>
 
-
-        <!-- =================================================
-             PASSWORD
-             ================================================= -->
-
         <div class="auth-field">
-
             <div class="auth-label-row">
-
-                <label>
-                    Mật khẩu
-                </label>
-
-                <a href="/forgot-password">
-                    Quên mật khẩu?
-                </a>
-
+                <label>Mật khẩu</label>
+                <a href="/forgot-password">Quên mật khẩu?</a>
             </div>
-
 
             <div class="password-wrapper">
-
                 <InputText @bind-Value="loginModel.Password" type="@passwordInputType" class="auth-input"
-                           placeholder="Nhập mật khẩu" />
-
-
+                           placeholder="••••••••" />
                 <button type="button" class="password-toggle" @onclick="TogglePassword">
-
                     @(showPassword ? "Ẩn" : "Hiện")
-
                 </button>
-
             </div>
-
+            <ValidationMessage For="() => loginModel.Password" />
         </div>
 
-
-        <!-- =================================================
-             LOGIN BUTTON
-             ================================================= -->
-
         <button type="submit" class="auth-submit" disabled="@isLoading">
-
-            @if (isLoading)
-            {
-                <span>
-                    Đang đăng nhập...
-                </span>
-            }
-            else
-            {
-                <span>
-                    ĐĂNG NHẬP
-                </span>
-            }
-
+            @(isLoading ? "Đang đăng nhập..." : "Đăng nhập")
         </button>
-
     </EditForm>
 
-
-    <!-- =====================================================
-         DIVIDER
-         ===================================================== -->
-
     <div class="auth-divider">
-
-        <span>
-            hoặc
-        </span>
-
+        <span>hoặc</span>
     </div>
 
-
-    <!-- =====================================================
-         GOOGLE LOGIN
-         ===================================================== -->
-
-    <button type="button" class="google-button" @onclick="HandleGoogleLogin">
-
-        <span class="google-icon">
-            G
-        </span>
-
-        <span>
-            Đăng nhập bằng Google
-        </span>
-
-    </button>
-
-
-    <!-- =====================================================
-         REGISTER
-         ===================================================== -->
+    <div id="google-login-button" class="google-button-host"></div>
 
     <div class="auth-register">
-
-        <span>
-            Chưa có tài khoản?
-        </span>
-
-        <a href="/register">
-            Đăng ký ngay
-        </a>
-
+        <span>Chưa có tài khoản?</span>
+        <a href="/register">Đăng ký ngay</a>
     </div>
 
 </div>
 
-
 @code {
-
-    // =========================================================
-    // MODEL
-    // =========================================================
-
     private LoginRequest loginModel = new();
-
-
-    // =========================================================
-    // STATE
-    // =========================================================
-
     private bool isLoading;
-
     private bool showPassword;
-
-
-    // =========================================================
-    // MESSAGES
-    // =========================================================
-
+    private bool googleReady;
     private string? errorMessage;
-
     private string? successMessage;
-
-
-    // =========================================================
-    // PASSWORD INPUT TYPE
-    // =========================================================
+    private DotNetObjectReference<Login>? dotNetRef;
 
     private string passwordInputType =>
-        showPassword
-            ? "text"
-            : "password";
-
-
-    // =========================================================
-    // INITIALIZE
-    // =========================================================
+        showPassword ? "text" : "password";
 
     protected override void OnInitialized()
     {
         CheckRegisterSuccessMessage();
     }
 
-
-    // =========================================================
-    // CHECK ?registered=true
-    // =========================================================
-
-    private void CheckRegisterSuccessMessage()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var uri =
-            Navigation.ToAbsoluteUri(
-                Navigation.Uri);
-
-        var query =
-            uri.Query;
-
-        if (query.Contains(
-                "registered=true",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            successMessage =
-                "Đăng ký tài khoản thành công. " +
-                "Vui lòng đăng nhập để tiếp tục.";
-        }
-    }
-
-
-    // =========================================================
-    // TOGGLE PASSWORD
-    // =========================================================
-
-    private void TogglePassword()
-    {
-        showPassword =
-            !showPassword;
-    }
-
-
-    // =========================================================
-    // LOGIN
-    // =========================================================
-
-    private async Task HandleLogin()
-    {
-        // Prevent double click
-        if (isLoading)
+        if (!firstRender || googleReady)
             return;
-
-
-        // Clear old messages
-        errorMessage = null;
-
-        successMessage = null;
-
-
-        // Start loading
-        isLoading = true;
-
 
         try
         {
-            // =================================================
-            // CALL LOGIN API
-            // =================================================
+            var clientId = Configuration["Google:ClientId"];
+            if (string.IsNullOrWhiteSpace(clientId))
+                return;
 
-            var result =
-                await AuthService.LoginAsync(
-                    loginModel);
+            dotNetRef = DotNetObjectReference.Create(this);
+            googleReady = await Js.InvokeAsync<bool>(
+                "googleAuth.initialize",
+                clientId,
+                dotNetRef);
+            StateHasChanged();
+        }
+        catch
+        {
+            googleReady = false;
+        }
+    }
 
+    private void CheckRegisterSuccessMessage()
+    {
+        var query = Navigation.ToAbsoluteUri(Navigation.Uri).Query;
+        if (query.Contains("registered=true", StringComparison.OrdinalIgnoreCase))
+        {
+            successMessage =
+                "Đăng ký tài khoản thành công. Vui lòng đăng nhập để tiếp tục.";
+        }
+    }
 
-            // =================================================
-            // LOGIN FAILED
-            // =================================================
+    private void TogglePassword() => showPassword = !showPassword;
 
+    private async Task HandleLogin()
+    {
+        if (isLoading)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var result = await AuthService.LoginAsync(loginModel);
             if (result == null)
             {
-                errorMessage =
-                    "Email hoặc mật khẩu không chính xác.";
-
+                errorMessage = "Email hoặc mật khẩu không chính xác.";
                 return;
             }
 
-
-            // =================================================
-            // SAVE ACCESS TOKEN + REFRESH TOKEN
-            // =================================================
-
-            await TokenStorage.SetTokensAsync(
-                result.AccessToken,
-                result.RefreshToken);
-
-
-            // =================================================
-            // SAVE AUTH STATE
-            // =================================================
-
+            await TokenStorage.SetTokensAsync(result.AccessToken, result.RefreshToken);
             AuthState.SetUser(result);
-
-
-            // =================================================
-            // NAVIGATE BY ROLE
-            // =================================================
-
-            NavigateByRole(
-                result.Roles);
+            NavigateByRole(result.Roles);
         }
         catch (HttpRequestException)
         {
-            errorMessage =
-                "Không thể kết nối đến máy chủ. " +
-                "Vui lòng kiểm tra API.";
+            errorMessage = "Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng/API.";
         }
         catch (Exception ex)
         {
-            errorMessage =
-                $"Đăng nhập thất bại: {ex.Message}";
+            errorMessage = $"Đăng nhập thất bại: {ex.Message}";
         }
         finally
         {
@@ -355,45 +165,66 @@
         }
     }
 
-
-    // =========================================================
-    // GOOGLE LOGIN
-    // =========================================================
-
-    private async Task HandleGoogleLogin()
+    [JSInvokable]
+    public async Task OnGoogleLogin(string idToken)
     {
         errorMessage = null;
+        await InvokeAsync(StateHasChanged);
 
-        successMessage = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                errorMessage = "Google token không hợp lệ.";
+                return;
+            }
 
+            var response = await Http.PostAsJsonAsync(
+                "api/auth/google",
+                new GoogleLoginRequest { IdToken = idToken });
 
-        /*
-         * Google Identity Services sẽ được
-         * tích hợp ở bước Google Login.
-         *
-         * Backend:
-         *
-         * POST /api/auth/google
-         *
-         * đã có sẵn.
-         *
-         * Frontend cần lấy Google ID Token
-         * rồi gửi token đó về Backend.
-         */
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadFromJsonAsync<ApiError>();
+                errorMessage = err?.Message
+                    ?? "Đăng nhập Google thất bại. Token không hợp lệ hoặc tài khoản bị khóa.";
+                return;
+            }
 
-        await Task.CompletedTask;
+            var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            if (result is null || string.IsNullOrWhiteSpace(result.AccessToken))
+            {
+                errorMessage = "Phản hồi Google login không hợp lệ.";
+                return;
+            }
 
-
-        errorMessage =
-            "Google Login sẽ được kết nối ở bước tiếp theo.";
+            await TokenStorage.SetTokensAsync(result.AccessToken, result.RefreshToken);
+            AuthState.SetUser(result);
+            NavigateByRole(result.Roles);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Mất kết nối mạng khi đăng nhập Google.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Google login lỗi: {ex.Message}";
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
+    [JSInvokable]
+    public Task OnGoogleLoginError(string message)
+    {
+        errorMessage = string.IsNullOrWhiteSpace(message)
+            ? "Đăng nhập Google bị hủy hoặc thất bại."
+            : message;
+        return InvokeAsync(StateHasChanged);
+    }
 
-    // =========================================================
-    // NAVIGATE BY ROLE
-    // =========================================================
-
-    
     private void NavigateByRole(List<string> roles)
     {
         if (roles == null || roles.Count == 0)
@@ -402,32 +233,25 @@
             return;
         }
 
-        var role = roles
-            .FirstOrDefault()?
-            .Trim()
-            .ToLowerInvariant();
-
-        switch (role)
+        var role = roles.FirstOrDefault()?.Trim().ToLowerInvariant();
+        Navigation.NavigateTo(role switch
         {
-            case "admin":
-                Navigation.NavigateTo("/admin");
-                break;
+            "admin" => "/admin",
+            "seller" => "/seller",
+            "shipper" => "/shipper",
+            "customer" => "/",
+            _ => "/"
+        });
+    }
 
-            case "seller":
-                Navigation.NavigateTo("/seller");
-                break;
+    public ValueTask DisposeAsync()
+    {
+        dotNetRef?.Dispose();
+        return ValueTask.CompletedTask;
+    }
 
-            case "shipper":
-                Navigation.NavigateTo("/shipper");
-                break;
-
-            case "customer":
-                Navigation.NavigateTo("/products");
-                break;
-
-            default:
-                Navigation.NavigateTo("/");
-                break;
-        }
+    private sealed class ApiError
+    {
+        public string? Message { get; set; }
     }
 }

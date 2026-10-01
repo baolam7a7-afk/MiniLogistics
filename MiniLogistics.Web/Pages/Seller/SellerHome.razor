@@ -1,0 +1,208 @@
+@page "/seller"
+@layout SellerLayout
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Tổng quan Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Tổng quan</h1>
+        <p>Số liệu của mọi cửa hàng thuộc tài khoản seller đang đăng nhập.</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải dashboard...</div>
+}
+else if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="app-alert app-alert-danger">@errorMessage</div>
+    @if (noShop)
+    {
+        <a class="app-button app-button-primary" href="/seller/shop">Tạo cửa hàng</a>
+    }
+}
+else if (data != null)
+{
+    <div class="seller-grid">
+        <article class="seller-stat">
+            <span>Tổng doanh thu</span>
+            <strong>@SellerText.Money(data.Revenue.TotalRevenue)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Doanh thu tháng này</span>
+            <strong>@SellerText.Money(data.Revenue.ThisMonthRevenue)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Doanh thu hôm nay</span>
+            <strong>@SellerText.Money(data.Revenue.TodayRevenue)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Tổng đơn hàng</span>
+            <strong>@data.Orders.Total</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Chờ xác nhận</span>
+            <strong>@data.Orders.Pending</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Đang xử lý / giao</span>
+            <strong>@(data.Orders.Confirmed + data.Orders.Processing + data.Orders.Shipping)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Đã giao</span>
+            <strong>@data.Orders.Delivered</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Đã hủy</span>
+            <strong>@data.Orders.Cancelled</strong>
+        </article>
+    </div>
+
+    <div class="seller-split">
+        <section class="seller-card">
+            <h2>Doanh thu</h2>
+            <p class="seller-muted">API dashboard trả tổng, hôm nay và tháng này. Không có chuỗi doanh thu theo từng ngày.</p>
+            <div class="seller-bars">
+                @Bar("Hôm nay", data.Revenue.TodayRevenue)
+                @Bar("Tháng này", data.Revenue.ThisMonthRevenue)
+                @Bar("Tổng", data.Revenue.TotalRevenue)
+            </div>
+        </section>
+        <section class="seller-card">
+            <h2>Cần chú ý</h2>
+            <div class="seller-alerts">
+                @if (alerts.Count == 0)
+                {
+                    <p class="seller-muted">Không có cảnh báo từ dữ liệu hiện tại.</p>
+                }
+                @foreach (var alert in alerts)
+                {
+                    <div class="app-alert app-alert-warning">@alert</div>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="seller-split">
+        <section class="seller-card">
+            <h2>Đơn gần đây</h2>
+            @if (data.Orders.RecentOrders.Count == 0)
+            {
+                <p class="seller-empty">Chưa có đơn hàng.</p>
+            }
+            else
+            {
+                <div class="seller-table-wrap">
+                    <table class="seller-table">
+                        <thead>
+                            <tr>
+                                <th>Mã</th>
+                                <th>Shop</th>
+                                <th>Trạng thái</th>
+                                <th>Tổng</th>
+                                <th>Thời gian</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var order in data.Orders.RecentOrders)
+                            {
+                                <tr>
+                                    <td><a href="@($"/seller/orders/{order.OrderId}")">@order.OrderCode</a></td>
+                                    <td>@order.ShopName</td>
+                                    <td><span class="seller-badge">@SellerText.OrderStatus(order.Status)</span></td>
+                                    <td>@SellerText.Money(order.Total)</td>
+                                    <td>@SellerText.When(order.PlacedAt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+        <section class="seller-card">
+            <h2>Cửa hàng, kho và ví</h2>
+            <p>Sản phẩm: <strong>@data.Products.TotalProducts</strong> (đang bán @data.Products.ActiveProducts, nháp @data.Products.DraftProducts)</p>
+            <p>Tồn khả dụng: <strong>@data.Inventory.AvailableQuantity</strong> · Hết hàng: <strong>@data.Inventory.OutOfStockVariants</strong> biến thể</p>
+            <p>Ví: <strong>@(data.Wallet.HasWallet ? SellerText.Money(data.Wallet.Balance) : "Chưa có ví")</strong></p>
+            <p>Hoàn tiền chờ: <strong>@data.Refunds.PendingRefunds</strong> · @SellerText.Money(data.Refunds.PendingRefundAmount)</p>
+            <p>Rút tiền chờ: <strong>@data.Payouts.RequestedRequests</strong> · @SellerText.Money(data.Payouts.RequestedAmount)</p>
+            @foreach (var shop in data.Shops)
+            {
+                <p>@shop.Name — <span class="seller-badge">@SellerText.ShopStatus(shop.Status)</span></p>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private SellerDashboard? data;
+    private bool isLoading = true;
+    private bool noShop;
+    private string? errorMessage;
+    private List<string> alerts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var result = await Api.GetAsync<SellerDashboard>("api/seller/dashboard");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error ?? "Không tải được dashboard.";
+            noShop = result.StatusCode == 404;
+            return;
+        }
+
+        data = result.Data;
+        if (data.Orders.Pending > 0)
+        {
+            alerts.Add($"{data.Orders.Pending} đơn đang chờ xác nhận.");
+        }
+        if (data.Inventory.OutOfStockVariants > 0)
+        {
+            alerts.Add($"{data.Inventory.OutOfStockVariants} biến thể đã hết hàng có thể bán.");
+        }
+        if (data.Refunds.PendingRefunds > 0)
+        {
+            alerts.Add($"{data.Refunds.PendingRefunds} giao dịch hoàn tiền đang chờ.");
+        }
+        if (data.Payouts.RequestedRequests > 0)
+        {
+            alerts.Add($"{data.Payouts.RequestedRequests} yêu cầu rút tiền đang chờ duyệt.");
+        }
+        foreach (var shop in data.Shops.Where(item => item.Status != "approved"))
+        {
+            alerts.Add($"Shop {shop.Name} đang ở trạng thái {SellerText.ShopStatus(shop.Status)}.");
+        }
+    }
+
+    private RenderFragment Bar(string label, decimal value) => builder =>
+    {
+        var max = Math.Max(data?.Revenue.TotalRevenue ?? 0, 1);
+        var width = Math.Clamp((double)(value / max) * 100, value > 0 ? 4 : 0, 100);
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "seller-bar-row");
+        builder.OpenElement(2, "span");
+        builder.AddContent(3, label);
+        builder.CloseElement();
+        builder.OpenElement(4, "div");
+        builder.AddAttribute(5, "class", "seller-bar-track");
+        builder.OpenElement(6, "span");
+        builder.AddAttribute(7, "style", $"width:{width.ToString(System.Globalization.CultureInfo.InvariantCulture)}%");
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.OpenElement(8, "strong");
+        builder.AddContent(9, SellerText.Money(value));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+}

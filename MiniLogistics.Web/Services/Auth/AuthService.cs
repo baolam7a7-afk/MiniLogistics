@@ -84,14 +84,38 @@ public class AuthService
     // FORGOT PASSWORD
     // =========================================================
 
-    public async Task<bool> ForgotPasswordAsync(
+    public async Task<ForgotPasswordResult> ForgotPasswordAsync(
         ForgotPasswordRequest request)
     {
         var response = await _httpClient.PostAsJsonAsync(
             "api/auth/forgot-password",
             request);
 
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            string? error = null;
+            try
+            {
+                var body = await response.Content.ReadFromJsonAsync<AuthMessage>();
+                error = body?.Message;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
+
+            return new ForgotPasswordResult
+            {
+                Error = error ?? "Không tạo được yêu cầu đặt lại mật khẩu."
+            };
+        }
+
+        var ok = await response.Content.ReadFromJsonAsync<AuthMessage>();
+        return new ForgotPasswordResult
+        {
+            Ok = true,
+            Message = ok?.Message,
+            ResetToken = ok?.ResetToken
+        };
     }
 
     // =========================================================

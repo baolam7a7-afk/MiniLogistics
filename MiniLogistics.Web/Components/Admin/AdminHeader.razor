@@ -1,0 +1,33 @@
+@inject AdminSession Session
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<header class="seller-header">
+    <div class="seller-header-title">
+        <button type="button" class="app-button app-button-secondary seller-menu-btn" @onclick="Session.ToggleNav">
+            Menu
+        </button>
+        <div>
+            <strong>Điều hành nền tảng</strong>
+            <div class="seller-muted">Admin</div>
+        </div>
+    </div>
+
+    <div class="seller-header-actions">
+        <div class="seller-user">
+            <strong>@(Session.Profile?.FullName ?? Session.Profile?.Email)</strong>
+            <span>@Session.Profile?.Email</span>
+        </div>
+        <button type="button" class="app-button app-button-secondary" @onclick="Logout">Đăng xuất</button>
+    </div>
+</header>
+
+@code {
+    private async Task Logout()
+    {
+        await TokenStorage.ClearAsync();
+        AuthState.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

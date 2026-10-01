@@ -28,4 +28,31 @@ public class ShipmentResponseDTO
 
     public List<ShipmentEventResponseDTO> Events { get; set; }
         = new();
+
+    public string? OrderCode { get; set; }
+
+    public string? ShopName { get; set; }
+
+    public string? PaymentMethod { get; set; }
+
+    public decimal ShippingFee { get; set; }
+
+    public string? Note { get; set; }
+
+    public string? ReceiverName { get; set; }
+
+    public string? ReceiverPhone { get; set; }
+
+    public string? AddressLine { get; set; }
+
+    public List<ShipmentLineDTO> Items { get; set; } = new();
+}
+
+public class ShipmentLineDTO
+{
+    public string ProductName { get; set; } = "";
+
+    public string VariantName { get; set; } = "";
+
+    public int Quantity { get; set; }
 }

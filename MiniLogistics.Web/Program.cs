@@ -10,6 +10,10 @@ using MiniLogistics.Web.Services.Address;
 using MiniLogistics.Web.Services.Order;
 using MiniLogistics.Web.Services.User;
 using MiniLogistics.Web.Services.Review;
+using MiniLogistics.Web.Services.Category;
+using MiniLogistics.Web.Services.Seller;
+using MiniLogistics.Web.Services.Shipper;
+using MiniLogistics.Web.Services.Admin;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -37,5 +41,10 @@ builder.Services.AddScoped<OrderService>();
 // User Profile
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ReviewService>();
+builder.Services.AddScoped<CategoryService>();
+builder.Services.AddScoped<SellerApi>();
+builder.Services.AddScoped<SellerSession>();
+builder.Services.AddScoped<ShipperSession>();
+builder.Services.AddScoped<AdminSession>();
 
 await builder.Build().RunAsync();

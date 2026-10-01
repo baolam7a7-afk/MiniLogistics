@@ -1,0 +1,203 @@
+@page "/admin/categories"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Danh mục</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Danh mục</h1>
+        <p>Tạo, sửa và xóa danh mục sản phẩm.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+<section class="seller-card">
+    <h2>@(editingId.HasValue ? $"Sửa danh mục #{editingId}" : "Danh mục mới")</h2>
+    <div class="seller-two">
+        <label class="seller-field">Tên
+            <input class="seller-input" @bind="name" />
+        </label>
+        <label class="seller-field">Slug
+            <input class="seller-input" @bind="slug" />
+        </label>
+        <label class="seller-field">Danh mục cha (để trống nếu là gốc)
+            <input class="seller-input" @bind="parentText" />
+        </label>
+        <label class="seller-field">
+            <input type="checkbox" @bind="isActive" /> Đang dùng
+        </label>
+    </div>
+    <div class="seller-actions">
+        <button class="app-button app-button-primary" @onclick="Save">Lưu</button>
+        @if (editingId.HasValue)
+        {
+            <button class="app-button app-button-secondary" @onclick="ResetForm">Hủy sửa</button>
+        }
+    </div>
+</section>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải danh mục...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Chưa có danh mục.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Tên</th>
+                        <th>Slug</th>
+                        <th>Cha</th>
+                        <th>Trạng thái</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.Name <span class="seller-muted">#@item.Id</span></td>
+                            <td>@item.Slug</td>
+                            <td>@(item.ParentId?.ToString() ?? "—")</td>
+                            <td>@(item.IsActive ? "Đang dùng" : "Ẩn")</td>
+                            <td class="seller-actions">
+                                <button class="app-button app-button-secondary" @onclick="() => Edit(item)">Sửa</button>
+                                <button class="app-button app-button-danger" @onclick="() => Delete(item.Id)">Xóa</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<CategoryRecord> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+    private long? editingId;
+    private string name = "";
+    private string slug = "";
+    private string parentText = "";
+    private bool isActive = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<CategoryRecord>>($"api/categories?Page={pageIndex}&PageSize=20");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private void Edit(CategoryRecord item)
+    {
+        editingId = item.Id;
+        name = item.Name;
+        slug = item.Slug;
+        parentText = item.ParentId?.ToString() ?? "";
+        isActive = item.IsActive;
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        name = "";
+        slug = "";
+        parentText = "";
+        isActive = true;
+    }
+
+    private long? ParentId()
+    {
+        if (string.IsNullOrWhiteSpace(parentText))
+        {
+            return null;
+        }
+
+        return long.TryParse(parentText, out var id) ? id : null;
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            slug = SellerText.Slugify(name);
+        }
+
+        var body = new
+        {
+            ParentId = ParentId(),
+            Name = name,
+            Slug = slug,
+            IsActive = isActive
+        };
+
+        var result = editingId.HasValue
+            ? await Api.PutAsync<CategoryRecord>($"api/categories/{editingId}", body)
+            : await Api.PostAsync<CategoryRecord>("api/categories", body);
+
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu danh mục." : result.Error;
+        if (result.Ok)
+        {
+            ResetForm();
+            await LoadAsync();
+        }
+    }
+
+    private async Task Delete(long id)
+    {
+        var result = await Api.DeleteAsync($"api/categories/{id}");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã xóa danh mục." : result.Error;
+        if (editingId == id)
+        {
+            ResetForm();
+        }
+        await LoadAsync();
+    }
+}

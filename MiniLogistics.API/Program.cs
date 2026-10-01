@@ -33,6 +33,10 @@ using MiniLogistics.BLL.Services.Shop;
 using MiniLogistics.BLL.Services.Voucher;
 using MiniLogistics.BLL.Services.SellerDashboard;
 using MiniLogistics.BLL.Services.AdminDashboard;
+using MiniLogistics.BLL.Services.UserVoucher;
+using MiniLogistics.BLL.Services.Chat;
+using MiniLogistics.BLL.Services.QrPayment;
+using MiniLogistics.API.Hubs;
 
 // =====================================================
 // GROUP A
@@ -364,6 +368,23 @@ builder.Services.AddScoped<
     IShopWalletTransactionService,
     ShopWalletTransactionService>();
 
+builder.Services.AddScoped<
+    IUserVoucherService,
+    UserVoucherService>();
+
+builder.Services.AddScoped<
+    IChatService,
+    ChatService>();
+
+builder.Services.AddScoped<
+    IQrPaymentService,
+    QrPaymentService>();
+
+builder.Services.Configure<VietQrSettings>(
+    builder.Configuration.GetSection("VietQr"));
+
+builder.Services.AddSignalR();
+
 // =====================================================
 // 28. ADMIN USER MANAGEMENT
 // =====================================================
@@ -416,6 +437,26 @@ builder.Services
 
                     ClockSkew =
                         TimeSpan.Zero
+                };
+
+            options.Events =
+                new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken =
+                            context.Request.Query["access_token"];
+
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                            path.StartsWithSegments("/hubs/chat"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
                 };
         });
 
@@ -581,9 +622,31 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapHub<ChatHub>("/hubs/chat");
+
 
 // =====================================================
-// 41. RUN
+// 41. DEMO DATA SEED
+// =====================================================
+
+try
+{
+    await MiniLogistics.API.Data.DemoDataSeeder.SeedAsync(app.Services);
+}
+catch (Exception ex)
+{
+    var logger = app.Services
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("DemoDataSeeder");
+
+    logger.LogError(
+        ex,
+        "Không thể seed dữ liệu demo. API vẫn chạy bình thường.");
+}
+
+
+// =====================================================
+// 42. RUN
 // =====================================================
 
 app.Run();

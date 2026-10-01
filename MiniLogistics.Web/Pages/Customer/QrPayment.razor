@@ -1,0 +1,224 @@
+@page "/orders/{OrderId:long}/qr-payment"
+@layout CustomerLayout
+
+@using System.Net.Http.Json
+@using MiniLogistics.Web.Services.Auth
+
+@inject HttpClient Http
+@inject TokenStorageService TokenStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Thanh toán QR</PageTitle>
+
+<div class="checkout-page">
+    <div class="checkout-header">
+        <div>
+            <h1>Thanh toán QR</h1>
+            <p>Quét mã để hoàn tất đơn hàng #@OrderId</p>
+        </div>
+        <button class="app-button app-button-secondary" @onclick='() => Navigation.NavigateTo($"/orders/{OrderId}")'>
+            Xem đơn hàng
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="app-alert app-alert-error">@errorMessage</div>
+    }
+
+    @if (isLoading || payment is null)
+    {
+        <div class="checkout-state-card">
+            <div class="orders-spinner"></div>
+            <p>Đang tạo mã QR...</p>
+        </div>
+    }
+    else
+    {
+        <div class="checkout-card" style="max-width:520px;margin:0 auto;text-align:center">
+            <h2 style="margin-top:0">@payment.OrderCode</h2>
+            <p class="product-price" style="font-size:28px">@payment.Amount.ToString("N0") ₫</p>
+            <p class="text-muted">Người nhận: @payment.AccountName · STK @payment.AccountNumber</p>
+            <p class="text-muted">Nội dung: @payment.PaymentRef</p>
+            <p>
+                Trạng thái:
+                <strong class="@(payment.Status == "paid" ? "text-success" : "text-primary")">
+                    @StatusText(payment.Status)
+                </strong>
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(payment.QrImageUrl) && payment.Status != "paid")
+            {
+                <img src="@payment.QrImageUrl"
+                     alt="VietQR"
+                     style="width:min(100%,320px);aspect-ratio:1;object-fit:contain;border:1px solid var(--border);border-radius:16px;background:#fff;padding:12px" />
+            }
+
+            @if (payment.ExpiresAt.HasValue && payment.Status == "pending")
+            {
+                <p class="text-muted" style="margin-top:12px">
+                    Hết hạn: @payment.ExpiresAt.Value.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
+                </p>
+            }
+
+            @if (payment.PaidAt.HasValue)
+            {
+                <p class="text-success">Đã thanh toán lúc @payment.PaidAt.Value.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</p>
+            }
+
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px">
+                <button class="app-button app-button-secondary" @onclick="RefreshStatus" disabled="@isBusy">
+                    Kiểm tra trạng thái
+                </button>
+
+                @if (payment.Status is "pending" or "expired")
+                {
+                    <button class="app-button app-button-primary" @onclick="RecreateQr" disabled="@isBusy">
+                        Tạo lại QR
+                    </button>
+                }
+
+                @if (payment.Status == "pending")
+                {
+                    <button class="app-button app-button-success" @onclick="ConfirmDemo" disabled="@isBusy">
+                        Xác nhận đã chuyển (demo)
+                    </button>
+                }
+            </div>
+
+            <p class="text-muted" style="font-size:12px;margin-top:16px">
+                Nút xác nhận demo dùng khi chưa có webhook ngân hàng thật.
+            </p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long OrderId { get; set; }
+
+    private QrPaymentDto? payment;
+    private bool isLoading = true;
+    private bool isBusy;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CreateQr();
+    }
+
+    private async Task CreateQr()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            using var req = await Auth(HttpMethod.Post, $"api/payments/qr/orders/{OrderId}");
+            var res = await Http.SendAsync(req);
+            if (!res.IsSuccessStatusCode)
+            {
+                errorMessage = "Không tạo được QR thanh toán.";
+                payment = null;
+                return;
+            }
+
+            payment = await res.Content.ReadFromJsonAsync<QrPaymentDto>();
+        }
+        catch
+        {
+            errorMessage = "Lỗi mạng khi tạo QR.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshStatus()
+    {
+        if (payment is null) return;
+        isBusy = true;
+        errorMessage = null;
+        try
+        {
+            using var req = await Auth(HttpMethod.Get, $"api/payments/qr/{payment.PaymentId}");
+            var res = await Http.SendAsync(req);
+            if (res.IsSuccessStatusCode)
+                payment = await res.Content.ReadFromJsonAsync<QrPaymentDto>();
+            else
+                errorMessage = "Không kiểm tra được trạng thái.";
+        }
+        catch
+        {
+            errorMessage = "Lỗi mạng.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task RecreateQr()
+    {
+        isBusy = true;
+        await CreateQr();
+        isBusy = false;
+    }
+
+    private async Task ConfirmDemo()
+    {
+        if (payment is null) return;
+        isBusy = true;
+        errorMessage = null;
+        try
+        {
+            using var req = await Auth(HttpMethod.Post, $"api/payments/qr/{payment.PaymentId}/confirm");
+            var res = await Http.SendAsync(req);
+            if (res.IsSuccessStatusCode)
+                payment = await res.Content.ReadFromJsonAsync<QrPaymentDto>();
+            else
+                errorMessage = "Không xác nhận được thanh toán.";
+        }
+        catch
+        {
+            errorMessage = "Lỗi mạng.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task<HttpRequestMessage> Auth(HttpMethod method, string url)
+    {
+        var req = new HttpRequestMessage(method, url);
+        var token = await TokenStorage.GetAccessTokenAsync();
+        if (!string.IsNullOrWhiteSpace(token))
+            req.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return req;
+    }
+
+    private static string StatusText(string status) => status switch
+    {
+        "pending" => "Chờ thanh toán",
+        "paid" => "Đã thanh toán",
+        "expired" => "Hết hạn",
+        "cancelled" => "Đã hủy",
+        _ => status
+    };
+
+    private sealed class QrPaymentDto
+    {
+        public long PaymentId { get; set; }
+        public long OrderId { get; set; }
+        public string OrderCode { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string Status { get; set; } = "";
+        public string PaymentRef { get; set; } = "";
+        public string QrImageUrl { get; set; } = "";
+        public string AccountName { get; set; } = "";
+        public string AccountNumber { get; set; } = "";
+        public DateTime? ExpiresAt { get; set; }
+        public DateTime? PaidAt { get; set; }
+    }
+}

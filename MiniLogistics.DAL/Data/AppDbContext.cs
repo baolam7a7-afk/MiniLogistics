@@ -24,11 +24,14 @@ public class AppDbContext : DbContext
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Voucher> Vouchers => Set<Voucher>();
+    public DbSet<UserVoucher> UserVouchers => Set<UserVoucher>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderStatusLog> OrderStatusLogs => Set<OrderStatusLog>();
     public DbSet<OrderVoucher> OrderVouchers => Set<OrderVoucher>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentEvent> ShipmentEvents => Set<ShipmentEvent>();
     public DbSet<ReturnRequest> ReturnRequests => Set<ReturnRequest>();
@@ -258,7 +261,36 @@ public class AppDbContext : DbContext
             e.ToTable("payment_transactions"); e.HasKey(x => x.Id); e.Property(x => x.Provider).HasMaxLength(50);
             e.Property(x => x.Method).HasMaxLength(20).IsRequired(); e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("pending");
             e.Property(x => x.Amount).HasPrecision(18, 2); e.Property(x => x.ProviderTxnId).HasMaxLength(200);
+            e.Property(x => x.PaymentRef).HasMaxLength(100);
+            e.Property(x => x.QrPayload).HasMaxLength(2000);
             e.HasOne(x => x.Order).WithMany(x => x.PaymentTransactions).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<UserVoucher>(e =>
+        {
+            e.ToTable("user_vouchers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserId, x.VoucherId }).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("available");
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Voucher).WithMany().HasForeignKey(x => x.VoucherId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Conversation>(e =>
+        {
+            e.ToTable("conversations");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.CustomerUserId, x.SellerUserId, x.ShopId }).IsUnique();
+            e.HasOne(x => x.CustomerUser).WithMany().HasForeignKey(x => x.CustomerUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SellerUser).WithMany().HasForeignKey(x => x.SellerUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Shop).WithMany().HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ChatMessage>(e =>
+        {
+            e.ToTable("chat_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).HasMaxLength(4000).IsRequired();
+            e.HasOne(x => x.Conversation).WithMany(x => x.Messages).HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.SenderUser).WithMany().HasForeignKey(x => x.SenderUserId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<Shipment>(e =>
         {
@@ -288,7 +320,7 @@ public class AppDbContext : DbContext
         });
         b.Entity<Review>(e =>
         {
-            e.ToTable("reviews"); e.HasKey(x => x.Id); e.HasCheckConstraint("CK_reviews_rating", "[rating] BETWEEN 1 AND 5");
+            e.ToTable("reviews", t => t.HasCheckConstraint("CK_reviews_rating", "[rating] BETWEEN 1 AND 5")); e.HasKey(x => x.Id);
             e.HasOne(x => x.Order).WithMany(x => x.Reviews).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.OrderItem).WithMany(x => x.Reviews).HasForeignKey(x => x.OrderItemId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Product).WithMany(x => x.Reviews).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);

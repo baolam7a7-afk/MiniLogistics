@@ -1,0 +1,50 @@
+@inject SellerSession Session
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<header class="seller-header">
+    <div class="seller-header-title">
+        <button type="button" class="app-button app-button-secondary seller-menu-btn" @onclick="Session.ToggleNav">
+            Menu
+        </button>
+        <div>
+            <strong>@(Session.Shop?.Name ?? "Chưa có cửa hàng")</strong>
+            <div class="seller-muted">@SellerText.ShopStatus(Session.Shop?.Status)</div>
+        </div>
+    </div>
+
+    <div class="seller-header-actions">
+        @if (Session.Shops.Count > 0)
+        {
+            <select class="seller-shop-select" value="@(Session.Shop?.Id)" @onchange="OnShopChanged">
+                @foreach (var shop in Session.Shops)
+                {
+                    <option value="@shop.Id">@shop.Name</option>
+                }
+            </select>
+        }
+        <div class="seller-user">
+            <strong>@(Session.Profile?.FullName ?? Session.Profile?.Email)</strong>
+            <span>@Session.Profile?.Email</span>
+        </div>
+        <button type="button" class="app-button app-button-secondary" @onclick="Logout">Đăng xuất</button>
+    </div>
+</header>
+
+@code {
+    private void OnShopChanged(ChangeEventArgs args)
+    {
+        if (long.TryParse(args.Value?.ToString(), out var shopId))
+        {
+            Session.SelectShop(shopId);
+        }
+    }
+
+    private async Task Logout()
+    {
+        await TokenStorage.ClearAsync();
+        AuthState.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

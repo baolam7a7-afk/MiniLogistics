@@ -82,7 +82,8 @@ public class SellerDashboardService : ISellerDashboardService
 
         var pendingOrders =
             await orders.CountAsync(
-                x => x.Status == OrderStatuses.Pending);
+                x => x.Status == OrderStatuses.Pending
+                    || x.Status == "paid");
 
         var confirmedOrders =
             await orders.CountAsync(

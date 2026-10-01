@@ -1,0 +1,210 @@
+@page "/admin/disputes"
+@page "/admin/disputes/{DisputeId:long}"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Khiếu nại</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Khiếu nại</h1>
+        <p>Admin xem mọi khiếu nại, đổi trạng thái và trả lời.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="open">Mở</option>
+        <option value="in_progress">Đang xử lý</option>
+        <option value="resolved">Đã giải quyết</option>
+        <option value="rejected">Từ chối</option>
+        <option value="closed">Đã đóng</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải khiếu nại...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Chưa có khiếu nại.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Người gửi</th>
+                        <th>Lý do</th>
+                        <th>Trạng thái</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>#@item.OrderId</td>
+                            <td>#@item.RaisedByUserId</td>
+                            <td>@item.Reason</td>
+                            <td>
+                                <select class="seller-select" value="@item.Status" @onchange="args => UpdateStatus(item, args)">
+                                    <option value="open">Mở</option>
+                                    <option value="in_progress">Đang xử lý</option>
+                                    <option value="resolved">Đã giải quyết</option>
+                                    <option value="rejected">Từ chối</option>
+                                    <option value="closed">Đã đóng</option>
+                                </select>
+                            </td>
+                            <td><a href="@($"/admin/disputes/{item.Id}")">Xem</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@if (DisputeId.HasValue)
+{
+    <section class="seller-card">
+        <h2>Khiếu nại #@DisputeId</h2>
+        @foreach (var note in messages)
+        {
+            <p><strong>#@note.SenderUserId</strong> · @SellerText.When(note.CreatedAt)<br />@note.Message</p>
+        }
+        <label class="seller-field">Trả lời
+            <textarea class="seller-input" @bind="reply"></textarea>
+        </label>
+        <button class="app-button app-button-primary" @onclick="Send">Gửi</button>
+    </section>
+}
+
+@code {
+    [Parameter] public long? DisputeId { get; set; }
+
+    private List<DisputeRecord> items = new();
+    private List<DisputeMessageRecord> messages = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string status = "";
+    private string reply = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+        if (DisputeId.HasValue)
+        {
+            await LoadMessages();
+        }
+        else
+        {
+            messages = new();
+        }
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/disputes?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<DisputeRecord>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private async Task LoadMessages()
+    {
+        var result = await Api.GetAsync<PagedResult<DisputeMessageRecord>>(
+            $"api/dispute-messages/dispute/{DisputeId}?Page=1&PageSize=50");
+        messages = result.Data?.Items ?? new();
+        if (!result.Ok)
+        {
+            isError = true;
+            message = result.Error;
+        }
+    }
+
+    private async Task UpdateStatus(DisputeRecord item, ChangeEventArgs args)
+    {
+        var next = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(next) || next == item.Status)
+        {
+            return;
+        }
+
+        var result = await Api.PutAsync<DisputeRecord>($"api/disputes/{item.Id}", new { Status = next });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật khiếu nại." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Send()
+    {
+        if (!DisputeId.HasValue || string.IsNullOrWhiteSpace(reply))
+        {
+            return;
+        }
+
+        var result = await Api.PostAsync<DisputeMessageRecord>("api/dispute-messages", new
+        {
+            DisputeId,
+            Message = reply
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã gửi trả lời." : result.Error;
+        if (result.Ok)
+        {
+            reply = "";
+            await LoadMessages();
+        }
+    }
+}

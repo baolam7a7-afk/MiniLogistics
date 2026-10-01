@@ -1,0 +1,150 @@
+@page "/seller/refunds"
+@layout SellerLayout
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Hoàn trả</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Hoàn trả</h1>
+        <p>Seller duyệt hoặc từ chối yêu cầu trả hàng. Danh sách giao dịch hoàn tiền chỉ admin xem được.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (summary != null)
+{
+    <div class="seller-grid">
+        <article class="seller-stat">
+            <span>Giao dịch hoàn</span>
+            <strong>@summary.TotalRefunds</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Đang chờ</span>
+            <strong>@summary.PendingRefunds</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Tiền hoàn</span>
+            <strong>@SellerText.Money(summary.TotalRefundAmount)</strong>
+        </article>
+    </div>
+}
+
+<div class="seller-filters">
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="requested">Chờ xử lý</option>
+        <option value="approved">Đã duyệt</option>
+        <option value="rejected">Từ chối</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="LoadAsync">Lọc</button>
+</div>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải yêu cầu hoàn trả...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có yêu cầu hoàn trả.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Khách</th>
+                        <th>Lý do</th>
+                        <th>Mô tả</th>
+                        <th>Trạng thái</th>
+                        <th>Lúc yêu cầu</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.OrderCode</td>
+                            <td>@item.CustomerEmail</td>
+                            <td>@item.Reason</td>
+                            <td>@(item.Description ?? "—")</td>
+                            <td><span class="seller-badge">@SellerText.ReturnStatus(item.Status)</span></td>
+                            <td>@SellerText.When(item.RequestedAt)</td>
+                            <td class="seller-actions">
+                                @if (item.Status == "requested")
+                                {
+                                    <button class="app-button app-button-primary" @onclick="() => Decide(item.Id, true)">Duyệt</button>
+                                    <button class="app-button app-button-danger" @onclick="() => Decide(item.Id, false)">Từ chối</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private List<ReturnRecord> items = new();
+    private RefundSummary? summary;
+    private string status = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        var dashboard = await Api.GetAsync<SellerDashboard>("api/seller/dashboard");
+        summary = dashboard.Data?.Refunds;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var query = "api/return-requests/shop?Page=1&PageSize=50";
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<ReturnRecord>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+    }
+
+    private async Task Decide(long id, bool approve)
+    {
+        var url = approve
+            ? $"api/return-requests/{id}/approve"
+            : $"api/return-requests/{id}/reject";
+        var result = await Api.PutAsync<ReturnRecord>(url);
+        isError = !result.Ok;
+        message = result.Ok
+            ? (approve ? "Đã duyệt yêu cầu." : "Đã từ chối yêu cầu.")
+            : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+}

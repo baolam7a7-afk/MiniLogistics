@@ -110,6 +110,17 @@ public interface IUnitOfWork
 
     IRepository<OrderVoucher> OrderVouchers { get; }
 
+    IRepository<UserVoucher> UserVouchers { get; }
+
+
+    // =====================================================
+    // CHAT
+    // =====================================================
+
+    IRepository<Conversation> Conversations { get; }
+
+    IRepository<ChatMessage> ChatMessages { get; }
+
 
     // =====================================================
     // SUPPORT TICKET

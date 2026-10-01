@@ -1,0 +1,111 @@
+@page "/shipper/profile"
+@layout ShipperLayout
+@using MiniLogistics.Web.Models.User
+@using MiniLogistics.Web.Services.Seller
+@inject SellerApi Api
+@inject ShipperSession Session
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Tài khoản Shipper</PageTitle>
+
+<div class="shipper-head">
+    <h1>Tài khoản</h1>
+    <p>Thông tin cá nhân của user đang đăng nhập.</p>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <p class="shipper-muted">Đang tải hồ sơ...</p>
+}
+else if (profile == null)
+{
+    <div class="shipper-card"><p>Không có dữ liệu tài khoản.</p></div>
+}
+else
+{
+    <section class="shipper-card">
+        <p>Email: <strong>@profile.Email</strong></p>
+        <p>Role: <strong>@string.Join(", ", profile.Roles)</strong></p>
+        <p>Trạng thái: <strong>@profile.Status</strong></p>
+        <label class="shipper-muted">Họ tên
+            <input class="shipper-input" @bind="fullName" />
+        </label>
+        <label class="shipper-muted">Số điện thoại
+            <input class="shipper-input" @bind="phone" />
+        </label>
+        <label class="shipper-muted">URL ảnh đại diện
+            <input class="shipper-input" @bind="avatarUrl" />
+        </label>
+        <div class="shipper-actions">
+            <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">Lưu hồ sơ</button>
+            <button class="app-button app-button-danger" @onclick="Logout">Đăng xuất</button>
+        </div>
+    </section>
+}
+
+@code {
+    private UserProfile? profile;
+    private string fullName = "";
+    private string? phone;
+    private string? avatarUrl;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        var result = await Api.GetAsync<UserProfile>("api/users/me");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            return;
+        }
+
+        profile = result.Data;
+        fullName = profile.FullName ?? "";
+        phone = profile.Phone;
+        avatarUrl = profile.AvatarUrl;
+    }
+
+    private async Task Save()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        isSaving = true;
+        var result = await Api.PutAsync<UserProfile>("api/users/me", new
+        {
+            FullName = fullName,
+            Phone = phone,
+            AvatarUrl = avatarUrl
+        });
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu hồ sơ." : result.Error;
+        if (result.Data != null)
+        {
+            profile = result.Data;
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+        }
+    }
+
+    private async Task Logout()
+    {
+        await TokenStorage.ClearAsync();
+        AuthState.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

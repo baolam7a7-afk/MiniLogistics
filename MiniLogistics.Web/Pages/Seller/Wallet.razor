@@ -1,0 +1,162 @@
+@page "/seller/wallet"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Ví Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Ví cửa hàng</h1>
+        <p>Số dư và giao dịch của shop đang chọn. Seller không tự ghi giao dịch ví.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải ví...</div>
+    }
+    else if (wallet == null)
+    {
+        <div class="seller-empty">Shop chưa có ví.</div>
+        <button class="app-button app-button-primary" @onclick="CreateWallet">Tạo ví</button>
+    }
+    else
+    {
+        <div class="seller-grid">
+            <article class="seller-stat">
+                <span>Số dư</span>
+                <strong>@SellerText.Money(wallet.Balance)</strong>
+            </article>
+            <article class="seller-stat">
+                <span>Giao dịch</span>
+                <strong>@transactions.Count</strong>
+            </article>
+        </div>
+        <section class="seller-card">
+            <h2>Giao dịch</h2>
+            @if (transactions.Count == 0)
+            {
+                <p class="seller-empty">Chưa có giao dịch ví.</p>
+            }
+            else
+            {
+                <div class="seller-table-wrap">
+                    <table class="seller-table">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Loại</th>
+                                <th>Số tiền</th>
+                                <th>Số dư sau</th>
+                                <th>Mô tả</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in transactions)
+                            {
+                                <tr>
+                                    <td>@SellerText.When(item.CreatedAt)</td>
+                                    <td>@item.Type</td>
+                                    <td>@SellerText.Money(item.Amount)</td>
+                                    <td>@(item.BalanceAfter.HasValue ? SellerText.Money(item.BalanceAfter.Value) : "—")</td>
+                                    <td>@(item.Description ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    private ShopWalletRecord? wallet;
+    private List<WalletTransaction> transactions = new();
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        message = null;
+        var result = await Api.GetAsync<ShopWalletRecord>($"api/shop-wallets/my/{Session.Shop.Id}");
+        if (result.StatusCode == 404)
+        {
+            wallet = null;
+            transactions = new();
+            isLoading = false;
+            return;
+        }
+
+        if (!result.Ok || result.Data == null)
+        {
+            isLoading = false;
+            isError = true;
+            message = result.Error;
+            wallet = null;
+            return;
+        }
+
+        wallet = result.Data;
+        var txs = await Api.GetAsync<List<WalletTransaction>>(
+            $"api/shop-wallet-transactions/my/{Session.Shop.Id}");
+        transactions = txs.Data ?? new();
+        if (!txs.Ok)
+        {
+            isError = true;
+            message = txs.Error;
+        }
+        isLoading = false;
+    }
+
+    private async Task CreateWallet()
+    {
+        if (Session.Shop == null)
+        {
+            return;
+        }
+
+        var result = await Api.PostAsync<ShopWalletRecord>($"api/shop-wallets/{Session.Shop.Id}");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã tạo ví." : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

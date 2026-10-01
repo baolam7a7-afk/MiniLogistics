@@ -1,0 +1,188 @@
+@page "/admin/shipments"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Vận đơn</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Vận đơn</h1>
+        <p>Gán shipper khi vận đơn còn trạng thái mới tạo. Các bước lấy hàng và giao hàng do shipper cập nhật.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <input class="seller-input" placeholder="Mã vận đơn" @bind="search" />
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="created">Mới tạo</option>
+        <option value="assigned">Chờ lấy hàng</option>
+        <option value="picked_up">Đã lấy hàng</option>
+        <option value="shipping">Đang giao</option>
+        <option value="delivered">Đã giao</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải vận đơn...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có vận đơn phù hợp.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Đơn</th>
+                        <th>COD</th>
+                        <th>Shipper</th>
+                        <th>Trạng thái</th>
+                        <th>Gán</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@(item.TrackingCode ?? "—")</td>
+                            <td>#@item.OrderId</td>
+                            <td>@SellerText.Money(item.CodAmount)</td>
+                            <td>@(item.ShipperName ?? (item.ShipperUserId?.ToString() ?? "—"))</td>
+                            <td><span class="seller-badge">@ShipperText.Status(item.Status)</span></td>
+                            <td>
+                                @if (item.Status == "created")
+                                {
+                                    <div class="seller-actions">
+                                        <select class="seller-select" @onchange="args => RememberShipper(item.Id, args)">
+                                            <option value="">Chọn shipper</option>
+                                            @foreach (var shipper in shippers)
+                                            {
+                                                <option value="@shipper.Id">@(shipper.FullName ?? shipper.Email)</option>
+                                            }
+                                        </select>
+                                        <button class="app-button app-button-primary" @onclick="() => Assign(item.Id)">Gán</button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<ShipmentRecord> items = new();
+    private List<UserProfile> shippers = new();
+    private Dictionary<long, long> chosen = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string search = "";
+    private string status = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadShippers();
+        await LoadAsync();
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadShippers()
+    {
+        var result = await Api.GetAsync<PagedResult<UserProfile>>("api/users?Role=shipper&Page=1&PageSize=100");
+        shippers = result.Data?.Items ?? new();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/shipments?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<ShipmentRecord>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private void RememberShipper(long shipmentId, ChangeEventArgs args)
+    {
+        if (long.TryParse(args.Value?.ToString(), out var userId))
+        {
+            chosen[shipmentId] = userId;
+        }
+        else
+        {
+            chosen.Remove(shipmentId);
+        }
+    }
+
+    private async Task Assign(long shipmentId)
+    {
+        if (!chosen.TryGetValue(shipmentId, out var shipperId))
+        {
+            isError = true;
+            message = "Chọn shipper trước khi gán.";
+            return;
+        }
+
+        var result = await Api.PutAsync<ShipmentRecord>($"api/shipments/{shipmentId}/assign", new
+        {
+            ShipperUserId = shipperId
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã gán shipper." : result.Error;
+        await LoadAsync();
+    }
+}

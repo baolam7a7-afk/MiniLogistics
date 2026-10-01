@@ -57,10 +57,10 @@ public class OrderService : IOrderService
                     .Trim()
                     .ToLowerInvariant();
 
-        if (paymentMethod != "cod")
+        if (paymentMethod is not ("cod" or "qr"))
         {
             throw new BadRequestException(
-                "Hiện tại Order chỉ hỗ trợ phương thức COD.");
+                "Hiện tại Order hỗ trợ COD hoặc thanh toán QR.");
         }
 
 
@@ -334,7 +334,9 @@ public class OrderService : IOrderService
                             request.ShippingAddressId,
 
                         Status =
-                            OrderStatuses.Pending,
+                            paymentMethod == "qr"
+                                ? "awaiting_payment"
+                                : OrderStatuses.Pending,
 
                         Currency =
                             "VND",
@@ -442,7 +444,7 @@ public class OrderService : IOrderService
                             null,
 
                         ToStatus =
-                            OrderStatuses.Pending,
+                            order.Status,
 
                         Message =
                             "Order được tạo.",
@@ -456,6 +458,10 @@ public class OrderService : IOrderService
 
                 await _unitOfWork.OrderStatusLogs
                     .AddAsync(statusLog);
+
+                await RemoveOrderedCartItems(
+                    customerId,
+                    orderItems);
 
 
                 // ========================================
@@ -932,11 +938,12 @@ public class OrderService : IOrderService
                     }
 
 
-                    if (order.Status !=
-                        OrderStatuses.Pending)
+                    if (order.Status is not (
+                        OrderStatuses.Pending
+                        or "awaiting_payment"))
                     {
                         throw new BadRequestException(
-                            "Chỉ có thể hủy Order đang ở trạng thái pending.");
+                            "Chỉ có thể hủy đơn đang chờ xác nhận hoặc chờ thanh toán.");
                     }
 
 
@@ -1213,6 +1220,38 @@ public class OrderService : IOrderService
     // RESERVE INVENTORY
     // =====================================================
 
+    private async Task RemoveOrderedCartItems(
+        long customerId,
+        List<OrderItemModel> orderItems)
+    {
+        var carts = await _unitOfWork.Carts
+            .FindAsync(cart => cart.UserId == customerId);
+
+        var cart = carts.FirstOrDefault();
+        if (cart == null)
+        {
+            return;
+        }
+
+        var variantIds = orderItems
+            .Select(item => item.VariantId)
+            .ToHashSet();
+
+        var lines = await _unitOfWork.CartItems
+            .FindAsync(item =>
+                item.CartId == cart.Id &&
+                variantIds.Contains(item.VariantId));
+
+        foreach (var line in lines)
+        {
+            _unitOfWork.CartItems.Delete(line);
+        }
+
+        cart.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.Carts.Update(cart);
+    }
+
+
     private async Task ReserveInventory(
         long variantId,
         int quantity)
@@ -1488,8 +1527,13 @@ public class OrderService : IOrderService
         {
             bool valid =
                 (
-                    currentStatus ==
-                        OrderStatuses.Pending
+                    (
+                        currentStatus ==
+                            OrderStatuses.Pending
+                        ||
+                        currentStatus ==
+                            "paid"
+                    )
                     &&
                     newStatus ==
                         OrderStatuses.Confirmed
@@ -1507,6 +1551,9 @@ public class OrderService : IOrderService
                     (
                         currentStatus ==
                             OrderStatuses.Pending
+                        ||
+                        currentStatus ==
+                            "paid"
                         ||
                         currentStatus ==
                             OrderStatuses.Confirmed
@@ -1538,8 +1585,13 @@ public class OrderService : IOrderService
         {
             bool valid =
                 (
-                    currentStatus ==
-                        OrderStatuses.Pending
+                    (
+                        currentStatus ==
+                            OrderStatuses.Pending
+                        ||
+                        currentStatus ==
+                            "paid"
+                    )
                     &&
                     (
                         newStatus ==

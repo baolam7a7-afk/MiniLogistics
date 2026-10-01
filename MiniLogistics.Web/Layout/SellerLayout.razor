@@ -1,0 +1,56 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject SellerSession Session
+
+@if (!Session.Ready)
+{
+    <div class="seller-boot">Đang kiểm tra quyền seller...</div>
+}
+else if (Session.Forbidden)
+{
+    <div class="seller-denied">
+        <div class="seller-denied-card">
+            <h1>Không có quyền Seller</h1>
+            <p>Tài khoản này không có role seller. Khu vực này chỉ mở cho tài khoản seller.</p>
+            <a class="app-button app-button-primary" href="/">Về trang chủ</a>
+        </div>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(Session.GateError) && Session.Profile == null)
+{
+    <div class="seller-denied">
+        <div class="seller-denied-card">
+            <h1>Không mở được kênh Seller</h1>
+            <p>@Session.GateError</p>
+            <a class="app-button app-button-primary" href="/login">Đăng nhập</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="seller-shell @(Session.NavOpen ? "is-nav-open" : null)">
+        <button type="button" class="seller-backdrop" @onclick="Session.CloseNav" aria-label="Đóng menu"></button>
+        <SellerSidebar />
+        <div class="seller-main">
+            <SellerHeader />
+            <main class="seller-content">
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Session.UiChanged += StateHasChanged;
+        Session.ShopChanged += StateHasChanged;
+        await Session.EnsureAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.UiChanged -= StateHasChanged;
+        Session.ShopChanged -= StateHasChanged;
+    }
+}

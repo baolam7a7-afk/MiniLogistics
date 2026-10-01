@@ -1,0 +1,18 @@
+<div class="seller-pager">
+    <button type="button" class="app-button app-button-secondary" disabled="@CannotBack" @onclick="GoPrev">Trước</button>
+    <span>@Label</span>
+    <button type="button" class="app-button app-button-secondary" disabled="@CannotForward" @onclick="GoNext">Sau</button>
+</div>
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private bool CannotBack => Page <= 1;
+    private bool CannotForward => TotalPages <= 1 || Page >= TotalPages;
+    private string Label => $"Trang {Page} / {Math.Max(TotalPages, 1)}";
+
+    private Task GoPrev() => PageChanged.InvokeAsync(Page - 1);
+    private Task GoNext() => PageChanged.InvokeAsync(Page + 1);
+}

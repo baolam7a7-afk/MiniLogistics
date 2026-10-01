@@ -1,0 +1,167 @@
+@page "/admin/refunds"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Hoàn tiền</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Hoàn tiền</h1>
+        <p>Tạo giao dịch hoàn từ yêu cầu trả hàng, rồi đánh dấu đã hoàn hoặc thất bại khi còn chờ.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+<section class="seller-card">
+    <h2>Tạo giao dịch hoàn</h2>
+    <div class="seller-two">
+        <label class="seller-field">Mã yêu cầu trả hàng
+            <input class="seller-input" type="number" @bind="returnRequestId" />
+        </label>
+        <label class="seller-field">Số tiền
+            <input class="seller-input" type="number" min="1" @bind="amount" />
+        </label>
+        <label class="seller-field">Kênh hoàn
+            <select class="seller-select" @bind="method">
+                <option value="original">Theo kênh gốc</option>
+                <option value="wallet">Ví</option>
+                <option value="bank">Ngân hàng</option>
+            </select>
+        </label>
+    </div>
+    <button class="app-button app-button-primary" @onclick="Create">Tạo</button>
+</section>
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải giao dịch hoàn...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Chưa có giao dịch hoàn tiền.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Khách</th>
+                        <th>Số tiền</th>
+                        <th>Kênh</th>
+                        <th>Trạng thái</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.OrderCode</td>
+                            <td>@(item.CustomerEmail ?? $"#{item.CustomerId}")</td>
+                            <td>@SellerText.Money(item.Amount)</td>
+                            <td>@item.Method</td>
+                            <td><span class="seller-badge">@AdminText.RefundStatus(item.Status)</span></td>
+                            <td>
+                                @if (item.Status == "pending")
+                                {
+                                    <div class="seller-actions">
+                                        <button class="app-button app-button-primary" @onclick="() => Complete(item.Id)">Đã hoàn</button>
+                                        <button class="app-button app-button-danger" @onclick="() => Fail(item.Id)">Thất bại</button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<RefundRecord> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private long returnRequestId;
+    private decimal amount;
+    private string method = "original";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<RefundRecord>>($"api/refunds?Page={pageIndex}&PageSize=10");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private async Task Create()
+    {
+        var result = await Api.PostAsync<RefundRecord>("api/refunds", new
+        {
+            ReturnRequestId = returnRequestId,
+            Amount = amount,
+            Method = method
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã tạo giao dịch hoàn tiền." : result.Error;
+        if (result.Ok)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task Complete(long id)
+    {
+        var result = await Api.PutAsync<RefundRecord>($"api/refunds/{id}/complete");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã đánh dấu hoàn tiền." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Fail(long id)
+    {
+        var result = await Api.PutAsync<RefundRecord>($"api/refunds/{id}/fail");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã đánh dấu hoàn tiền thất bại." : result.Error;
+        await LoadAsync();
+    }
+}

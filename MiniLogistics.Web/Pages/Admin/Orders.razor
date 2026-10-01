@@ -1,0 +1,138 @@
+@page "/admin/orders"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Đơn hàng Admin</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Đơn hàng</h1>
+        <p>Toàn bộ đơn trên sàn. Admin chỉ được xác nhận, chuyển xử lý hoặc hủy ở các bước đầu. Giao hàng thuộc shipper.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <input class="seller-input" placeholder="Mã đơn" @bind="search" />
+    <select class="seller-select" @bind="status">
+        <option value="">Mọi trạng thái</option>
+        <option value="pending">Chờ xác nhận</option>
+        <option value="confirmed">Đã xác nhận</option>
+        <option value="processing">Đang xử lý</option>
+        <option value="shipping">Đang giao</option>
+        <option value="delivered">Đã giao</option>
+        <option value="cancelled">Đã hủy</option>
+        <option value="awaiting_payment">Chờ thanh toán</option>
+        <option value="paid">Đã thanh toán</option>
+    </select>
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="app-alert app-alert-danger">@errorMessage</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải đơn hàng...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có đơn hàng phù hợp.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Shop</th>
+                        <th>Khách</th>
+                        <th>Tổng</th>
+                        <th>Trạng thái</th>
+                        <th>Đặt lúc</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in items)
+                    {
+                        <tr>
+                            <td>@order.OrderCode</td>
+                            <td>#@order.ShopId</td>
+                            <td>#@order.CustomerId</td>
+                            <td>@SellerText.Money(order.Total)</td>
+                            <td><span class="seller-badge">@SellerText.OrderStatus(order.Status)</span></td>
+                            <td>@SellerText.When(order.PlacedAt)</td>
+                            <td><a class="app-button app-button-secondary" href="@($"/admin/orders/{order.Id}")">Chi tiết</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<SellerOrder> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string search = "";
+    private string status = "";
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/orders?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query += $"&Status={Uri.EscapeDataString(status)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<SellerOrder>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+}

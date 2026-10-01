@@ -367,9 +367,15 @@ public class AuthService : IAuthService
                 "Google:ClientId chưa được cấu hình.");
         }
 
-        // Google Login public chỉ tạo Customer.
-        // Không cho client tự truyền role để tránh tự tạo Admin/Seller/Shipper.
-        const string roleName = "customer";
+        // Google chỉ được tạo customer / seller / shipper. Không bao giờ admin.
+        var roleName = string.IsNullOrWhiteSpace(request.Role)
+            ? "customer"
+            : request.Role.Trim().ToLowerInvariant();
+
+        if (roleName is not ("customer" or "seller" or "shipper"))
+        {
+            roleName = "customer";
+        }
 
         GoogleJsonWebSignature.Payload payload;
 
@@ -434,79 +440,100 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
-            // Không tự động link vào tài khoản local
-            // chỉ vì email giống nhau.
-            bool emailExists =
-                await _context.Users
-                    .AnyAsync(x => x.Email == email);
+            // Liên kết với tài khoản local cùng email nếu đã tồn tại.
+            user = await _context.Users
+                .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+                .FirstOrDefaultAsync(x => x.Email == email);
 
-            if (emailExists)
+            if (user != null)
             {
-                throw new Exception(
-                    "Email Google này đã tồn tại. Hãy đăng nhập bằng Email/Password hoặc thực hiện chức năng liên kết tài khoản.");
-            }
-
-            var role =
-                await _context.Roles
-                    .FirstOrDefaultAsync(
-                        x => x.Name == roleName);
-
-            if (role == null)
-            {
-                throw new Exception(
-                    $"Role '{roleName}' chưa tồn tại trong Database.");
-            }
-
-            user =
-                new UserModel
+                if (user.Status != "active")
                 {
-                    Email = email,
+                    throw new Exception(
+                        "Tài khoản hiện không hoạt động.");
+                }
 
-                    // Google account không dùng password local.
-                    PasswordHash = string.Empty,
+                // Email đã có GoogleId khác → không cho chiếm.
+                if (!string.IsNullOrWhiteSpace(user.GoogleId) &&
+                    user.GoogleId != googleId)
+                {
+                    throw new Exception(
+                        "Email này đã được liên kết với tài khoản Google khác.");
+                }
 
-                    Phone = null,
+                user.GoogleId = googleId;
+                user.AuthProvider =
+                    string.IsNullOrWhiteSpace(user.PasswordHash)
+                        ? "google"
+                        : "local+google";
 
-                    FullName = fullName,
+                if (!string.IsNullOrWhiteSpace(fullName) &&
+                    string.IsNullOrWhiteSpace(user.FullName))
+                {
+                    user.FullName = fullName;
+                }
 
-                    AvatarUrl = avatarUrl,
+                if (!string.IsNullOrWhiteSpace(avatarUrl) &&
+                    string.IsNullOrWhiteSpace(user.AvatarUrl))
+                {
+                    user.AvatarUrl = avatarUrl;
+                }
 
-                    Status = "active",
+                user.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                var role =
+                    await _context.Roles
+                        .FirstOrDefaultAsync(
+                            x => x.Name == roleName);
 
-                    AuthProvider = "google",
+                if (role == null)
+                {
+                    throw new Exception(
+                        $"Role '{roleName}' chưa tồn tại trong Database.");
+                }
 
-                    GoogleId = googleId,
+                user =
+                    new UserModel
+                    {
+                        Email = email,
+                        PasswordHash = string.Empty,
+                        Phone = null,
+                        FullName = fullName,
+                        AvatarUrl = avatarUrl,
+                        Status = "active",
+                        AuthProvider = "google",
+                        GoogleId = googleId,
+                        CreatedAt = DateTime.UtcNow
+                    };
 
-                    CreatedAt = DateTime.UtcNow
-                };
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
 
-            _context.Users.Add(user);
-
-            await _context.SaveChangesAsync();
-
-            var userRole =
-                new UserRoleModel
+                _context.UserRoles.Add(new UserRoleModel
                 {
                     UserId = user.Id,
                     RoleId = role.Id,
                     AssignedAt = DateTime.UtcNow
-                };
+                });
 
-            _context.UserRoles.Add(userRole);
+                await _context.SaveChangesAsync();
 
-            await _context.SaveChangesAsync();
+                user =
+                    await _context.Users
+                        .Include(x => x.UserRoles)
+                        .ThenInclude(x => x.Role)
+                        .FirstOrDefaultAsync(
+                            x => x.Id == user.Id);
 
-            user =
-                await _context.Users
-                    .Include(x => x.UserRoles)
-                    .ThenInclude(x => x.Role)
-                    .FirstOrDefaultAsync(
-                        x => x.Id == user.Id);
-
-            if (user == null)
-            {
-                throw new Exception(
-                    "Không thể tải lại Google User.");
+                if (user == null)
+                {
+                    throw new Exception(
+                        "Không thể tải lại Google User.");
+                }
             }
         }
         else

@@ -1,0 +1,124 @@
+@page "/seller/shop"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Cửa hàng</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Cửa hàng</h1>
+        <p>Tên, mô tả và logo. Trạng thái duyệt chỉ admin được đổi.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+<section class="seller-card">
+    <h2>@(isCreate ? "Tạo cửa hàng" : "Thông tin cửa hàng")</h2>
+    @if (!isCreate)
+    {
+        <p>Trạng thái: <span class="seller-badge">@SellerText.ShopStatus(status)</span></p>
+        @if (approvedAt != null)
+        {
+            <p class="seller-muted">Duyệt lúc @SellerText.When(approvedAt.Value)</p>
+        }
+        <p class="seller-muted">Model shop không có địa chỉ hoặc số điện thoại cửa hàng.</p>
+    }
+    <div class="seller-form">
+        <label>Tên
+            <input class="seller-input" @bind="name" />
+        </label>
+        <label>Mô tả
+            <textarea class="seller-textarea" @bind="description"></textarea>
+        </label>
+        <label>URL logo
+            <input class="seller-input" @bind="logoUrl" />
+        </label>
+        <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">
+            @(isCreate ? "Tạo cửa hàng" : "Lưu cửa hàng")
+        </button>
+    </div>
+</section>
+
+@code {
+    private bool isCreate = true;
+    private bool isSaving;
+    private bool isError;
+    private string? message;
+    private string name = "";
+    private string? description;
+    private string? logoUrl;
+    private string status = "";
+    private DateTime? approvedAt;
+    private long shopId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        BindShop();
+    }
+
+    private void OnShopChanged()
+    {
+        BindShop();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void BindShop()
+    {
+        var shop = Session.Shop;
+        isCreate = shop == null;
+        if (shop == null)
+        {
+            return;
+        }
+
+        shopId = shop.Id;
+        name = shop.Name;
+        description = shop.Description;
+        logoUrl = shop.LogoUrl;
+        status = shop.Status;
+        approvedAt = shop.ApprovedAt;
+    }
+
+    private async Task Save()
+    {
+        isSaving = true;
+        var body = new
+        {
+            Name = name,
+            Description = description,
+            LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim()
+        };
+
+        if (isCreate)
+        {
+            var created = await Api.PostAsync<ShopRecord>("api/shops", body);
+            isSaving = false;
+            isError = !created.Ok;
+            message = created.Ok ? "Đã tạo cửa hàng. Shop mới ở trạng thái chờ duyệt." : created.Error;
+            if (created.Ok && created.Data != null)
+            {
+                Session.RememberShop(created.Data);
+            }
+            return;
+        }
+
+        var updated = await Api.PutAsync<ShopRecord>($"api/shops/{shopId}", body);
+        isSaving = false;
+        isError = !updated.Ok;
+        message = updated.Ok ? "Đã lưu cửa hàng." : updated.Error;
+        if (updated.Ok && updated.Data != null)
+        {
+            Session.RememberShop(updated.Data);
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

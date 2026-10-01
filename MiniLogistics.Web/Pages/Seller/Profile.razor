@@ -1,0 +1,105 @@
+@page "/seller/profile"
+@layout SellerLayout
+@inject SellerApi Api
+@inject SellerSession Session
+@inject TokenStorageService TokenStorage
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Tài khoản Seller</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Tài khoản</h1>
+        <p>Thông tin cá nhân của user đang đăng nhập.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải hồ sơ...</div>
+}
+else if (profile == null)
+{
+    <div class="seller-empty">Không có dữ liệu tài khoản.</div>
+}
+else
+{
+    <section class="seller-card">
+        <p>Email: <strong>@profile.Email</strong></p>
+        <p>Role: <strong>@string.Join(", ", profile.Roles)</strong></p>
+        <p>Trạng thái tài khoản: <strong>@profile.Status</strong></p>
+        <div class="seller-form">
+            <label>Họ tên
+                <input class="seller-input" @bind="fullName" />
+            </label>
+            <label>Số điện thoại
+                <input class="seller-input" @bind="phone" />
+            </label>
+            <label>URL ảnh đại diện
+                <input class="seller-input" @bind="avatarUrl" />
+            </label>
+            <div class="seller-actions">
+                <button class="app-button app-button-primary" @onclick="Save">Lưu hồ sơ</button>
+                <button class="app-button app-button-danger" @onclick="Logout">Đăng xuất</button>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private MiniLogistics.Web.Models.User.UserProfile? profile;
+    private string fullName = "";
+    private string? phone;
+    private string? avatarUrl;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        var result = await Api.GetAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            return;
+        }
+
+        profile = result.Data;
+        fullName = profile.FullName ?? "";
+        phone = profile.Phone;
+        avatarUrl = profile.AvatarUrl;
+    }
+
+    private async Task Save()
+    {
+        var result = await Api.PutAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me", new
+        {
+            FullName = fullName,
+            Phone = phone,
+            AvatarUrl = avatarUrl
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu hồ sơ." : result.Error;
+        if (result.Data != null)
+        {
+            profile = result.Data;
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+        }
+    }
+
+    private async Task Logout()
+    {
+        await TokenStorage.ClearAsync();
+        AuthState.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

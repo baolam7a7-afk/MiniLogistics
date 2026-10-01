@@ -3,20 +3,19 @@
 @layout CustomerLayout
 
 @using System.Text.Json
-
+@using System.Net.Http.Json
+@using System.Net.Http.Headers
 @using MiniLogistics.Web.Models.Product
-
 @using MiniLogistics.Web.Models.Cart
-
 @using MiniLogistics.Web.Services.Product
-
 @using MiniLogistics.Web.Services.Cart
+@using MiniLogistics.Web.Services.Auth
 
 @inject ProductService ProductService
-
 @inject CartService CartService
-
 @inject NavigationManager NavigationManager
+@inject HttpClient Http
+@inject TokenStorageService TokenStorage
 
 <PageTitle>Chi tiết sản phẩm</PageTitle>
 
@@ -462,28 +461,25 @@
 
                                     <!-- Add to cart -->
 
-                                    <div class="product-detail-actions">
+                                    <div class="product-detail-actions" style="display:flex;gap:10px;flex-wrap:wrap">
 
                                         <button type="button" class="app-button app-button-primary product-add-cart-button"
-
                                                 @onclick="AddToCart" disabled="@isAddingToCart">
-
                                             @if (isAddingToCart)
-
                                             {
-
                                                 <span>Đang thêm...</span>
-
                                             }
-
                                             else
-
                                             {
-
                                                 <span>🛒 Thêm vào giỏ hàng</span>
-
                                             }
+                                        </button>
 
+                                        <button type="button"
+                                                class="app-button app-button-secondary"
+                                                @onclick="StartChatWithSeller"
+                                                disabled="@isStartingChat">
+                                            @(isStartingChat ? "Đang mở chat..." : "Chat với Seller")
                                         </button>
 
                                     </div>
@@ -584,6 +580,8 @@
     private bool isLoadingVariants = false;
 
     private bool isAddingToCart = false;
+
+    private bool isStartingChat = false;
 
     private string cartMessage = string.Empty;
 
@@ -914,6 +912,61 @@
 
         }
 
+    }
+
+    private async Task StartChatWithSeller()
+    {
+        if (isStartingChat || product is null)
+            return;
+
+        isStartingChat = true;
+        cartMessage = string.Empty;
+
+        try
+        {
+            var token = await TokenStorage.GetAccessTokenAsync();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, "api/chat/start");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            req.Content = JsonContent.Create(new { productId = product.Id });
+
+            var res = await Http.SendAsync(req);
+            if (!res.IsSuccessStatusCode)
+            {
+                cartSuccess = false;
+                cartMessage = "Không thể mở chat với Seller.";
+                return;
+            }
+
+            var conversation = await res.Content.ReadFromJsonAsync<ChatStartResponse>();
+            if (conversation is null)
+            {
+                cartSuccess = false;
+                cartMessage = "Phản hồi chat không hợp lệ.";
+                return;
+            }
+
+            NavigationManager.NavigateTo($"/chat/{conversation.Id}");
+        }
+        catch (Exception ex)
+        {
+            cartSuccess = false;
+            cartMessage = $"Lỗi chat: {ex.Message}";
+        }
+        finally
+        {
+            isStartingChat = false;
+        }
+    }
+
+    private sealed class ChatStartResponse
+    {
+        public long Id { get; set; }
     }
 
     private Dictionary<string, string> GetAttributes(

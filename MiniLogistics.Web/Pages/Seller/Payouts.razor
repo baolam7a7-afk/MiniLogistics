@@ -1,0 +1,159 @@
+@page "/seller/payouts"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Rút tiền</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Yêu cầu rút tiền</h1>
+        <p>Seller tạo yêu cầu. Duyệt hoặc từ chối là việc của admin.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    }
+
+    <section class="seller-card">
+        <h2>Tạo yêu cầu</h2>
+        <div class="seller-two">
+            <label class="seller-field">Số tiền
+                <input class="seller-input" type="number" min="1" @bind="amount" />
+            </label>
+            <label class="seller-field">Ngân hàng
+                <input class="seller-input" @bind="bankName" />
+            </label>
+            <label class="seller-field">Chủ tài khoản
+                <input class="seller-input" @bind="accountName" />
+            </label>
+            <label class="seller-field">Số tài khoản
+                <input class="seller-input" @bind="accountNumber" />
+            </label>
+        </div>
+        <button class="app-button app-button-primary" @onclick="Create">Gửi yêu cầu</button>
+    </section>
+
+    @if (isLoading)
+    {
+        <div class="seller-loading">Đang tải yêu cầu...</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="seller-empty">Chưa có yêu cầu rút tiền.</div>
+    }
+    else
+    {
+        <section class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>Số tiền</th>
+                            <th>Ngân hàng</th>
+                            <th>Tài khoản</th>
+                            <th>Trạng thái</th>
+                            <th>Xử lý lúc</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td>@SellerText.When(item.RequestedAt)</td>
+                                <td>@SellerText.Money(item.Amount)</td>
+                                <td>@item.BankName</td>
+                                <td>@item.BankAccountName · @item.BankAccountNumber</td>
+                                <td><span class="seller-badge">@SellerText.PayoutStatus(item.Status)</span></td>
+                                <td>@(item.ProcessedAt.HasValue ? SellerText.When(item.ProcessedAt.Value) : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private List<PayoutRecord> items = new();
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+    private decimal amount;
+    private string bankName = "";
+    private string accountName = "";
+    private string accountNumber = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<PagedResult<PayoutRecord>>(
+            $"api/payout-requests/my/{Session.Shop.Id}?Page=1&PageSize=50");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error;
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+    }
+
+    private async Task Create()
+    {
+        if (Session.Shop == null)
+        {
+            return;
+        }
+
+        var result = await Api.PostAsync<PayoutRecord>("api/payout-requests", new
+        {
+            ShopId = Session.Shop.Id,
+            Amount = amount,
+            BankAccountName = accountName,
+            BankAccountNumber = accountNumber,
+            BankName = bankName
+        });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã gửi yêu cầu rút tiền." : result.Error;
+        if (result.Ok)
+        {
+            amount = 0;
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+}

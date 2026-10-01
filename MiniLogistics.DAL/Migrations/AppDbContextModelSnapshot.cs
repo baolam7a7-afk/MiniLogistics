@@ -181,6 +181,84 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("categories", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.ChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("SenderUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.ToTable("chat_messages", (string)null);
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.Conversation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("CustomerUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("LastMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SellerUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ShopId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SellerUserId");
+
+                    b.HasIndex("ShopId");
+
+                    b.HasIndex("CustomerUserId", "SellerUserId", "ShopId")
+                        .IsUnique()
+                        .HasFilter("[ShopId] IS NOT NULL");
+
+                    b.ToTable("conversations", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Dispute", b =>
                 {
                     b.Property<long>("Id")
@@ -541,6 +619,9 @@ namespace MiniLogistics.DAL.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -552,6 +633,10 @@ namespace MiniLogistics.DAL.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PaymentRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Provider")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -559,6 +644,10 @@ namespace MiniLogistics.DAL.Migrations
                     b.Property<string>("ProviderTxnId")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("QrPayload")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1378,6 +1467,46 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("user_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.UserVoucher", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ClaimedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("available");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("UsedOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("VoucherId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VoucherId");
+
+                    b.HasIndex("UserId", "VoucherId")
+                        .IsUnique();
+
+                    b.ToTable("user_vouchers", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Voucher", b =>
                 {
                     b.Property<long>("Id")
@@ -1502,6 +1631,58 @@ namespace MiniLogistics.DAL.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.ChatMessage", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.User", "SenderUser")
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("SenderUser");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.Conversation", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.User", "CustomerUser")
+                        .WithMany()
+                        .HasForeignKey("CustomerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MiniLogistics.DAL.Models.User", "SellerUser")
+                        .WithMany()
+                        .HasForeignKey("SellerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.Shop", "Shop")
+                        .WithMany()
+                        .HasForeignKey("ShopId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomerUser");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("SellerUser");
+
+                    b.Navigation("Shop");
                 });
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.Dispute", b =>
@@ -1977,6 +2158,25 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.UserVoucher", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.Voucher", "Voucher")
+                        .WithMany()
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("Voucher");
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Voucher", b =>
                 {
                     b.HasOne("MiniLogistics.DAL.Models.Shop", "Shop")
@@ -1997,6 +2197,11 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.Conversation", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.Dispute", b =>
