@@ -3,13 +3,14 @@
 @implements IDisposable
 @inject SellerApi Api
 @inject SellerSession Session
+@inject AuthStateService AuthState
 
 <PageTitle>Cửa hàng</PageTitle>
 
 <div class="seller-page-head">
     <div>
         <h1>Cửa hàng</h1>
-        <p>Tên, mô tả và logo. Trạng thái duyệt chỉ admin được đổi.</p>
+        <p>Hồ sơ cá nhân và thông tin cửa hàng nằm cùng một chỗ.</p>
     </div>
 </div>
 
@@ -39,11 +40,43 @@
         <label>URL logo
             <input class="seller-input" @bind="logoUrl" />
         </label>
+        @if (!string.IsNullOrWhiteSpace(myCode))
+        {
+            <p class="seller-muted">Mã giới thiệu của bạn: <strong>@myCode</strong></p>
+        }
+        @if (isCreate)
+        {
+            <label>Mã giới thiệu (nếu có)
+                <input class="seller-input" @bind="referralCode" maxlength="20" />
+            </label>
+        }
         <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">
             @(isCreate ? "Tạo cửa hàng" : "Lưu cửa hàng")
         </button>
     </div>
 </section>
+
+@if (profile != null)
+{
+    <section class="seller-card">
+        <h2>Hồ sơ cá nhân</h2>
+        <p>Email: <strong>@profile.Email</strong></p>
+        <div class="seller-form">
+            <label>Họ tên
+                <input class="seller-input" @bind="fullName" />
+            </label>
+            <label>Số điện thoại
+                <input class="seller-input" @bind="phone" />
+            </label>
+            <AccountAvatarUpload CurrentUrl="@profile.AvatarUrl"
+                                 InputClass="seller-input"
+                                 HintClass="seller-muted"
+                                 ActionsClass="seller-actions"
+                                 AvatarSaved="OnAvatarSaved" />
+            <button class="app-button app-button-primary" disabled="@isSavingProfile" @onclick="SaveProfile">Lưu hồ sơ</button>
+        </div>
+    </section>
+}
 
 @code {
     private bool isCreate = true;
@@ -53,15 +86,33 @@
     private string name = "";
     private string? description;
     private string? logoUrl;
+    private string? referralCode;
+    private string? myCode;
     private string status = "";
     private DateTime? approvedAt;
     private long shopId;
+    private MiniLogistics.Web.Models.User.UserProfile? profile;
+    private string fullName = "";
+    private string? phone;
+    private bool isSavingProfile;
 
     protected override async Task OnInitializedAsync()
     {
         Session.ShopChanged += OnShopChanged;
         await Session.EnsureAsync();
         BindShop();
+        var me = await Api.GetAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me");
+        if (me.Ok)
+        {
+            profile = me.Data;
+            fullName = profile?.FullName ?? "";
+            phone = profile?.Phone;
+        }
+        var code = await Api.GetAsync<ReferralCodeResponse>("api/referrals/my-code");
+        if (code.Ok)
+        {
+            myCode = code.Data?.Code;
+        }
     }
 
     private void OnShopChanged()
@@ -94,7 +145,8 @@
         {
             Name = name,
             Description = description,
-            LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim()
+            LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim(),
+            ReferralCode = string.IsNullOrWhiteSpace(referralCode) ? null : referralCode.Trim()
         };
 
         if (isCreate)
@@ -120,5 +172,39 @@
         }
     }
 
+    private void OnAvatarSaved(string url)
+    {
+        if (profile != null)
+        {
+            profile.AvatarUrl = url;
+        }
+
+        AuthState.UpdateUserProfile(fullName, url);
+        Session.ApplyAvatar(url);
+    }
+
+    private async Task SaveProfile()
+    {
+        isSavingProfile = true;
+        var result = await Api.PutAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me", new
+        {
+            FullName = fullName,
+            Phone = phone
+        });
+        isSavingProfile = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu hồ sơ cá nhân." : result.Error;
+        if (result.Data != null)
+        {
+            profile = result.Data;
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+        }
+    }
+
     public void Dispose() => Session.ShopChanged -= OnShopChanged;
+
+    private sealed class ReferralCodeResponse
+    {
+        public string Code { get; set; } = "";
+    }
 }

@@ -7,3 +7,9 @@ public class UploadAvatarResponse
 
     public string Message { get; set; } = string.Empty;
 }
+
+public class AvatarUploadResult
+{
+    public string? AvatarUrl { get; set; }
+    public string? Error { get; set; }
+}

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Order;
 using MiniLogistics.BLL.Exceptions;
@@ -7,6 +8,8 @@ using MiniLogistics.DAL.UnitOfWork;
 using OrderModel = MiniLogistics.DAL.Models.Order;
 using OrderItemModel = MiniLogistics.DAL.Models.OrderItem;
 using OrderStatusLogModel = MiniLogistics.DAL.Models.OrderStatusLog;
+using ShipmentModel = MiniLogistics.DAL.Models.Shipment;
+using AddressModel = MiniLogistics.DAL.Models.Address;
 
 namespace MiniLogistics.BLL.Services.Order;
 
@@ -129,6 +132,8 @@ public class OrderService : IOrderService
         return await _unitOfWork.ExecuteInTransactionAsync(
             async () =>
             {
+                await CancelUnpaidCheckoutsAsync(customerId);
+
                 var orderItems =
                     new List<OrderItemModel>();
 
@@ -459,9 +464,12 @@ public class OrderService : IOrderService
                 await _unitOfWork.OrderStatusLogs
                     .AddAsync(statusLog);
 
-                await RemoveOrderedCartItems(
-                    customerId,
-                    orderItems);
+                if (paymentMethod != "qr")
+                {
+                    await RemoveOrderedCartItems(
+                        customerId,
+                        orderItems);
+                }
 
 
                 // ========================================
@@ -515,8 +523,9 @@ public class OrderService : IOrderService
             orders =
                 orders
                     .Where(x =>
-                        x.Status.ToLower() ==
-                        status)
+                        MatchesCustomerStatusFilter(
+                            x.Status,
+                            status))
                     .ToList();
         }
 
@@ -1007,6 +1016,12 @@ public class OrderService : IOrderService
                     order.Status =
                         OrderStatuses.Cancelled;
 
+                    order.CancelReason =
+                        "Khách hàng hủy đơn.";
+
+                    order.CancelledAt =
+                        DateTime.UtcNow;
+
                     order.UpdatedAt =
                         DateTime.UtcNow;
 
@@ -1177,6 +1192,12 @@ public class OrderService : IOrderService
                     order.Status =
                         newStatus;
 
+                    if (newStatus == OrderStatuses.Confirmed)
+                    {
+                        order.ConfirmedAt = DateTime.UtcNow;
+                        order.ConfirmedByUserId = actorUserId;
+                    }
+
                     order.UpdatedAt =
                         DateTime.UtcNow;
 
@@ -1217,8 +1238,445 @@ public class OrderService : IOrderService
 
 
     // =====================================================
+    // SHOP CONFIRM
+    // =====================================================
+
+    public async Task<OrderResponseDTO> ConfirmByShopAsync(
+        long orderId,
+        long actorUserId,
+        string role)
+    {
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var order = await GetRequiredOrder(orderId);
+            await EnsureShopActor(order, actorUserId, role);
+
+            var current = Normalize(order.Status);
+            if (current is not (OrderStatuses.Pending or "paid"))
+            {
+                throw new BadRequestException(
+                    "Chỉ xác nhận được đơn đang chờ shop xác nhận.");
+            }
+
+            order.Status = OrderStatuses.Confirmed;
+            order.ConfirmedAt = DateTime.UtcNow;
+            order.ConfirmedByUserId = actorUserId;
+            order.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.Orders.Update(order);
+
+            await AddStatusLog(
+                order.Id,
+                current,
+                OrderStatuses.Confirmed,
+                "Shop đã xác nhận đơn.",
+                actorUserId);
+
+            await EnsureShipmentAsync(order);
+            await _unitOfWork.SaveChangesAsync();
+            return await BuildResponse(order);
+        });
+    }
+
+
+    // =====================================================
+    // SHOP CANCEL
+    // =====================================================
+
+    public async Task<OrderResponseDTO> CancelByShopAsync(
+        long orderId,
+        long actorUserId,
+        string role,
+        CancelOrderDTO request)
+    {
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new BadRequestException(
+                    "Vui lòng nhập lý do hủy đơn.");
+            }
+
+            var reason = request.Reason.Trim();
+            if (reason.Length > 500)
+            {
+                throw new BadRequestException(
+                    "Lý do hủy không được dài quá 500 ký tự.");
+            }
+
+            var order = await GetRequiredOrder(orderId);
+            await EnsureShopActor(order, actorUserId, role);
+
+            var current = Normalize(order.Status);
+            if (current is not (OrderStatuses.Pending or "paid"))
+            {
+                throw new BadRequestException(
+                    "Chỉ hủy được đơn đang chờ shop xác nhận.");
+            }
+
+            await ReleaseOrderResources(order.Id);
+
+            order.Status = OrderStatuses.Cancelled;
+            order.CancelReason = reason;
+            order.CancelledAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.Orders.Update(order);
+
+            await AddStatusLog(
+                order.Id,
+                current,
+                OrderStatuses.Cancelled,
+                reason,
+                actorUserId);
+
+            await _unitOfWork.SaveChangesAsync();
+            return await BuildResponse(order);
+        });
+    }
+
+
+    // =====================================================
+    // SHIPPER LISTS
+    // =====================================================
+
+    public async Task<List<OrderResponseDTO>> GetAvailableForShipperAsync(
+        long shipperUserId)
+    {
+        await EnsureShipperAsync(shipperUserId);
+
+        var assigned = await _unitOfWork.Shipments
+            .FindAsync(shipment => shipment.ShipperUserId != null);
+        var takenIds = assigned
+            .Select(shipment => shipment.OrderId)
+            .ToHashSet();
+
+        var orders = await _unitOfWork.Orders.FindAsync(order =>
+            order.Status == OrderStatuses.Confirmed ||
+            order.Status == OrderStatuses.Processing);
+
+        var result = new List<OrderResponseDTO>();
+        foreach (var order in orders
+            .Where(order => !takenIds.Contains(order.Id))
+            .OrderBy(order => order.PlacedAt)
+            .Take(100))
+        {
+            result.Add(await BuildResponse(order));
+        }
+
+        return result;
+    }
+
+    public async Task<List<OrderResponseDTO>> GetShipperDeliveriesAsync(
+        long shipperUserId)
+    {
+        await EnsureShipperAsync(shipperUserId);
+
+        var mine = await _unitOfWork.Shipments
+            .FindAsync(shipment => shipment.ShipperUserId == shipperUserId);
+        var orderIds = mine
+            .Select(shipment => shipment.OrderId)
+            .ToHashSet();
+
+        var orders = await _unitOfWork.Orders
+            .FindAsync(order => orderIds.Contains(order.Id));
+
+        var result = new List<OrderResponseDTO>();
+        foreach (var order in orders.OrderByDescending(order => order.UpdatedAt ?? order.PlacedAt))
+        {
+            result.Add(await BuildResponse(order));
+        }
+
+        return result;
+    }
+
+
+    // =====================================================
+    // SHIPPER ACCEPT
+    // =====================================================
+
+    public async Task<OrderResponseDTO> AcceptByShipperAsync(
+        long orderId,
+        long shipperUserId)
+    {
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureShipperAsync(shipperUserId);
+            var order = await GetRequiredOrder(orderId);
+            var current = Normalize(order.Status);
+
+            if (current == OrderStatuses.Shipping)
+            {
+                return await AcceptOwnedOrReject(order, shipperUserId);
+            }
+
+            if (current is not (OrderStatuses.Confirmed or OrderStatuses.Processing))
+            {
+                throw new BadRequestException(
+                    "Chỉ nhận được đơn shop đã xác nhận.");
+            }
+
+            await EnsureShipmentRowAsync(order);
+
+            var now = DateTime.UtcNow;
+            var claimed = await _unitOfWork.ClaimOpenShipmentAsync(
+                order.Id,
+                shipperUserId,
+                now);
+
+            if (claimed == 0)
+            {
+                return await AcceptOwnedOrReject(order, shipperUserId);
+            }
+
+            var moved = await _unitOfWork.MarkOrderShippingIfOpenAsync(
+                order.Id,
+                now);
+
+            if (moved == 0)
+            {
+                throw new BadRequestException(
+                    "Đơn hàng đã được shipper khác nhận.");
+            }
+
+            order.Status = OrderStatuses.Shipping;
+            order.UpdatedAt = now;
+
+            var shipments = await _unitOfWork.Shipments
+                .FindAsync(item => item.OrderId == order.Id);
+            var shipment = shipments.FirstOrDefault()
+                ?? throw new BadRequestException(
+                    "Đơn hàng đã được shipper khác nhận.");
+
+            await _unitOfWork.ShipmentEvents.AddAsync(new ShipmentEvent
+            {
+                ShipmentId = shipment.Id,
+                Status = "shipping",
+                Note = "Shipper đã nhận hàng và bắt đầu giao.",
+                CreatedAt = now
+            });
+
+            await AddStatusLog(
+                order.Id,
+                current,
+                OrderStatuses.Shipping,
+                "Shipper đã nhận hàng.",
+                shipperUserId);
+
+            await _unitOfWork.SaveChangesAsync();
+            return await BuildResponse(order);
+        });
+    }
+
+
+    private async Task<OrderResponseDTO> AcceptOwnedOrReject(
+        OrderModel order,
+        long shipperUserId)
+    {
+        var shipments = await _unitOfWork.Shipments
+            .FindAsync(item => item.OrderId == order.Id);
+        var shipment = shipments.FirstOrDefault();
+
+        if (shipment?.ShipperUserId == shipperUserId)
+        {
+            if (Normalize(order.Status) == OrderStatuses.Shipping)
+            {
+                return await BuildResponse(order);
+            }
+
+            throw new BadRequestException(
+                "Bạn đã nhận đơn này.");
+        }
+
+        throw new BadRequestException(
+            "Đơn hàng đã được shipper khác nhận.");
+    }
+
+
+    private async Task EnsureShipmentRowAsync(OrderModel order)
+    {
+        var shipment = await EnsureShipmentAsync(order);
+        if (shipment.Id > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new BadRequestException(
+                "Đơn hàng đã được shipper khác nhận.");
+        }
+    }
+
+
+    // =====================================================
+    // SHIPPER DELIVERED TO CUSTOMER
+    // =====================================================
+
+    public async Task<OrderResponseDTO> DeliverByShipperAsync(
+        long orderId,
+        long shipperUserId)
+    {
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureShipperAsync(shipperUserId);
+            var order = await GetRequiredOrder(orderId);
+            var current = Normalize(order.Status);
+
+            if (current != OrderStatuses.Shipping)
+            {
+                throw new BadRequestException(
+                    "Chỉ xác nhận giao khi đơn đang giao và bạn đã nhận đơn.");
+            }
+
+            var shipments = await _unitOfWork.Shipments
+                .FindAsync(item => item.OrderId == order.Id);
+            var shipment = shipments.FirstOrDefault()
+                ?? throw new BadRequestException(
+                    "Đơn chưa được nhận giao.");
+
+            if (shipment.ShipperUserId != shipperUserId)
+            {
+                throw new ForbiddenException(
+                    "Bạn không phải người giao của đơn này.");
+            }
+
+            var now = DateTime.UtcNow;
+            shipment.Status = "delivered";
+            shipment.DeliveredAt = now;
+            shipment.UpdatedAt = now;
+            _unitOfWork.Shipments.Update(shipment);
+
+            await _unitOfWork.ShipmentEvents.AddAsync(new ShipmentEvent
+            {
+                ShipmentId = shipment.Id,
+                Status = "delivered",
+                Note = "Shipper đã giao, chờ khách xác nhận.",
+                CreatedAt = now
+            });
+
+            await MarkCodPaidAsync(order);
+
+            order.Status = OrderStatuses.AwaitingReceipt;
+            order.UpdatedAt = now;
+            _unitOfWork.Orders.Update(order);
+
+            await AddStatusLog(
+                order.Id,
+                current,
+                OrderStatuses.AwaitingReceipt,
+                "Shipper đã giao. Chờ khách xác nhận đã nhận hàng.",
+                shipperUserId);
+
+            await _unitOfWork.SaveChangesAsync();
+            return await BuildResponse(order);
+        });
+    }
+
+
+    // =====================================================
+    // CUSTOMER CONFIRMS RECEIPT
+    // =====================================================
+
+    public async Task<OrderResponseDTO> ConfirmReceivedAsync(
+        long orderId,
+        long customerId)
+    {
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var order = await GetRequiredOrder(orderId);
+            if (order.CustomerId != customerId)
+            {
+                throw new ForbiddenException(
+                    "Bạn không có quyền xác nhận đơn này.");
+            }
+
+            var current = Normalize(order.Status);
+            if (current == OrderStatuses.Delivered)
+            {
+                throw new BadRequestException(
+                    "Đơn đã được xác nhận nhận hàng.");
+            }
+
+            if (current != OrderStatuses.AwaitingReceipt)
+            {
+                throw new BadRequestException(
+                    "Chỉ xác nhận nhận hàng sau khi shipper đã giao.");
+            }
+
+            var now = DateTime.UtcNow;
+            order.Status = OrderStatuses.Delivered;
+            order.CustomerConfirmedAt = now;
+            order.UpdatedAt = now;
+            _unitOfWork.Orders.Update(order);
+
+            await SettleDeliveredOrderAsync(order);
+
+            await AddStatusLog(
+                order.Id,
+                current,
+                OrderStatuses.Delivered,
+                "Khách đã xác nhận nhận hàng.",
+                customerId);
+
+            await _unitOfWork.SaveChangesAsync();
+            return await BuildResponse(order);
+        });
+    }
+
+
+    // =====================================================
     // RESERVE INVENTORY
     // =====================================================
+
+    private async Task CancelUnpaidCheckoutsAsync(long customerId)
+    {
+        var unpaid = await _unitOfWork.Orders.FindAsync(order =>
+            order.CustomerId == customerId &&
+            order.Status == "awaiting_payment");
+
+        foreach (var order in unpaid)
+        {
+            var items = await _unitOfWork.OrderItems
+                .FindAsync(item => item.OrderId == order.Id);
+
+            foreach (var item in items)
+            {
+                await ReleaseInventory(item.VariantId, item.Quantity);
+            }
+
+            var payments = await _unitOfWork.PaymentTransactions
+                .FindAsync(payment => payment.OrderId == order.Id);
+
+            foreach (var payment in payments)
+            {
+                if (payment.Status == "pending")
+                {
+                    payment.Status = "cancelled";
+                    payment.PaidAt = null;
+                    _unitOfWork.PaymentTransactions.Update(payment);
+                }
+            }
+
+            var previous = order.Status;
+            order.Status = OrderStatuses.Cancelled;
+            order.CancelReason = "Khách chưa thanh toán.";
+            order.CancelledAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.Orders.Update(order);
+
+            await AddStatusLog(
+                order.Id,
+                previous,
+                OrderStatuses.Cancelled,
+                "Đơn QR chưa thanh toán được hủy khi khách tạo lại đơn. Giỏ hàng được giữ.",
+                customerId);
+        }
+    }
+
 
     private async Task RemoveOrderedCartItems(
         long customerId,
@@ -1263,16 +1721,11 @@ public class OrderService : IOrderService
         }
 
 
-        var inventories =
-            await _unitOfWork.Inventories
-                .FindAsync(
-                    x =>
-                        x.ProductVariantId ==
-                        variantId);
-
         var inventory =
-            inventories.FirstOrDefault();
-
+            await _unitOfWork.Inventories
+                .Query()
+                .FirstOrDefaultAsync(x =>
+                    x.ProductVariantId == variantId);
 
         if (inventory == null)
         {
@@ -1322,16 +1775,11 @@ public class OrderService : IOrderService
         }
 
 
-        var inventories =
-            await _unitOfWork.Inventories
-                .FindAsync(
-                    x =>
-                        x.ProductVariantId ==
-                        variantId);
-
         var inventory =
-            inventories.FirstOrDefault();
-
+            await _unitOfWork.Inventories
+                .Query()
+                .FirstOrDefaultAsync(x =>
+                    x.ProductVariantId == variantId);
 
         if (inventory == null)
         {
@@ -1414,6 +1862,11 @@ public class OrderService : IOrderService
             role.Trim()
                 .ToLowerInvariant();
 
+        if (order.CustomerId == userId)
+        {
+            return;
+        }
+
 
         // ================================================
         // ADMIN
@@ -1466,6 +1919,30 @@ public class OrderService : IOrderService
             }
 
             return;
+        }
+
+
+        if (role == "shipper")
+        {
+            var shipments =
+                await _unitOfWork.Shipments
+                    .FindAsync(item => item.OrderId == order.Id);
+
+            var shipment = shipments.FirstOrDefault();
+            if (shipment?.ShipperUserId == userId)
+            {
+                return;
+            }
+
+            var status = Normalize(order.Status);
+            if (shipment?.ShipperUserId == null &&
+                status is OrderStatuses.Confirmed or OrderStatuses.Processing)
+            {
+                return;
+            }
+
+            throw new ForbiddenException(
+                "Bạn không có quyền xem đơn này.");
         }
 
 
@@ -1527,50 +2004,17 @@ public class OrderService : IOrderService
         {
             bool valid =
                 (
-                    (
-                        currentStatus ==
-                            OrderStatuses.Pending
-                        ||
-                        currentStatus ==
-                            "paid"
-                    )
-                    &&
-                    newStatus ==
-                        OrderStatuses.Confirmed
+                    currentStatus == OrderStatuses.Pending
+                    ||
+                    currentStatus == "paid"
                 )
-                ||
-                (
-                    currentStatus ==
-                        OrderStatuses.Confirmed
-                    &&
-                    newStatus ==
-                        OrderStatuses.Processing
-                )
-                ||
-                (
-                    (
-                        currentStatus ==
-                            OrderStatuses.Pending
-                        ||
-                        currentStatus ==
-                            "paid"
-                        ||
-                        currentStatus ==
-                            OrderStatuses.Confirmed
-                        ||
-                        currentStatus ==
-                            OrderStatuses.Processing
-                    )
-                    &&
-                    newStatus ==
-                        OrderStatuses.Cancelled
-                );
-
+                &&
+                newStatus == OrderStatuses.Confirmed;
 
             if (!valid)
             {
                 throw new BadRequestException(
-                    "Seller không được phép chuyển Order sang trạng thái này.");
+                    "Seller chỉ được xác nhận đơn đang chờ shop. Hủy đơn phải kèm lý do.");
             }
 
             return;
@@ -1585,49 +2029,17 @@ public class OrderService : IOrderService
         {
             bool valid =
                 (
-                    (
-                        currentStatus ==
-                            OrderStatuses.Pending
-                        ||
-                        currentStatus ==
-                            "paid"
-                    )
-                    &&
-                    (
-                        newStatus ==
-                            OrderStatuses.Confirmed
-                        ||
-                        newStatus ==
-                            OrderStatuses.Cancelled
-                    )
+                    currentStatus == OrderStatuses.Pending
+                    ||
+                    currentStatus == "paid"
                 )
-                ||
-                (
-                    currentStatus ==
-                        OrderStatuses.Confirmed
-                    &&
-                    (
-                        newStatus ==
-                            OrderStatuses.Processing
-                        ||
-                        newStatus ==
-                            OrderStatuses.Cancelled
-                    )
-                )
-                ||
-                (
-                    currentStatus ==
-                        OrderStatuses.Processing
-                    &&
-                    newStatus ==
-                        OrderStatuses.Cancelled
-                );
-
+                &&
+                newStatus == OrderStatuses.Confirmed;
 
             if (!valid)
             {
                 throw new BadRequestException(
-                    "Admin không được phép chuyển Order sang trạng thái này ở giai đoạn hiện tại.");
+                    "Admin chỉ được xác nhận đơn đang chờ shop. Không chuyển trạng thái giao hàng tại đây.");
             }
 
             return;
@@ -1689,6 +2101,21 @@ public class OrderService : IOrderService
                 Note =
                     order.Note,
 
+                CancelReason =
+                    order.CancelReason,
+
+                ConfirmedAt =
+                    order.ConfirmedAt,
+
+                ConfirmedByUserId =
+                    order.ConfirmedByUserId,
+
+                CancelledAt =
+                    order.CancelledAt,
+
+                CustomerConfirmedAt =
+                    order.CustomerConfirmedAt,
+
                 PlacedAt =
                     order.PlacedAt,
 
@@ -1741,6 +2168,30 @@ public class OrderService : IOrderService
                         })
                 .ToList();
 
+        var productIds = result.Items
+            .Select(item => item.ProductId)
+            .Distinct()
+            .ToList();
+        if (productIds.Count > 0)
+        {
+            var images = await _unitOfWork.ProductImages
+                .FindAsync(image => productIds.Contains(image.ProductId));
+            var firstByProduct = images
+                .Where(image => !string.IsNullOrWhiteSpace(image.Url))
+                .GroupBy(image => image.ProductId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.OrderBy(image => image.SortOrder).First().Url);
+
+            foreach (var item in result.Items)
+            {
+                if (firstByProduct.TryGetValue(item.ProductId, out var url))
+                {
+                    item.ImageUrl = url;
+                }
+            }
+        }
+
 
         // ================================================
         // STATUS LOGS
@@ -1781,6 +2232,44 @@ public class OrderService : IOrderService
                 .OrderBy(
                     x => x.CreatedAt)
                 .ToList();
+
+
+        var customer =
+            await _unitOfWork.Users.GetByIdAsync(order.CustomerId);
+        var shop =
+            await _unitOfWork.Shops.GetByIdAsync(order.ShopId);
+        var address =
+            await _unitOfWork.Addresses.GetByIdAsync(
+                order.ShippingAddressId);
+        var orderShipments =
+            await _unitOfWork.Shipments.FindAsync(
+                item => item.OrderId == order.Id);
+        var orderShipment = orderShipments.FirstOrDefault();
+
+        result.CustomerName =
+            customer?.FullName ?? address?.ReceiverName;
+        result.CustomerPhone =
+            address?.ReceiverPhone ?? customer?.Phone;
+        result.ShopName = shop?.Name;
+        result.ReceiverName = address?.ReceiverName;
+        result.ReceiverPhone = address?.ReceiverPhone;
+        result.ShippingAddressText = JoinAddress(address);
+
+        if (orderShipment != null)
+        {
+            result.ShipperId = orderShipment.ShipperUserId;
+            result.ShipperAcceptedAt =
+                orderShipment.AssignedAt ?? orderShipment.PickedAt;
+            result.DeliveredAt = orderShipment.DeliveredAt;
+
+            if (orderShipment.ShipperUserId != null)
+            {
+                var shipperUser =
+                    await _unitOfWork.Users.GetByIdAsync(
+                        orderShipment.ShipperUserId.Value);
+                result.ShipperName = shipperUser?.FullName;
+            }
+        }
 
 
         return result;
@@ -1828,5 +2317,297 @@ public class OrderService : IOrderService
                 .Substring(
                     0,
                     40);
+    }
+
+
+    private static bool MatchesCustomerStatusFilter(
+        string? orderStatus,
+        string filter)
+    {
+        var status = (orderStatus ?? "").Trim().ToLowerInvariant();
+        return filter switch
+        {
+            "pending" => status is "pending" or "paid",
+            "confirmed" => status is "confirmed" or "processing",
+            "shipping" => status is "shipping" or "shipped",
+            "delivered" => status is "delivered" or "completed",
+            _ => status == filter
+        };
+    }
+
+    private static string Normalize(string? status) =>
+        status?.Trim().ToLowerInvariant() ?? "";
+
+
+    private async Task<OrderModel> GetRequiredOrder(long orderId)
+    {
+        var order = await _unitOfWork.Orders.GetByIdAsync(orderId);
+        if (order == null)
+        {
+            throw new NotFoundException("Order không tồn tại.");
+        }
+
+        return order;
+    }
+
+
+    private async Task EnsureShopActor(
+        OrderModel order,
+        long actorUserId,
+        string role)
+    {
+        role = Normalize(role);
+        if (role == "admin")
+        {
+            return;
+        }
+
+        if (role != "seller")
+        {
+            throw new ForbiddenException(
+                "Bạn không có quyền xác nhận hoặc hủy đơn của shop.");
+        }
+
+        bool ownsShop = await _unitOfWork.Shops.AnyAsync(shop =>
+            shop.Id == order.ShopId &&
+            shop.OwnerUserId == actorUserId);
+
+        if (!ownsShop)
+        {
+            throw new ForbiddenException(
+                "Bạn không có quyền xử lý đơn của shop này.");
+        }
+    }
+
+
+    private async Task EnsureShipperAsync(long userId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId)
+            ?? throw new ForbiddenException(
+                "Không xác định được tài khoản shipper.");
+
+        if (!string.Equals(user.Status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ForbiddenException(
+                "Tài khoản shipper không hoạt động.");
+        }
+
+        var userRoles = await _unitOfWork.UserRoles
+            .FindAsync(item => item.UserId == userId);
+
+        foreach (var userRole in userRoles)
+        {
+            var role = await _unitOfWork.Roles.GetByIdAsync(userRole.RoleId);
+            if (role != null &&
+                string.Equals(role.Name, "shipper", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        throw new ForbiddenException(
+            "Chỉ shipper mới được nhận và giao đơn.");
+    }
+
+
+    private async Task AddStatusLog(
+        long orderId,
+        string fromStatus,
+        string toStatus,
+        string message,
+        long userId)
+    {
+        await _unitOfWork.OrderStatusLogs.AddAsync(new OrderStatusLogModel
+        {
+            OrderId = orderId,
+            FromStatus = fromStatus,
+            ToStatus = toStatus,
+            Message = message,
+            CreatedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        });
+    }
+
+
+    private async Task ReleaseOrderResources(long orderId)
+    {
+        var items = await _unitOfWork.OrderItems
+            .FindAsync(item => item.OrderId == orderId);
+
+        foreach (var item in items)
+        {
+            await ReleaseInventory(item.VariantId, item.Quantity);
+        }
+
+        await ReleaseVoucher(orderId);
+
+        var payments = await _unitOfWork.PaymentTransactions
+            .FindAsync(payment => payment.OrderId == orderId);
+
+        foreach (var payment in payments)
+        {
+            if (payment.Status == "pending")
+            {
+                payment.Status = "cancelled";
+                payment.PaidAt = null;
+                _unitOfWork.PaymentTransactions.Update(payment);
+            }
+        }
+    }
+
+
+    private async Task<ShipmentModel> EnsureShipmentAsync(OrderModel order)
+    {
+        var existing = await _unitOfWork.Shipments
+            .FindAsync(item => item.OrderId == order.Id);
+        var shipment = existing.FirstOrDefault();
+        if (shipment != null)
+        {
+            return shipment;
+        }
+
+        var now = DateTime.UtcNow;
+        shipment = new ShipmentModel
+        {
+            OrderId = order.Id,
+            TrackingCode = $"ML{order.Id:D6}{now:HHmmss}",
+            Status = "created",
+            CodAmount = string.Equals(order.PaymentMethod, "cod", StringComparison.OrdinalIgnoreCase)
+                ? order.Total
+                : 0,
+            CreatedAt = now
+        };
+
+        await _unitOfWork.Shipments.AddAsync(shipment);
+        return shipment;
+    }
+
+
+    private async Task MarkCodPaidAsync(OrderModel order)
+    {
+        if (!string.Equals(order.PaymentMethod, "cod", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var payments = await _unitOfWork.PaymentTransactions
+            .FindAsync(payment => payment.OrderId == order.Id);
+        var payment = payments
+            .OrderByDescending(item => item.CreatedAt)
+            .FirstOrDefault();
+        var now = DateTime.UtcNow;
+
+        if (payment == null)
+        {
+            await _unitOfWork.PaymentTransactions.AddAsync(new PaymentTransaction
+            {
+                OrderId = order.Id,
+                Method = "cod",
+                Amount = order.Total,
+                Status = "paid",
+                PaidAt = now,
+                CreatedAt = now
+            });
+            return;
+        }
+
+        if (string.Equals(payment.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            payment.Status = "paid";
+            payment.PaidAt = now;
+            _unitOfWork.PaymentTransactions.Update(payment);
+        }
+    }
+
+
+    private async Task SettleDeliveredOrderAsync(OrderModel order)
+    {
+        var items = await _unitOfWork.OrderItems
+            .FindAsync(item => item.OrderId == order.Id);
+
+        foreach (var item in items)
+        {
+            var inventories = await _unitOfWork.Inventories
+                .FindAsync(row => row.ProductVariantId == item.VariantId);
+            var inventory = inventories.FirstOrDefault()
+                ?? throw new NotFoundException(
+                    $"Inventory của Variant {item.VariantId} không tồn tại.");
+
+            if (item.Quantity > inventory.ReservedQuantity ||
+                item.Quantity > inventory.Quantity)
+            {
+                throw new BadRequestException(
+                    $"Tồn kho của Variant {item.VariantId} không đủ để hoàn tất giao hàng.");
+            }
+
+            inventory.ReservedQuantity -= item.Quantity;
+            inventory.Quantity -= item.Quantity;
+            inventory.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.Inventories.Update(inventory);
+        }
+
+        var credits = await _unitOfWork.ShopWalletTransactions
+            .FindAsync(row =>
+                row.OrderId == order.Id &&
+                row.Type == "SALE_CREDIT");
+
+        if (credits.Any())
+        {
+            return;
+        }
+
+        var wallets = await _unitOfWork.ShopWallets
+            .FindAsync(row => row.ShopId == order.ShopId);
+        var wallet = wallets.FirstOrDefault();
+        if (wallet == null)
+        {
+            wallet = new MiniLogistics.DAL.Models.ShopWallet
+            {
+                ShopId = order.ShopId,
+                Balance = 0,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _unitOfWork.ShopWallets.AddAsync(wallet);
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        wallet.Balance += order.Total;
+        wallet.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.ShopWallets.Update(wallet);
+
+        await _unitOfWork.ShopWalletTransactions.AddAsync(
+            new MiniLogistics.DAL.Models.ShopWalletTransaction
+            {
+                WalletId = wallet.Id,
+                OrderId = order.Id,
+                Type = "SALE_CREDIT",
+                Amount = order.Total,
+                Description = $"Doanh thu đơn {order.OrderCode}",
+                CreatedAt = DateTime.UtcNow
+            });
+    }
+
+
+    private static string? JoinAddress(AddressModel? address)
+    {
+        if (address == null)
+        {
+            return null;
+        }
+
+        var parts = new[]
+        {
+            address.Line1,
+            address.Line2,
+            address.Ward,
+            address.District,
+            address.Province
+        };
+
+        var text = string.Join(
+            ", ",
+            parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 }

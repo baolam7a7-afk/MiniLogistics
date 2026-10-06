@@ -9,6 +9,8 @@
 @inject TokenStorageService TokenStorage
 @inject UserService UserService
 @inject NavigationManager Navigation
+@inject ChatLiveService Live
+@using MiniLogistics.Web.Services.Chat
 
 <div class="customer-layout" @onclick="CloseMenus">
 
@@ -124,7 +126,7 @@
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M4 6h16v10H8l-4 4V6z" />
                                 </svg>
-                                Tin nhắn
+                                Chat với Shop
                             </NavLink>
 
                             <NavLink href="/orders" class="store-dropdown-item" @onclick="CloseMenus">
@@ -222,6 +224,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadCustomerProfileAsync();
+        await Live.EnsureConnectedAsync();
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)

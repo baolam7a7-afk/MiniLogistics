@@ -1,10 +1,12 @@
 using System.Linq.Expressions;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 
 using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Shop;
 using MiniLogistics.BLL.Exceptions;
+using MiniLogistics.BLL.Services.Referral;
 using MiniLogistics.DAL.UnitOfWork;
 
 using ShopModel = MiniLogistics.DAL.Models.Shop;
@@ -14,11 +16,14 @@ namespace MiniLogistics.BLL.Services.Shop;
 public class ShopService : IShopService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IReferralService _referral;
 
     public ShopService(
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IReferralService referral)
     {
         _unitOfWork = unitOfWork;
+        _referral = referral;
     }
 
 
@@ -27,9 +32,21 @@ public class ShopService : IShopService
     // SELLER ONLY
     // =====================================================
 
-    public async Task<ShopResponseDTO> CreateAsync(
+    public Task<ShopResponseDTO> CreateAsync(
         long ownerUserId,
-        CreateShopDTO request)
+        CreateShopDTO request,
+        string? clientIp = null,
+        string? userAgent = null)
+    {
+        return _unitOfWork.ExecuteInTransactionAsync(() =>
+            CreateCoreAsync(ownerUserId, request, clientIp, userAgent));
+    }
+
+    private async Task<ShopResponseDTO> CreateCoreAsync(
+        long ownerUserId,
+        CreateShopDTO request,
+        string? clientIp,
+        string? userAgent)
     {
         if (request == null)
         {
@@ -41,6 +58,16 @@ public class ShopService : IShopService
         {
             throw new BadRequestException(
                 "Tên Shop không được để trống.");
+        }
+
+        var alreadyOwnsShop = await _unitOfWork.Shops
+            .Query()
+            .AnyAsync(shop => shop.OwnerUserId == ownerUserId);
+
+        if (alreadyOwnsShop)
+        {
+            throw new BadRequestException(
+                "Mỗi seller chỉ được có một shop.");
         }
 
         var name = request.Name.Trim();
@@ -134,6 +161,12 @@ public class ShopService : IShopService
         await _unitOfWork
             .SaveChangesAsync();
 
+        await _referral.ApplyAsync(
+            ownerUserId,
+            shop.Id,
+            request.ReferralCode,
+            clientIp,
+            userAgent);
 
         return MapToResponseDTO(shop);
     }

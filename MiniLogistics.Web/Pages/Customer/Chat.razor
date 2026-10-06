@@ -2,19 +2,24 @@
 @page "/chat/{ConversationId:long}"
 @layout CustomerLayout
 
+@using System.Globalization
 @using System.Net.Http.Json
 @using MiniLogistics.Web.Services.Auth
+@using MiniLogistics.Web.Services.Chat
 
 @inject HttpClient Http
 @inject TokenStorageService TokenStorage
+@inject ChatLiveService Live
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
 
-<PageTitle>Tin nhắn - MiniLogistics</PageTitle>
+<PageTitle>Chat với Shop - MiniLogistics</PageTitle>
 
-<div class="customer-products">
+<div class="customer-products chat-page chat-page-store">
     <div class="customer-page-header">
-        <h1 class="customer-page-title">Tin nhắn với Seller</h1>
-        <p class="customer-page-description">Chat 1-1 về sản phẩm / đơn hàng</p>
+        <h1 class="customer-page-title">Chat với Shop</h1>
+        <p class="customer-page-description">Mỗi sản phẩm là một cuộc trò chuyện riêng với shop.</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(errorMessage))
@@ -22,37 +27,41 @@
         <div class="app-alert app-alert-error">@errorMessage</div>
     }
 
-    <div style="display:grid;grid-template-columns:minmax(240px,320px) 1fr;gap:16px;min-height:520px">
-        <aside class="checkout-card" style="padding:12px;overflow:auto">
+    @if (Live.LinkLabel == "Đang kết nối lại...")
+    {
+        <div class="shop-chat-link is-wait">Đang kết nối lại...</div>
+    }
+
+    <div class="seller-chat-layout">
+        <aside class="checkout-card seller-chat-list">
             <h3 style="margin:8px 12px">Cuộc trò chuyện</h3>
             @if (conversations.Count == 0)
             {
-                <p class="text-muted" style="padding:12px">Chưa có hội thoại. Vào sản phẩm → Chat với Seller.</p>
+                <p class="text-muted" style="padding:12px">Chưa có hội thoại. Vào sản phẩm rồi chọn Chat với Shop.</p>
             }
             else
             {
-                @foreach (var c in conversations)
+                @foreach (var item in conversations)
                 {
                     <button type="button"
-                            class="store-dropdown-item @(ConversationId == c.Id ? "active" : null)"
-                            style="width:100%;margin-bottom:4px"
-                            @onclick="() => Open(c.Id)">
+                            class="seller-chat-item @(ConversationId == item.Id ? "active" : null)"
+                            @onclick="() => Open(item.Id)">
                         <span style="flex:1;text-align:left">
-                            <strong>@(c.PeerName ?? c.ShopName ?? "Seller")</strong>
-                            <br />
-                            <small class="text-muted">@(c.LastMessagePreview ?? c.ProductName)</small>
+                            <strong>@(item.ShopName ?? "Shop")</strong>
+                            <span class="text-muted" style="display:block">@(item.ProductName ?? "Sản phẩm")</span>
+                            <span class="text-muted" style="display:block">@(item.LastMessagePreview ?? "Chưa có tin")</span>
                         </span>
-                        @if (c.UnreadCount > 0)
+                        @if (item.UnreadCount > 0)
                         {
-                            <span class="product-status">@c.UnreadCount</span>
+                            <span class="seller-chat-badge">@item.UnreadCount</span>
                         }
                     </button>
                 }
             }
         </aside>
 
-        <section class="checkout-card" style="display:flex;flex-direction:column;padding:0;min-height:520px">
-            @if (ConversationId is null or 0)
+        <section class="checkout-card seller-chat-thread">
+            @if (ConversationId is null or 0 || current == null)
             {
                 <div class="checkout-state-card" style="flex:1">
                     <p>Chọn một cuộc trò chuyện</p>
@@ -60,21 +69,61 @@
             }
             else
             {
-                <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
-                    @foreach (var m in messages)
+                <div class="shop-chat-head">
+                    @if (!string.IsNullOrWhiteSpace(current.ShopLogoUrl))
                     {
-                        <div style="align-self:@(m.IsMine ? "flex-end" : "flex-start");max-width:75%">
-                            <div style="background:@(m.IsMine ? "var(--primary)" : "var(--surface-hover)");color:@(m.IsMine ? "#fff" : "var(--text)");padding:10px 12px;border-radius:14px">
-                                @m.Content
+                        <img class="shop-chat-logo" src="@current.ShopLogoUrl" alt="@current.ShopName" />
+                    }
+                    <strong>@(current.ShopName ?? "Shop")</strong>
+                    <span class="text-muted">@ShopStatus(current.ShopStatus)</span>
+                    @if (Live.LinkLabel == "Đã kết nối")
+                    {
+                        <span class="text-muted">Đã kết nối</span>
+                    }
+                    @if (current.ShopRating is not null)
+                    {
+                        <span class="text-muted">Đánh giá @current.ShopRating.Value.ToString("0.0")</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(current.ShopDescription))
+                    {
+                        <p class="text-muted" style="margin:6px 0 0">@current.ShopDescription</p>
+                    }
+                </div>
+                <div class="shop-chat-product">
+                    @if (!string.IsNullOrWhiteSpace(current.ProductImageUrl))
+                    {
+                        <img src="@current.ProductImageUrl" alt="@current.ProductName" />
+                    }
+                    <div>
+                        <strong>@(current.ProductName ?? "Sản phẩm")</strong>
+                        <span class="text-muted" style="display:block">@Money(current.ProductPrice) · @Stock(current.ProductStock)</span>
+                        @if (!string.IsNullOrWhiteSpace(current.ProductSummary))
+                        {
+                            <span class="text-muted" style="display:block">@current.ProductSummary</span>
+                        }
+                    </div>
+                </div>
+                <div class="seller-chat-messages" @ref="messagePane" @onscroll="OnPaneScroll">
+                    @foreach (var message in messages)
+                    {
+                        <div @key="message.Id" style="align-self:@(message.IsMine ? "flex-end" : "flex-start");max-width:75%">
+                            @if (!string.IsNullOrWhiteSpace(message.SenderAvatarUrl))
+                            {
+                                <img src="@message.SenderAvatarUrl" alt="" style="width:24px;height:24px;border-radius:50%;object-fit:cover" />
+                            }
+                            <div style="background:@(message.IsMine ? "var(--primary)" : "var(--surface-hover)");color:@(message.IsMine ? "#fff" : "var(--text)");padding:10px 12px;border-radius:14px">
+                                @message.Content
                             </div>
-                            <small class="text-muted">@m.CreatedAt.ToLocalTime().ToString("HH:mm dd/MM") @(m.IsRead && m.IsMine ? "· Đã xem" : "")</small>
+                            <small class="text-muted">@message.CreatedAt.ToLocalTime().ToString("HH:mm dd/MM") @(message.IsRead && message.IsMine ? "· Đã xem" : "")</small>
                         </div>
                     }
                 </div>
-                <form style="display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)"
-                      @onsubmit="Send"
-                      @onsubmit:preventDefault>
-                    <input class="app-input" style="flex:1" @bind="draft" placeholder="Nhập tin nhắn..." />
+                @if (pendingNew > 0)
+                {
+                    <button type="button" class="shop-chat-jump" @onclick="JumpToLatest">↓ @pendingNew tin nhắn mới</button>
+                }
+                <form class="seller-chat-compose" @onsubmit="Send" @onsubmit:preventDefault>
+                    <input class="app-input" style="flex:1" @bind="draft" @bind:event="oninput" placeholder="Nhập tin nhắn..." />
                     <button class="app-button app-button-primary" type="submit" disabled="@isSending">Gửi</button>
                 </form>
             }
@@ -90,12 +139,36 @@
     private string draft = string.Empty;
     private string? errorMessage;
     private bool isSending;
+    private Func<ChatInboxNotice, Task>? onInbox;
+    private Func<Task>? onRestored;
+    private Func<Task>? onLink;
+    private readonly HashSet<long> seenMessages = new();
+    private ElementReference messagePane;
+    private bool scrollPending;
+    private int pendingNew;
+
+    private ConversationDto? current =>
+        conversations.FirstOrDefault(item => item.Id == ConversationId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        onInbox = OnInboxAsync;
+        onRestored = OnRestoredAsync;
+        onLink = () => InvokeAsync(StateHasChanged);
+        Live.InboxChanged += onInbox;
+        Live.ConnectionRestored += onRestored;
+        Live.LinkChanged += onLink;
+        await Live.EnsureConnectedAsync();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         await LoadConversations();
         if (ConversationId is > 0)
+        {
+            await Live.JoinAsync(ConversationId.Value);
             await LoadMessages(ConversationId.Value);
+        }
     }
 
     private async Task LoadConversations()
@@ -105,7 +178,9 @@
             using var req = await Auth(HttpMethod.Get, "api/chat/conversations");
             var res = await Http.SendAsync(req);
             if (res.IsSuccessStatusCode)
+            {
                 conversations = await res.Content.ReadFromJsonAsync<List<ConversationDto>>() ?? new();
+            }
         }
         catch
         {
@@ -120,7 +195,17 @@
             using var req = await Auth(HttpMethod.Get, $"api/chat/conversations/{id}/messages");
             var res = await Http.SendAsync(req);
             if (res.IsSuccessStatusCode)
-                messages = await res.Content.ReadFromJsonAsync<List<MessageDto>>() ?? new();
+            {
+                var loaded = await res.Content.ReadFromJsonAsync<List<MessageDto>>() ?? new();
+                messages = loaded.GroupBy(item => item.Id).Select(group => group.First()).ToList();
+                pendingNew = 0;
+                scrollPending = true;
+                var row = conversations.FirstOrDefault(item => item.Id == id);
+                if (row != null)
+                {
+                    row.UnreadCount = 0;
+                }
+            }
         }
         catch
         {
@@ -128,12 +213,166 @@
         }
     }
 
+    private Task OnInboxAsync(ChatInboxNotice incoming)
+    {
+        return InvokeAsync(async () =>
+        {
+            if (incoming.MessageId > 0 &&
+                (!seenMessages.Add(incoming.MessageId) ||
+                 messages.Any(item => item.Id == incoming.MessageId)))
+            {
+                return;
+            }
+
+            if (incoming.MessageId <= 0)
+            {
+                await LoadConversations();
+                StateHasChanged();
+                return;
+            }
+
+            var open = ConversationId == incoming.ConversationId;
+            var row = conversations.FirstOrDefault(item => item.Id == incoming.ConversationId);
+            if (row == null)
+            {
+                await LoadConversations();
+                row = conversations.FirstOrDefault(item => item.Id == incoming.ConversationId);
+            }
+
+            if (row != null)
+            {
+                row.LastMessagePreview = incoming.Content;
+                if (!open)
+                {
+                    row.UnreadCount++;
+                }
+            }
+
+            if (open)
+            {
+                messages.Add(new MessageDto
+                {
+                    Id = incoming.MessageId,
+                    Content = incoming.Content,
+                    SenderAvatarUrl = incoming.SenderAvatarUrl,
+                    CreatedAt = incoming.CreatedAt,
+                    IsRead = false,
+                    IsMine = false
+                });
+                await TrackScrollAsync();
+                using var req = await Auth(HttpMethod.Post, $"api/chat/conversations/{incoming.ConversationId}/read");
+                req.Content = JsonContent.Create(new { });
+                await Http.SendAsync(req);
+                if (row != null)
+                {
+                    row.UnreadCount = 0;
+                }
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task OnRestoredAsync()
+    {
+        await LoadConversations();
+        if (ConversationId is > 0)
+        {
+            await Live.JoinAsync(ConversationId.Value);
+            await LoadMessages(ConversationId.Value);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task TrackScrollAsync()
+    {
+        var near = true;
+        try
+        {
+            near = await JS.InvokeAsync<bool>("miniLogistics.isNearBottom", messagePane);
+        }
+        catch
+        {
+            near = true;
+        }
+
+        if (near)
+        {
+            pendingNew = 0;
+            scrollPending = true;
+        }
+        else
+        {
+            pendingNew++;
+        }
+    }
+
+    private async Task OnPaneScroll()
+    {
+        try
+        {
+            if (await JS.InvokeAsync<bool>("miniLogistics.isNearBottom", messagePane))
+            {
+                pendingNew = 0;
+            }
+        }
+        catch
+        {
+            pendingNew = 0;
+        }
+    }
+
+    private async Task JumpToLatest()
+    {
+        pendingNew = 0;
+        scrollPending = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!scrollPending)
+        {
+            return;
+        }
+
+        scrollPending = false;
+        try
+        {
+            await JS.InvokeVoidAsync("miniLogistics.scrollToEnd", messagePane);
+        }
+        catch
+        {
+        }
+    }
+
     private void Open(long id) => Navigation.NavigateTo($"/chat/{id}");
+
+    public void Dispose()
+    {
+        if (onInbox != null)
+        {
+            Live.InboxChanged -= onInbox;
+        }
+
+        if (onRestored != null)
+        {
+            Live.ConnectionRestored -= onRestored;
+        }
+
+        if (onLink != null)
+        {
+            Live.LinkChanged -= onLink;
+        }
+    }
 
     private async Task Send()
     {
         if (ConversationId is null or 0 || string.IsNullOrWhiteSpace(draft))
+        {
             return;
+        }
 
         isSending = true;
         try
@@ -143,9 +382,26 @@
             var res = await Http.SendAsync(req);
             if (res.IsSuccessStatusCode)
             {
+                var sent = await res.Content.ReadFromJsonAsync<MessageDto>();
                 draft = string.Empty;
-                await LoadMessages(ConversationId.Value);
-                await LoadConversations();
+                if (sent != null)
+                {
+                    seenMessages.Add(sent.Id);
+                }
+
+                if (sent != null && messages.All(item => item.Id != sent.Id))
+                {
+                    messages.Add(sent);
+                }
+
+                var row = conversations.FirstOrDefault(item => item.Id == ConversationId);
+                if (row != null && sent != null)
+                {
+                    row.LastMessagePreview = sent.Content;
+                }
+
+                pendingNew = 0;
+                scrollPending = true;
             }
             else
             {
@@ -167,18 +423,46 @@
         var req = new HttpRequestMessage(method, url);
         var token = await TokenStorage.GetAccessTokenAsync();
         if (!string.IsNullOrWhiteSpace(token))
+        {
             req.Headers.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
         return req;
     }
+
+    private static string ShopStatus(string? status) => status switch
+    {
+        "approved" => "Đang hoạt động",
+        "pending" => "Chờ duyệt",
+        "rejected" => "Tạm ngưng",
+        "suspended" => "Tạm ngưng",
+        null or "" => "Shop",
+        _ => status
+    };
+
+    private static string Money(decimal? price) =>
+        price is null ? "" : price.Value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + "đ";
+
+    private static string Stock(int? stock) =>
+        stock is > 0 ? "Còn hàng" : "Hết hàng";
 
     private sealed class ConversationDto
     {
         public long Id { get; set; }
         public string? PeerName { get; set; }
         public string? ShopName { get; set; }
+        public string? ShopLogoUrl { get; set; }
+        public string? ShopDescription { get; set; }
+        public string? ShopStatus { get; set; }
+        public double? ShopRating { get; set; }
         public string? ProductName { get; set; }
+        public string? ProductImageUrl { get; set; }
+        public decimal? ProductPrice { get; set; }
+        public int? ProductStock { get; set; }
+        public string? ProductSummary { get; set; }
         public string? LastMessagePreview { get; set; }
+        public DateTime? LastMessageAt { get; set; }
         public int UnreadCount { get; set; }
     }
 
@@ -186,6 +470,7 @@
     {
         public long Id { get; set; }
         public string Content { get; set; } = "";
+        public string? SenderAvatarUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsRead { get; set; }
         public bool IsMine { get; set; }

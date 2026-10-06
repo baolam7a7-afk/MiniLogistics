@@ -36,6 +36,8 @@ public class CreateVoucherDTO
     [Range(1, int.MaxValue)]
     public int? UsageLimit { get; set; }
 
+    public List<long> ProductIds { get; set; } = new();
+
     [Required]
     public DateTime StartAt { get; set; }
 

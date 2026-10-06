@@ -219,6 +219,32 @@ public class ProductController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:long}/status")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> SetStatus(long id, [FromBody] ProductStatusRequest request)
+    {
+        var product = await _productService.SetStatusAsync(id, request.Status);
+        if (product == null)
+        {
+            return NotFound(new { message = "Product không tồn tại." });
+        }
+
+        return Ok(product);
+    }
+
+    [HttpPut("{id:long}/manage")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> AdminEdit(long id, [FromBody] AdminProductEditDTO request)
+    {
+        var product = await _productService.AdminEditAsync(id, request);
+        if (product == null)
+        {
+            return NotFound(new { message = "Product không tồn tại." });
+        }
+
+        return Ok(product);
+    }
+
 
     // =====================================================
     // GET CURRENT USER ID
@@ -247,4 +273,9 @@ public class ProductController : ControllerBase
 
         return parsedUserId;
     }
+}
+
+public class ProductStatusRequest
+{
+    public string Status { get; set; } = string.Empty;
 }

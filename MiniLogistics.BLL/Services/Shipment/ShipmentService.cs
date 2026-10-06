@@ -908,23 +908,20 @@ public class ShipmentService : IShipmentService
                                 .Trim()
                                 .ToLowerInvariant();
 
-                        if (!string.Equals(
-                                oldOrderStatus,
-                                "processing",
-                                StringComparison.OrdinalIgnoreCase))
+                        if (oldOrderStatus is not ("processing" or "shipping"))
                         {
                             throw new BadRequestException(
                                 $"Order hiện tại đang ở trạng thái " +
                                 $"'{order.Status}', " +
-                                "không thể chuyển sang delivered.");
+                                "không thể chuyển sang chờ khách xác nhận.");
                         }
 
                         // =================================
-                        // UPDATE ORDER
+                        // WAIT FOR CUSTOMER CONFIRMATION
                         // =================================
 
                         order.Status =
-                            "delivered";
+                            "awaiting_receipt";
 
                         order.UpdatedAt =
                             DateTime.UtcNow;
@@ -948,10 +945,10 @@ public class ShipmentService : IShipmentService
                                         oldOrderStatus,
 
                                     ToStatus =
-                                        "delivered",
+                                        "awaiting_receipt",
 
                                     Message =
-                                        "Shipment đã giao hàng thành công.",
+                                        "Shipper đã giao. Chờ khách xác nhận đã nhận hàng.",
 
                                     CreatedByUserId =
                                         shipperUserId,
@@ -1045,8 +1042,6 @@ public class ShipmentService : IShipmentService
                                         payment);
                             }
                         }
-
-                        await SettleDeliveredOrderAsync(order);
                     }
 
                     // =====================================
@@ -1361,75 +1356,6 @@ public class ShipmentService : IShipmentService
                             })
                     .ToList()
         };
-    }
-
-    private async Task SettleDeliveredOrderAsync(OrderEntity order)
-    {
-        var items = await _unitOfWork.OrderItems
-            .FindAsync(item => item.OrderId == order.Id);
-
-        foreach (var item in items)
-        {
-            var inventories = await _unitOfWork.Inventories
-                .FindAsync(row => row.ProductVariantId == item.VariantId);
-
-            var inventory = inventories.FirstOrDefault()
-                ?? throw new NotFoundException(
-                    $"Inventory của Variant {item.VariantId} không tồn tại.");
-
-            if (item.Quantity > inventory.ReservedQuantity ||
-                item.Quantity > inventory.Quantity)
-            {
-                throw new BadRequestException(
-                    $"Tồn kho của Variant {item.VariantId} không đủ để hoàn tất giao hàng.");
-            }
-
-            inventory.ReservedQuantity -= item.Quantity;
-            inventory.Quantity -= item.Quantity;
-            inventory.UpdatedAt = DateTime.UtcNow;
-            _unitOfWork.Inventories.Update(inventory);
-        }
-
-        var credits = await _unitOfWork.ShopWalletTransactions
-            .FindAsync(row =>
-                row.OrderId == order.Id &&
-                row.Type == "SALE_CREDIT");
-
-        if (credits.Any())
-        {
-            return;
-        }
-
-        var wallets = await _unitOfWork.ShopWallets
-            .FindAsync(row => row.ShopId == order.ShopId);
-
-        var wallet = wallets.FirstOrDefault();
-        if (wallet == null)
-        {
-            wallet = new MiniLogistics.DAL.Models.ShopWallet
-            {
-                ShopId = order.ShopId,
-                Balance = 0,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _unitOfWork.ShopWallets.AddAsync(wallet);
-            await _unitOfWork.SaveChangesAsync();
-        }
-
-        wallet.Balance += order.Total;
-        wallet.UpdatedAt = DateTime.UtcNow;
-        _unitOfWork.ShopWallets.Update(wallet);
-
-        await _unitOfWork.ShopWalletTransactions.AddAsync(
-            new MiniLogistics.DAL.Models.ShopWalletTransaction
-            {
-                WalletId = wallet.Id,
-                OrderId = order.Id,
-                Type = "SALE_CREDIT",
-                Amount = order.Total,
-                Description = $"Doanh thu đơn {order.OrderCode}",
-                CreatedAt = DateTime.UtcNow
-            });
     }
 
     private async Task<ShipmentResponseDTO?> LoadDeliveryAsync(long orderId)

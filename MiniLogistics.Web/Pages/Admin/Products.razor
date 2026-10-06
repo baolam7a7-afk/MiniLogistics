@@ -1,0 +1,154 @@
+@page "/admin/products"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Sản phẩm</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Sản phẩm</h1>
+        <p>Danh sách lấy từ database. Admin đổi trạng thái bán; nội dung sản phẩm vẫn do shop sở hữu sửa.</p>
+    </div>
+</div>
+
+<div class="seller-filters">
+    <input class="seller-input" placeholder="Tên sản phẩm" @bind="search" />
+    <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải sản phẩm...</div>
+}
+else if (items.Count == 0)
+{
+    <div class="seller-empty">Không có sản phẩm.</div>
+}
+else
+{
+    <section class="seller-card">
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Sản phẩm</th>
+                        <th>Shop</th>
+                        <th>Trạng thái</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in items)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@product.Name</strong>
+                                <div class="seller-muted">#@product.Id</div>
+                            </td>
+                            <td>@(product.ShopName ?? $"#{product.ShopId}")</td>
+                            <td>
+                                <select class="seller-select" value="@product.Status" @onchange="e => Change(product, e)">
+                                    <option value="active">Đang bán</option>
+                                    <option value="draft">Nháp</option>
+                                    <option value="inactive">Ngừng bán</option>
+                                </select>
+                            </td>
+                            <td>
+                                <a href="@($"/admin/products/{product.Id}")">Sửa</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <AdminPager Page="pageIndex" TotalPages="totalPages" PageChanged="GoPage" />
+    </section>
+}
+
+@code {
+    private List<AdminProduct> items = new();
+    private int pageIndex = 1;
+    private int totalPages;
+    private string search = "";
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task Search()
+    {
+        pageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoPage(int next)
+    {
+        pageIndex = next;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var query = $"api/products?Page={pageIndex}&PageSize=10";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query += $"&Search={Uri.EscapeDataString(search)}";
+        }
+
+        var result = await Api.GetAsync<PagedResult<AdminProduct>>(query);
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            isError = true;
+            message = result.Error ?? "Không tải được sản phẩm.";
+            items = new();
+            return;
+        }
+
+        items = result.Data.Items;
+        totalPages = result.Data.TotalPages;
+    }
+
+    private async Task Change(AdminProduct product, ChangeEventArgs args)
+    {
+        var status = args.Value?.ToString() ?? "";
+        var result = await Api.PutAsync<AdminProduct>($"api/products/{product.Id}/status", new { status });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật trạng thái sản phẩm." : result.Error;
+        if (result.Ok && result.Data != null)
+        {
+            product.Status = result.Data.Status;
+        }
+        else
+        {
+            await LoadAsync();
+        }
+    }
+
+    private sealed class AdminProduct
+    {
+        public long Id { get; set; }
+        public long ShopId { get; set; }
+        public string? ShopName { get; set; }
+        public string Name { get; set; } = "";
+        public string Status { get; set; } = "";
+    }
+}

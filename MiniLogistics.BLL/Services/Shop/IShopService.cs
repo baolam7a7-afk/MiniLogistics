@@ -11,7 +11,9 @@ public interface IShopService
 
     Task<ShopResponseDTO> CreateAsync(
         long ownerUserId,
-        CreateShopDTO request);
+        CreateShopDTO request,
+        string? clientIp = null,
+        string? userAgent = null);
 
     Task<IEnumerable<ShopResponseDTO>> GetMyShopsAsync(
         long ownerUserId);

@@ -105,7 +105,23 @@
                         }
                     </div>
 
-                    @if (productImageUrls.Count > 1)
+                    @if (variants.Count > 1)
+                    {
+                        <div class="product-detail-thumbnails" aria-label="Ảnh theo phiên bản">
+                            @foreach (var variant in variants)
+                            {
+                                var variantImage = ImageForVariant(variant);
+                                <button type="button"
+                                        class="product-detail-thumbnail @(selectedVariant?.Id == variant.Id ? "active" : "")"
+                                        @onclick="() => SelectVariant(variant)"
+                                        aria-label="@variant.VariantName">
+                                    <img src="@variantImage" alt="@variant.VariantName" loading="lazy" />
+                                    <span class="product-detail-thumbnail-name">@variant.VariantName</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (productImageUrls.Count > 1)
                     {
                         <div class="product-detail-thumbnails" aria-label="Ảnh sản phẩm">
                             @foreach (var imageUrl in productImageUrls)
@@ -136,6 +152,8 @@
                         @product.Name
 
                     </h1>
+
+                    <p class="product-detail-shop">@ShopLabel</p>
 
                     @if (!string.IsNullOrWhiteSpace(product.Description))
 
@@ -171,13 +189,13 @@
 
                             <span class="meta-label">
 
-                                Shop ID
+                                Cửa hàng
 
                             </span>
 
                             <span class="meta-value">
 
-                                #@product.ShopId
+                                @ShopLabel
 
                             </span>
 
@@ -479,7 +497,7 @@
                                                 class="app-button app-button-secondary"
                                                 @onclick="StartChatWithSeller"
                                                 disabled="@isStartingChat">
-                                            @(isStartingChat ? "Đang mở chat..." : "Chat với Seller")
+                                            @(isStartingChat ? "Đang mở chat..." : "Chat với Shop")
                                         </button>
 
                                     </div>
@@ -539,6 +557,8 @@
                 </div>
 
             </div>
+
+            <ProductReviews ProductId="@product.Id" />
 
             <!-- Back button -->
 
@@ -714,6 +734,8 @@
 
                 quantity = 1;
 
+                ApplyVariantImage(selectedVariant);
+
             }
 
         }
@@ -750,7 +772,30 @@
 
         cartMessage = string.Empty;
 
+        ApplyVariantImage(variant);
+
     }
+
+    private string ShopLabel =>
+        product == null
+            ? ""
+            : string.IsNullOrWhiteSpace(product.ShopName)
+                ? $"Shop #{product.ShopId}"
+                : product.ShopName;
+
+    private void ApplyVariantImage(ProductVariant variant)
+    {
+        var image = ImageForVariant(variant);
+        if (!string.IsNullOrWhiteSpace(image))
+        {
+            productImageUrl = image;
+        }
+    }
+
+    private string ImageForVariant(ProductVariant variant) =>
+        VariantImages.Resolve(
+            variant.VariantName,
+            productImageUrls.FirstOrDefault() ?? product?.ImageUrl);
 
     private void DecreaseQuantity()
 
@@ -939,7 +984,7 @@
             if (!res.IsSuccessStatusCode)
             {
                 cartSuccess = false;
-                cartMessage = "Không thể mở chat với Seller.";
+                cartMessage = "Không thể mở chat với Shop.";
                 return;
             }
 

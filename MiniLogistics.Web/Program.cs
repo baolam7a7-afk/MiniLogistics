@@ -14,6 +14,7 @@ using MiniLogistics.Web.Services.Category;
 using MiniLogistics.Web.Services.Seller;
 using MiniLogistics.Web.Services.Shipper;
 using MiniLogistics.Web.Services.Admin;
+using MiniLogistics.Web.Services.Chat;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -35,6 +36,7 @@ builder.Services.AddScoped<AuthStateService>();
 // Product, Cart, Address, Order
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<CartService>();
+builder.Services.AddScoped<CheckoutSelection>();
 builder.Services.AddScoped<AddressService>();
 builder.Services.AddScoped<OrderService>();
 
@@ -45,6 +47,8 @@ builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<SellerApi>();
 builder.Services.AddScoped<SellerSession>();
 builder.Services.AddScoped<ShipperSession>();
+builder.Services.AddScoped<ShipperOrderLiveService>();
 builder.Services.AddScoped<AdminSession>();
+builder.Services.AddScoped<ChatLiveService>();
 
 await builder.Build().RunAsync();

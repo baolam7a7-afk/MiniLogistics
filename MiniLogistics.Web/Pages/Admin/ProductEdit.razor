@@ -1,0 +1,159 @@
+@page "/admin/products/{ProductId:long}"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Sửa sản phẩm</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>@(product?.Name ?? "Sửa sản phẩm")</h1>
+        <p><a href="/admin/products">Quay lại danh sách</a></p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading)
+{
+    <div class="seller-loading">Đang tải sản phẩm...</div>
+}
+else if (product == null)
+{
+    <div class="seller-empty">Không tìm thấy sản phẩm.</div>
+}
+else
+{
+    <section class="seller-card">
+        <p class="seller-muted">Shop: @(product.ShopName ?? $"#{product.ShopId}")</p>
+        <label class="seller-field">Tên sản phẩm
+            <input class="seller-input" @bind="product.Name" maxlength="300" />
+        </label>
+        <label class="seller-field">Mô tả
+            <textarea class="seller-textarea" rows="4" @bind="product.Description"></textarea>
+        </label>
+        <label class="seller-field">Trạng thái
+            <select class="seller-select" @bind="product.Status">
+                <option value="active">Đang bán</option>
+                <option value="draft">Nháp</option>
+                <option value="inactive">Ngừng bán</option>
+            </select>
+        </label>
+    </section>
+
+    <section class="seller-card">
+        <h2>Biến thể và giá</h2>
+        @if (variants.Count == 0)
+        {
+            <p class="seller-muted">Sản phẩm chưa có biến thể.</p>
+        }
+        else
+        {
+            @foreach (var variant in variants)
+            {
+                <div class="seller-two">
+                    <label class="seller-field">Tên biến thể
+                        <input class="seller-input" @bind="variant.VariantName" maxlength="300" />
+                    </label>
+                    <label class="seller-field">Giá
+                        <input class="seller-input" type="number" min="0" step="1000" @bind="variant.Price" />
+                    </label>
+                </div>
+            }
+        }
+        <div class="seller-actions">
+            <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">Lưu</button>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public long ProductId { get; set; }
+
+    private ProductForm? product;
+    private List<VariantForm> variants = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool isError;
+    private string? message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var detail = await Api.GetAsync<ProductForm>($"api/products/{ProductId}");
+        var options = await Api.GetAsync<List<VariantForm>>($"api/product-variants/product/{ProductId}");
+        isLoading = false;
+        if (!detail.Ok || detail.Data == null)
+        {
+            isError = true;
+            message = detail.Error ?? "Không tải được sản phẩm.";
+            product = null;
+            return;
+        }
+
+        product = detail.Data;
+        variants = options.Data ?? new();
+    }
+
+    private async Task Save()
+    {
+        if (product == null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        var result = await Api.PutAsync<ProductForm>($"api/products/{ProductId}/manage", new
+        {
+            name = product.Name,
+            description = product.Description,
+            status = product.Status,
+            variants = variants.Select(item => new
+            {
+                id = item.Id,
+                variantName = item.VariantName,
+                price = item.Price
+            })
+        });
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu sản phẩm." : result.Error;
+        if (result.Ok && result.Data != null)
+        {
+            product.Name = result.Data.Name;
+            product.Status = result.Data.Status;
+        }
+    }
+
+    private sealed class ProductForm
+    {
+        public long Id { get; set; }
+        public long ShopId { get; set; }
+        public string? ShopName { get; set; }
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public string Status { get; set; } = "active";
+    }
+
+    private sealed class VariantForm
+    {
+        public long Id { get; set; }
+        public string VariantName { get; set; } = "";
+        public decimal Price { get; set; }
+    }
+}

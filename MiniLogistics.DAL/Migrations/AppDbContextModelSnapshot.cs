@@ -252,9 +252,9 @@ namespace MiniLogistics.DAL.Migrations
 
                     b.HasIndex("ShopId");
 
-                    b.HasIndex("CustomerUserId", "SellerUserId", "ShopId")
+                    b.HasIndex("CustomerUserId", "ShopId", "ProductId")
                         .IsUnique()
-                        .HasFilter("[ShopId] IS NOT NULL");
+                        .HasFilter("[ShopId] IS NOT NULL AND [ProductId] IS NOT NULL");
 
                     b.ToTable("conversations", (string)null);
                 });
@@ -380,12 +380,28 @@ namespace MiniLogistics.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ConfirmedByUserId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)")
                         .HasDefaultValue("VND");
+
+                    b.Property<DateTime?>("CustomerConfirmedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<long>("CustomerId")
                         .HasColumnType("bigint");
@@ -439,6 +455,8 @@ namespace MiniLogistics.DAL.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
 
                     b.HasIndex("CustomerId");
 
@@ -838,6 +856,98 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("product_variants", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.ReferralPolicy", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("FlatAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("HoldingDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MinProductCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PayoutMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("PlatformFeePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<bool>("RequireApprovedShop")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequireFirstOrder")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RewardMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("SharePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("referral_policies", (string)null);
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.ReferralRewardTransaction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("SellerReferralId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ShopWalletTransactionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SellerReferralId")
+                        .IsUnique();
+
+                    b.HasIndex("ShopWalletTransactionId");
+
+                    b.ToTable("referral_reward_transactions", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.RefundTransaction", b =>
                 {
                     b.Property<long>("Id")
@@ -1068,6 +1178,82 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("roles", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.SellerReferral", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceHint")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("FraudFlags")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("PayableAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("QualifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ReferredShopId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ReferredUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ReferrerUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<long?>("ReviewedByUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("RewardAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SignupIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReferredShopId")
+                        .IsUnique();
+
+                    b.HasIndex("ReferredUserId");
+
+                    b.HasIndex("ReferrerUserId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.ToTable("seller_referrals", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Shipment", b =>
                 {
                     b.Property<long>("Id")
@@ -1203,7 +1389,8 @@ namespace MiniLogistics.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OwnerUserId");
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique();
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -1389,6 +1576,10 @@ namespace MiniLogistics.DAL.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("ReferralCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1403,6 +1594,10 @@ namespace MiniLogistics.DAL.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("ReferralCode")
+                        .IsUnique()
+                        .HasFilter("[ReferralCode] IS NOT NULL");
 
                     b.ToTable("users", (string)null);
                 });
@@ -1582,6 +1777,21 @@ namespace MiniLogistics.DAL.Migrations
                     b.ToTable("vouchers", (string)null);
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.VoucherProduct", b =>
+                {
+                    b.Property<long>("VoucherId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("VoucherId", "ProductId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("voucher_products", (string)null);
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Address", b =>
                 {
                     b.HasOne("MiniLogistics.DAL.Models.User", "User")
@@ -1743,6 +1953,11 @@ namespace MiniLogistics.DAL.Migrations
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.Order", b =>
                 {
+                    b.HasOne("MiniLogistics.DAL.Models.User", "ConfirmedByUser")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiniLogistics.DAL.Models.User", "Customer")
                         .WithMany("CustomerOrders")
                         .HasForeignKey("CustomerId")
@@ -1760,6 +1975,8 @@ namespace MiniLogistics.DAL.Migrations
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("ConfirmedByUser");
 
                     b.Navigation("Customer");
 
@@ -1913,6 +2130,24 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.ReferralRewardTransaction", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.SellerReferral", "SellerReferral")
+                        .WithMany("Rewards")
+                        .HasForeignKey("SellerReferralId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.ShopWalletTransaction", "ShopWalletTransaction")
+                        .WithMany()
+                        .HasForeignKey("ShopWalletTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("SellerReferral");
+
+                    b.Navigation("ShopWalletTransaction");
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.RefundTransaction", b =>
                 {
                     b.HasOne("MiniLogistics.DAL.Models.ReturnRequest", "ReturnRequest")
@@ -2020,6 +2255,40 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("Review");
 
                     b.Navigation("Shop");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.SellerReferral", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.Shop", "ReferredShop")
+                        .WithMany()
+                        .HasForeignKey("ReferredShopId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.User", "ReferredUser")
+                        .WithMany()
+                        .HasForeignKey("ReferredUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.User", "ReferrerUser")
+                        .WithMany()
+                        .HasForeignKey("ReferrerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ReferredShop");
+
+                    b.Navigation("ReferredUser");
+
+                    b.Navigation("ReferrerUser");
+
+                    b.Navigation("ReviewedByUser");
                 });
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.Shipment", b =>
@@ -2187,6 +2456,25 @@ namespace MiniLogistics.DAL.Migrations
                     b.Navigation("Shop");
                 });
 
+            modelBuilder.Entity("MiniLogistics.DAL.Models.VoucherProduct", b =>
+                {
+                    b.HasOne("MiniLogistics.DAL.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiniLogistics.DAL.Models.Voucher", "Voucher")
+                        .WithMany()
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Voucher");
+                });
+
             modelBuilder.Entity("MiniLogistics.DAL.Models.Cart", b =>
                 {
                     b.Navigation("CartItems");
@@ -2271,6 +2559,11 @@ namespace MiniLogistics.DAL.Migrations
             modelBuilder.Entity("MiniLogistics.DAL.Models.Role", b =>
                 {
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("MiniLogistics.DAL.Models.SellerReferral", b =>
+                {
+                    b.Navigation("Rewards");
                 });
 
             modelBuilder.Entity("MiniLogistics.DAL.Models.Shipment", b =>

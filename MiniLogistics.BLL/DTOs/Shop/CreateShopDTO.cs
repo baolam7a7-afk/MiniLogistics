@@ -13,4 +13,7 @@ public class CreateShopDTO
 
     [MaxLength(1000)]
     public string? LogoUrl { get; set; }
+
+    [MaxLength(20)]
+    public string? ReferralCode { get; set; }
 }

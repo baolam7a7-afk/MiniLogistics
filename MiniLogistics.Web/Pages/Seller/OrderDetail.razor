@@ -1,5 +1,7 @@
 @page "/seller/orders/{OrderId:long}"
 @layout SellerLayout
+@using MiniLogistics.Web.Components
+@using MiniLogistics.Web.Services.Product
 @inject SellerApi Api
 @inject SellerSession Session
 
@@ -8,7 +10,7 @@
 <div class="seller-page-head">
     <div>
         <h1>@(order?.OrderCode ?? "Chi tiết đơn")</h1>
-        <p>Seller chỉ được xác nhận, chuyển xử lý hoặc hủy theo đúng bước của API.</p>
+        <p>Shop xác nhận hoặc hủy khi đơn đang chờ. Sau khi xác nhận, shipper nhận giao.</p>
     </div>
     <a class="app-button app-button-secondary" href="/seller/orders">Về danh sách</a>
 </div>
@@ -30,17 +32,23 @@ else
 {
     <section class="seller-card">
         <h2>@SellerText.OrderStatus(order.Status)</h2>
+        <OrderFlow Status="@order.Status" CancelReason="@order.CancelReason" />
         <div class="seller-two">
-            <p>Khách hàng: <strong>#@order.CustomerId</strong></p>
-            <p>Địa chỉ giao: <strong>#@order.ShippingAddressId</strong></p>
-            <p>Shop: <strong>#@order.ShopId</strong></p>
+            <p>Khách hàng: <strong>@(order.CustomerName ?? $"#{order.CustomerId}")</strong></p>
+            <p>Số điện thoại: <strong>@(order.CustomerPhone ?? "—")</strong></p>
+            <p>Địa chỉ giao: <strong>@(order.ShippingAddressText ?? "—")</strong></p>
+            <p>Shop: <strong>@(order.ShopName ?? $"#{order.ShopId}")</strong></p>
             <p>Thanh toán: <strong>@order.PaymentMethod</strong></p>
+            <p>Đặt lúc: <strong>@SellerText.When(order.PlacedAt)</strong></p>
             <p>Tạm tính: <strong>@SellerText.Money(order.Subtotal)</strong></p>
             <p>Phí ship: <strong>@SellerText.Money(order.ShippingFee)</strong></p>
             <p>Giảm giá: <strong>@SellerText.Money(order.DiscountTotal)</strong></p>
             <p>Tổng: <strong>@SellerText.Money(order.Total)</strong></p>
         </div>
-        <p class="seller-muted">API đơn hàng trả mã khách và mã địa chỉ, không trả tên hoặc địa chỉ chữ.</p>
+        @if (order.ConfirmedAt.HasValue)
+        {
+            <p class="seller-muted">Shop xác nhận lúc @SellerText.When(order.ConfirmedAt.Value)</p>
+        }
         @if (!string.IsNullOrWhiteSpace(order.Note))
         {
             <p>Ghi chú: @order.Note</p>
@@ -59,6 +67,7 @@ else
                 <table class="seller-table">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>Sản phẩm</th>
                             <th>Biến thể</th>
                             <th>Giá</th>
@@ -70,6 +79,7 @@ else
                         @foreach (var item in order.Items)
                         {
                             <tr>
+                                <td><img class="order-line-image" src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="" /></td>
                                 <td>@item.ProductName</td>
                                 <td>@item.VariantName</td>
                                 <td>@SellerText.Money(item.UnitPrice)</td>
@@ -83,31 +93,21 @@ else
         }
     </section>
 
-    <section class="seller-card">
-        <h2>Cập nhật trạng thái</h2>
-        @if (!nextStatuses.Any())
-        {
-            <p class="seller-muted">Không có bước nào seller được chuyển từ trạng thái hiện tại.</p>
-        }
-        else
-        {
-            <div class="seller-form">
-                <label>Trạng thái mới
-                    <select class="seller-select" @bind="nextStatus">
-                        @foreach (var item in nextStatuses)
-                        {
-                            <option value="@item">@SellerText.OrderStatus(item)</option>
-                        }
-                    </select>
-                </label>
-                <label>Ghi chú
-                    <input class="seller-input" @bind="statusMessage" />
-                </label>
-                <button class="app-button app-button-primary" @onclick="UpdateStatus">Cập nhật</button>
+    @if (CanAct)
+    {
+        <section class="seller-card">
+            <h2>Xử lý đơn</h2>
+            <div class="seller-actions">
+                <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Confirm">Xác nhận đơn</button>
+                <button class="app-button app-button-danger" disabled="@isSaving" @onclick="OpenCancel">Hủy đơn</button>
             </div>
-        }
-        @if (order.StatusLogs.Count > 0)
-        {
+        </section>
+    }
+
+    @if (order.StatusLogs.Count > 0)
+    {
+        <section class="seller-card">
+            <h2>Lịch sử</h2>
             <div class="seller-table-wrap">
                 <table class="seller-table">
                     <thead>
@@ -131,8 +131,23 @@ else
                     </tbody>
                 </table>
             </div>
-        }
-    </section>
+        </section>
+    }
+}
+
+@if (showCancel)
+{
+    <div class="order-modal-backdrop">
+        <div class="order-modal">
+            <h3>Hủy đơn</h3>
+            <p>Nhập lý do hủy. Khách hàng sẽ thấy lý do này.</p>
+            <textarea class="seller-input" rows="4" @bind="cancelReason" maxlength="500" placeholder="Lý do hủy"></textarea>
+            <div class="order-modal-actions">
+                <button class="app-button app-button-secondary" @onclick="CloseCancel">Đóng</button>
+                <button class="app-button app-button-danger" disabled="@(isSaving || string.IsNullOrWhiteSpace(cancelReason))" @onclick="Cancel">Xác nhận hủy</button>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -140,18 +155,20 @@ else
 
     private SellerOrder? order;
     private bool isLoading = true;
+    private bool isSaving;
     private bool isError;
+    private bool showCancel;
     private string? message;
-    private string nextStatus = "";
-    private string? statusMessage;
+    private string cancelReason = "";
 
-    private IEnumerable<string> nextStatuses => order?.Status switch
+    private bool CanAct
     {
-        "pending" or "paid" => new[] { "confirmed", "cancelled" },
-        "confirmed" => new[] { "processing", "cancelled" },
-        "processing" => new[] { "cancelled" },
-        _ => Array.Empty<string>()
-    };
+        get
+        {
+            var status = order?.Status?.Trim().ToLowerInvariant();
+            return status is "pending" or "paid";
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -173,23 +190,48 @@ else
         }
 
         order = result.Data;
-        nextStatus = nextStatuses.FirstOrDefault() ?? "";
     }
 
-    private async Task UpdateStatus()
+    private async Task Confirm()
     {
-        var result = await Api.PutAsync<SellerOrder>($"api/orders/{OrderId}/status", new
-        {
-            Status = nextStatus,
-            Message = statusMessage
-        });
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{OrderId}/confirm");
+        isSaving = false;
         isError = !result.Ok;
-        message = result.Ok ? "Đã cập nhật trạng thái đơn." : result.Error;
-        if (result.Ok)
+        message = result.Ok ? "Đã xác nhận đơn." : result.Error;
+        if (result.Data != null)
         {
             order = result.Data;
-            statusMessage = "";
-            nextStatus = nextStatuses.FirstOrDefault() ?? "";
+        }
+    }
+
+    private void OpenCancel()
+    {
+        cancelReason = "";
+        showCancel = true;
+    }
+
+    private void CloseCancel() => showCancel = false;
+
+    private async Task Cancel()
+    {
+        if (string.IsNullOrWhiteSpace(cancelReason))
+        {
+            return;
+        }
+
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{OrderId}/shop-cancel", new
+        {
+            Reason = cancelReason.Trim()
+        });
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã hủy đơn." : result.Error;
+        if (result.Ok)
+        {
+            showCancel = false;
+            order = result.Data ?? order;
         }
     }
 }

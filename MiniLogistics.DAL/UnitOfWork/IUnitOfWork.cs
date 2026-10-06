@@ -108,6 +108,8 @@ public interface IUnitOfWork
 
     IRepository<Voucher> Vouchers { get; }
 
+    IRepository<VoucherProduct> VoucherProducts { get; }
+
     IRepository<OrderVoucher> OrderVouchers { get; }
 
     IRepository<UserVoucher> UserVouchers { get; }
@@ -176,6 +178,12 @@ public interface IUnitOfWork
 
     IRepository<ReportSnapshot> ReportSnapshots { get; }
 
+    IRepository<ReferralPolicy> ReferralPolicies { get; }
+
+    IRepository<SellerReferral> SellerReferrals { get; }
+
+    IRepository<ReferralRewardTransaction> ReferralRewardTransactions { get; }
+
 
     // =====================================================
     // SAVE
@@ -190,4 +198,13 @@ public interface IUnitOfWork
 
     Task<T> ExecuteInTransactionAsync<T>(
         Func<Task<T>> action);
+
+    Task<int> ClaimOpenShipmentAsync(
+        long orderId,
+        long shipperUserId,
+        DateTime now);
+
+    Task<int> MarkOrderShippingIfOpenAsync(
+        long orderId,
+        DateTime now);
 }

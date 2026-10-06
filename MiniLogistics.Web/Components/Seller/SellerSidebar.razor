@@ -1,4 +1,5 @@
 @inject SellerSession Session
+@implements IDisposable
 
 <aside class="seller-sidebar">
     <a class="seller-brand" href="/seller">
@@ -16,16 +17,24 @@
     <NavLink class="seller-nav-link" href="/seller/inventory">Tồn kho</NavLink>
 
     <div class="seller-nav-group">Cửa hàng</div>
-    <NavLink class="seller-nav-link" href="/seller/shop">Hồ sơ shop</NavLink>
+    <NavLink class="seller-nav-link" href="/seller/shop">Cửa hàng</NavLink>
     <NavLink class="seller-nav-link" href="/seller/vouchers">Voucher</NavLink>
     <NavLink class="seller-nav-link" href="/seller/reviews">Đánh giá</NavLink>
-    <NavLink class="seller-nav-link" href="/seller/support">Hỗ trợ</NavLink>
+    <NavLink class="seller-nav-link" href="/seller/chat">
+        Chat với khách hàng
+        @if (Session.ChatUnread > 0)
+        {
+            <span class="seller-chat-badge">@SellerText.CountBadge(Session.ChatUnread)</span>
+        }
+    </NavLink>
 
     <div class="seller-nav-group">Tài chính</div>
     <NavLink class="seller-nav-link" href="/seller/wallet">Ví</NavLink>
     <NavLink class="seller-nav-link" href="/seller/payouts">Rút tiền</NavLink>
-    <NavLink class="seller-nav-link" href="/seller/refunds">Hoàn trả</NavLink>
-
-    <div class="seller-nav-group">Tài khoản</div>
-    <NavLink class="seller-nav-link" href="/seller/profile">Hồ sơ cá nhân</NavLink>
 </aside>
+
+@code {
+    protected override void OnInitialized() => Session.UiChanged += StateHasChanged;
+
+    public void Dispose() => Session.UiChanged -= StateHasChanged;
+}

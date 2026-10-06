@@ -1,0 +1,98 @@
+<div class="order-flow">
+    @foreach (var step in Steps)
+    {
+        <div class="order-flow-step order-flow-@step.State">
+            <span class="order-flow-mark">@step.Mark</span>
+            <span>@step.Label</span>
+        </div>
+    }
+</div>
+
+@if (IsCancelled && !string.IsNullOrWhiteSpace(CancelReason))
+{
+    <p class="order-flow-reason">Lý do: @CancelReason</p>
+}
+
+@code {
+    [Parameter] public string? Status { get; set; }
+    [Parameter] public string? CancelReason { get; set; }
+
+    private bool IsCancelled =>
+        string.Equals(Status, "cancelled", StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<FlowStep> Steps
+    {
+        get
+        {
+            if (IsCancelled)
+            {
+                yield return new("Đã thanh toán", "done", "✓");
+                yield return new("Shop xử lý", "done", "✓");
+                yield return new("Đã hủy", "failed", "✕");
+                yield break;
+            }
+
+            var status = Status?.Trim().ToLowerInvariant();
+            if (status == "awaiting_payment")
+            {
+                yield return new("Chờ thanh toán", "current", "●");
+                yield return new("Shop xác nhận", "wait", "○");
+                yield return new("Shipper nhận hàng", "wait", "○");
+                yield return new("Đang giao", "wait", "○");
+                yield return new("Chờ khách xác nhận", "wait", "○");
+                yield return new("Đã giao thành công", "wait", "○");
+                yield break;
+            }
+
+            var index = status switch
+            {
+                "pending" or "paid" => 1,
+                "confirmed" or "processing" => 2,
+                "shipping" => 3,
+                "awaiting_receipt" => 4,
+                "delivered" => 5,
+                _ => 0
+            };
+            var complete = status == "delivered";
+            var labels = new[]
+            {
+                "Đã thanh toán",
+                "Shop xác nhận",
+                "Đã xác nhận",
+                "Đang giao",
+                "Chờ khách xác nhận",
+                "Đã giao thành công"
+            };
+
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var state = complete || i < index
+                    ? "done"
+                    : i == index ? "current" : "wait";
+                var label = labels[i];
+                if (i == 1 && state == "current")
+                {
+                    label = "Chờ shop xác nhận";
+                }
+                else if (i == 1 && state == "done")
+                {
+                    label = "Shop đã xác nhận";
+                }
+                else if (i == 2 && state == "done")
+                {
+                    label = "Shipper đã nhận hàng";
+                }
+
+                var mark = state switch
+                {
+                    "done" => "✓",
+                    "current" => "●",
+                    _ => "○"
+                };
+                yield return new(label, state, mark);
+            }
+        }
+    }
+
+    private sealed record FlowStep(string Label, string State, string Mark);
+}

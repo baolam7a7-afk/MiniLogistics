@@ -7,50 +7,23 @@
 
 <div class="seller-page-head">
     <div>
-        <h1>Giao dịch ví</h1>
-        <p>API admin trả toàn bộ giao dịch, không phân trang. Ghi sổ bằng loại SALE_CREDIT, REFUND_DEBIT, PAYOUT_DEBIT hoặc ADJUSTMENT. Cần đúng mã ví đã có.</p>
+        <h1>Ví shop</h1>
+        <p>Số dư hiện có của từng cửa hàng.</p>
     </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(message))
 {
-    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+    <div class="app-alert app-alert-danger">@message</div>
 }
-
-<section class="seller-card">
-    <h2>Ghi giao dịch</h2>
-    <div class="seller-two">
-        <label class="seller-field">Mã ví
-            <input class="seller-input" type="number" @bind="walletId" />
-        </label>
-        <label class="seller-field">Mã đơn (nếu có)
-            <input class="seller-input" @bind="orderText" />
-        </label>
-        <label class="seller-field">Loại
-            <select class="seller-select" @bind="type">
-                <option value="SALE_CREDIT">Cộng doanh thu</option>
-                <option value="REFUND_DEBIT">Trừ hoàn tiền</option>
-                <option value="PAYOUT_DEBIT">Trừ rút tiền</option>
-                <option value="ADJUSTMENT">Điều chỉnh</option>
-            </select>
-        </label>
-        <label class="seller-field">Số tiền
-            <input class="seller-input" type="number" min="1" @bind="amount" />
-        </label>
-        <label class="seller-field">Mô tả
-            <input class="seller-input" @bind="description" />
-        </label>
-    </div>
-    <button class="app-button app-button-primary" @onclick="Create">Ghi sổ</button>
-</section>
 
 @if (isLoading)
 {
-    <div class="seller-loading">Đang tải giao dịch...</div>
+    <div class="seller-loading">Đang tải ví...</div>
 }
 else if (items.Count == 0)
 {
-    <div class="seller-empty">Chưa có giao dịch ví.</div>
+    <div class="seller-empty">Chưa có cửa hàng.</div>
 }
 else
 {
@@ -59,26 +32,18 @@ else
             <table class="seller-table">
                 <thead>
                     <tr>
-                        <th>Thời gian</th>
-                        <th>Shop</th>
-                        <th>Ví</th>
-                        <th>Loại</th>
-                        <th>Số tiền</th>
-                        <th>Số dư sau</th>
-                        <th>Mô tả</th>
+                        <th>Cửa hàng</th>
+                        <th>Số dư</th>
+                        <th>Cập nhật</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var item in items)
                     {
                         <tr>
-                            <td>@SellerText.When(item.CreatedAt)</td>
-                            <td>@(string.IsNullOrWhiteSpace(item.ShopName) ? $"#{item.ShopId}" : item.ShopName)</td>
-                            <td>#@item.WalletId</td>
-                            <td>@AdminText.WalletType(item.Type)</td>
-                            <td>@SellerText.Money(item.Amount)</td>
-                            <td>@(item.BalanceAfter.HasValue ? SellerText.Money(item.BalanceAfter.Value) : "—")</td>
-                            <td>@item.Description</td>
+                            <td>@item.ShopName</td>
+                            <td>@SellerText.Money(item.Balance)</td>
+                            <td>@(item.UpdatedAt.HasValue ? SellerText.When(item.UpdatedAt.Value) : "—")</td>
                         </tr>
                     }
                 </tbody>
@@ -88,61 +53,28 @@ else
 }
 
 @code {
-    private List<WalletTransaction> items = new();
-    private long walletId;
-    private string orderText = "";
-    private string type = "ADJUSTMENT";
-    private decimal amount;
-    private string description = "";
+    private List<ShopWalletRecord> items = new();
     private bool isLoading = true;
-    private bool isError;
     private string? message;
 
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureAsync();
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
         if (Session.Forbidden || Session.Profile == null)
         {
             isLoading = false;
             return;
         }
 
-        isLoading = true;
-        var result = await Api.GetAsync<List<WalletTransaction>>("api/shop-wallet-transactions");
+        var result = await Api.GetAsync<List<ShopWalletRecord>>("api/shop-wallets");
         isLoading = false;
         if (!result.Ok || result.Data == null)
         {
-            isError = true;
             message = result.Error;
             items = new();
             return;
         }
 
-        items = result.Data.OrderByDescending(item => item.CreatedAt).ToList();
-    }
-
-    private async Task Create()
-    {
-        long? orderId = long.TryParse(orderText, out var parsed) ? parsed : null;
-        var result = await Api.PostAsync<WalletTransaction>("api/shop-wallet-transactions", new
-        {
-            WalletId = walletId,
-            OrderId = orderId,
-            Type = type,
-            Amount = amount,
-            Description = description
-        });
-        isError = !result.Ok;
-        message = result.Ok ? "Đã ghi giao dịch ví." : result.Error;
-        if (result.Ok)
-        {
-            description = "";
-            await LoadAsync();
-        }
+        items = result.Data;
     }
 }

@@ -182,6 +182,7 @@ public static class AdminText
         "SALE_CREDIT" => "Cộng doanh thu",
         "REFUND_DEBIT" => "Trừ hoàn tiền",
         "PAYOUT_DEBIT" => "Trừ rút tiền",
+        "REFERRAL" => "Hoa hồng giới thiệu",
         "ADJUSTMENT" => "Điều chỉnh",
         _ => string.IsNullOrWhiteSpace(type) ? "—" : type
     };
@@ -190,8 +191,6 @@ public static class AdminText
         current?.Trim().ToLowerInvariant() switch
         {
             "pending" or "paid" => new[] { "confirmed", "cancelled" },
-            "confirmed" => new[] { "processing", "cancelled" },
-            "processing" => new[] { "cancelled" },
             _ => Array.Empty<string>()
         };
 }

@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @using MiniLogistics.Web.Models.Order
 @using MiniLogistics.Web.Services.Order
+@using MiniLogistics.Web.Services.Product
 @inject OrderService OrderService
 @inject NavigationManager Navigation
 
@@ -35,29 +36,24 @@
                    @onkeydown="HandleSearchKeyDown" />
         </div>
 
-        <div class="orders-status">
-            <label>Trạng thái</label>
-
-            <select class="app-input"
-                    @bind="selectedStatus">
-
-                <option value="">Tất cả trạng thái</option>
-                <option value="pending">Chờ xử lý</option>
-                <option value="confirmed">Đã xác nhận</option>
-                <option value="processing">Đang xử lý</option>
-                <option value="shipped">Đang giao</option>
-                <option value="delivered">Đã giao</option>
-                <option value="cancelled">Đã hủy</option>
-                <option value="completed">Hoàn thành</option>
-
-            </select>
-        </div>
-
         <button class="app-button app-button-primary orders-search-button"
                 @onclick="SearchOrders">
             Tìm kiếm
         </button>
 
+    </div>
+
+    <div class="orders-status-tabs" role="tablist" aria-label="Lọc theo trạng thái">
+        @foreach (var filter in StatusFilters)
+        {
+            <button type="button"
+                    role="tab"
+                    class="orders-status-tab @(selectedStatus == filter.Value ? "active" : null)"
+                    aria-selected="@(selectedStatus == filter.Value)"
+                    @onclick="() => SelectStatus(filter.Value)">
+                @filter.Label
+            </button>
+        }
     </div>
 
     @if (isLoading)
@@ -87,16 +83,24 @@
                 📦
             </div>
 
-            <h3>Bạn chưa có đơn hàng</h3>
-
-            <p>
-                Hãy khám phá sản phẩm và bắt đầu mua sắm.
-            </p>
-
-            <button class="app-button app-button-primary"
-                    @onclick="GoToProducts">
-                Khám phá sản phẩm
-            </button>
+            @if (HasActiveFilter)
+            {
+                <h3>Không có đơn phù hợp</h3>
+                <p>Thử trạng thái khác hoặc xóa từ khóa tìm kiếm.</p>
+                <button class="app-button app-button-secondary"
+                        @onclick="ClearFilters">
+                    Xóa bộ lọc
+                </button>
+            }
+            else
+            {
+                <h3>Bạn chưa có đơn hàng</h3>
+                <p>Hãy khám phá sản phẩm và bắt đầu mua sắm.</p>
+                <button class="app-button app-button-primary"
+                        @onclick="GoToProducts">
+                    Khám phá sản phẩm
+                </button>
+            }
 
         </div>
     }
@@ -175,7 +179,7 @@
                             <div class="order-product">
 
                                 <div class="order-product-icon">
-                                    📦
+                                    <img src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="@item.ProductName" />
                                 </div>
 
                                 <div class="order-product-info">
@@ -283,6 +287,21 @@
 
     private string selectedStatus = string.Empty;
 
+    private static readonly (string Value, string Label)[] StatusFilters =
+    [
+        ("", "Tất cả"),
+        ("pending", "Chờ shop xác nhận"),
+        ("confirmed", "Đã xác nhận"),
+        ("shipping", "Đang giao"),
+        ("awaiting_receipt", "Chờ nhận hàng"),
+        ("delivered", "Đã giao"),
+        ("cancelled", "Đã hủy")
+    ];
+
+    private bool HasActiveFilter =>
+        !string.IsNullOrWhiteSpace(selectedStatus)
+        || !string.IsNullOrWhiteSpace(searchText);
+
     private bool isLoading;
 
     private string? errorMessage;
@@ -343,6 +362,26 @@
     {
         currentPage = 1;
 
+        await LoadOrdersAsync();
+    }
+
+    private async Task SelectStatus(string status)
+    {
+        if (selectedStatus == status)
+        {
+            return;
+        }
+
+        selectedStatus = status;
+        currentPage = 1;
+        await LoadOrdersAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchText = string.Empty;
+        selectedStatus = string.Empty;
+        currentPage = 1;
         await LoadOrdersAsync();
     }
 
@@ -437,11 +476,11 @@
     {
         return status?.ToLowerInvariant() switch
         {
-            "pending" or "paid" => "Chờ xác nhận",
+            "pending" or "paid" => "Chờ shop xác nhận",
             "awaiting_payment" => "Chờ thanh toán",
-            "confirmed" => "Đã xác nhận",
-            "processing" => "Đang xử lý",
+            "confirmed" or "processing" => "Đã xác nhận",
             "shipping" or "shipped" => "Đang giao",
+            "awaiting_receipt" => "Chờ nhận hàng",
             "delivered" => "Đã giao",
             "completed" => "Hoàn thành",
             "cancelled" => "Đã hủy",
@@ -458,6 +497,7 @@
             "awaiting_payment" or "paid" => "status-pending",
             "processing" => "status-processing",
             "shipping" or "shipped" => "status-shipped",
+            "awaiting_receipt" => "status-awaiting",
             "delivered" => "status-delivered",
             "completed" => "status-completed",
             "cancelled" => "status-cancelled",

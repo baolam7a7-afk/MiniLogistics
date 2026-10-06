@@ -32,5 +32,7 @@ public class VoucherResponseDTO
 
     public string Status { get; set; } = null!;
 
+    public List<long> ProductIds { get; set; } = new();
+
     public DateTime CreatedAt { get; set; }
 }

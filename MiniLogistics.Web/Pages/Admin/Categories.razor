@@ -8,7 +8,7 @@
 <div class="seller-page-head">
     <div>
         <h1>Danh mục</h1>
-        <p>Tạo, sửa và xóa danh mục sản phẩm.</p>
+        <p>Nhóm sản phẩm trên sàn. Danh mục gốc không có danh mục cha. Danh mục con chọn cha trong danh sách.</p>
     </div>
 </div>
 
@@ -26,8 +26,14 @@
         <label class="seller-field">Slug
             <input class="seller-input" @bind="slug" />
         </label>
-        <label class="seller-field">Danh mục cha (để trống nếu là gốc)
-            <input class="seller-input" @bind="parentText" />
+        <label class="seller-field">Danh mục cha
+            <select class="seller-select" @bind="parentText">
+                <option value="">Không có — đây là danh mục gốc</option>
+                @foreach (var parent in items.Where(item => item.Id != editingId))
+                {
+                    <option value="@parent.Id">@parent.Name</option>
+                }
+            </select>
         </label>
         <label class="seller-field">
             <input type="checkbox" @bind="isActive" /> Đang dùng
@@ -70,7 +76,7 @@ else
                         <tr>
                             <td>@item.Name <span class="seller-muted">#@item.Id</span></td>
                             <td>@item.Slug</td>
-                            <td>@(item.ParentId?.ToString() ?? "—")</td>
+                            <td>@(items.FirstOrDefault(parent => parent.Id == item.ParentId)?.Name ?? "Gốc")</td>
                             <td>@(item.IsActive ? "Đang dùng" : "Ẩn")</td>
                             <td class="seller-actions">
                                 <button class="app-button app-button-secondary" @onclick="() => Edit(item)">Sửa</button>

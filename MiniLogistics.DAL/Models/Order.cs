@@ -18,9 +18,15 @@ public class Order
     public decimal Total { get; set; }
     public string PaymentMethod { get; set; } = null!;
     public string? Note { get; set; }
+    public string? CancelReason { get; set; }
     public DateTime PlacedAt { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
+    public long? ConfirmedByUserId { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public DateTime? CustomerConfirmedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public User Customer { get; set; } = null!;
+    public User? ConfirmedByUser { get; set; }
     public Shop Shop { get; set; } = null!;
     public Address ShippingAddress { get; set; } = null!;
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();

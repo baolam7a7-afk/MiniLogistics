@@ -10,6 +10,8 @@ public static class OrderStatuses
 
     public const string Shipping = "shipping";
 
+    public const string AwaitingReceipt = "awaiting_receipt";
+
     public const string Delivered = "delivered";
 
     public const string Cancelled = "cancelled";

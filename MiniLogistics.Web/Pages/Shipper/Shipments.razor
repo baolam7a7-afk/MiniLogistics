@@ -1,94 +1,133 @@
 @page "/shipper/shipments"
 @layout ShipperLayout
+@using MiniLogistics.Web.Components
+@using MiniLogistics.Web.Services.Product
 @using MiniLogistics.Web.Services.Seller
 @inject SellerApi Api
 @inject ShipperSession Session
+@inject ShipperOrderLiveService OrdersLive
+@implements IDisposable
 
 <PageTitle>Đơn giao hàng</PageTitle>
 
 <div class="shipper-head">
     <h1>Đơn giao</h1>
-    <p>Chỉ các shipment đã gán cho bạn. Tìm theo mã vận đơn hoặc mã đơn số.</p>
+    <p>Nhận đơn shop đã xác nhận, rồi xác nhận đã giao khi khách nhận được hàng.</p>
 </div>
 
-<div class="shipper-filters">
-    <input class="shipper-input" placeholder="Mã vận đơn hoặc mã đơn" @bind="search" />
-    <select class="shipper-select" @bind="status">
-        <option value="">Mọi trạng thái</option>
-        <option value="assigned">Chờ lấy hàng</option>
-        <option value="picked_up">Đã lấy hàng</option>
-        <option value="shipping">Đang giao</option>
-        <option value="delivered">Đã giao</option>
-    </select>
-    <button class="app-button app-button-primary" @onclick="Search">Lọc</button>
-</div>
-
-@if (!string.IsNullOrWhiteSpace(errorMessage))
+@if (!string.IsNullOrWhiteSpace(message))
 {
-    <div class="app-alert app-alert-danger">@errorMessage</div>
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
 }
 
 @if (isLoading)
 {
-    <p class="shipper-muted">Đang tải danh sách...</p>
-}
-else if (items.Count == 0)
-{
-    <div class="shipper-card">
-        <p>Chưa có đơn phù hợp. Đơn xuất hiện sau khi admin hoặc seller gán cho bạn.</p>
-    </div>
+    <p class="shipper-muted">Đang tải đơn hàng...</p>
 }
 else
 {
-    @foreach (var item in items)
-    {
-        <a class="shipper-card shipper-job" href="@($"/shipper/shipments/{item.Id}")">
-            <div class="shipper-row">
-                <strong>@(string.IsNullOrWhiteSpace(item.TrackingCode) ? $"Shipment #{item.Id}" : item.TrackingCode)</strong>
-                <span class="shipper-badge @ShipperText.Badge(item.Status)">@ShipperText.Status(item.Status)</span>
-            </div>
-            <span>Đơn #@item.OrderId</span>
-            <span class="shipper-muted">COD @SellerText.Money(item.CodAmount)</span>
-            <span class="shipper-muted">@SellerText.When(item.AssignedAt ?? item.CreatedAt)</span>
-        </a>
-    }
-
-    <div class="shipper-pager">
-        <button class="app-button app-button-secondary" disabled="@(pageIndex <= 1 || isLoading)" @onclick="Previous">Trước</button>
-        <span>Trang @pageIndex / @Math.Max(totalPages, 1)</span>
-        <button class="app-button app-button-secondary" disabled="@(pageIndex >= totalPages || isLoading)" @onclick="Next">Sau</button>
+    <div class="shipper-tabs">
+        <button type="button" class="@(tab == "open" ? "active" : null)" @onclick='() => tab = "open"'>
+            <strong>@available.Count</strong>
+            <span>Chờ nhận</span>
+        </button>
+        <button type="button" class="@(tab == "pending" ? "active" : null)" @onclick='() => tab = "pending"'>
+            <strong>@Pending.Count</strong>
+            <span>Chưa giao</span>
+        </button>
+        <button type="button" class="@(tab == "waiting" ? "active" : null)" @onclick='() => tab = "waiting"'>
+            <strong>@Waiting.Count</strong>
+            <span>Chờ khách xác nhận</span>
+        </button>
+        <button type="button" class="@(tab == "received" ? "active" : null)" @onclick='() => tab = "received"'>
+            <strong>@Received.Count</strong>
+            <span>Khách đã nhận</span>
+        </button>
     </div>
+
+    <p class="shipper-note">@TabNote</p>
+
+    @if (VisibleOrders.Count == 0)
+    {
+        <div class="shipper-card"><p>@EmptyText</p></div>
+    }
+    else
+    {
+        @foreach (var order in VisibleOrders)
+        {
+            <article class="shipper-card">
+                <div class="shipper-row">
+                    <strong>@order.OrderCode</strong>
+                    <span class="shipper-badge @BadgeClass(order.Status)">@SellerText.OrderStatus(order.Status)</span>
+                </div>
+                <p>Khách: <strong>@(order.CustomerName ?? "—")</strong> · @(order.CustomerPhone ?? "—")</p>
+                <p>Địa chỉ: @(order.ShippingAddressText ?? "—")</p>
+                <p>Shop: @(order.ShopName ?? "—") · Tổng @SellerText.Money(order.Total)</p>
+                @if (order.Items.Count > 0)
+                {
+                    <ul>
+                        @foreach (var item in order.Items)
+                        {
+                            <li class="shipper-line">
+                                <img src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="" />
+                                <span>@item.ProductName · @item.VariantName · SL @item.Quantity</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (tab == "open")
+                {
+                    <div class="shipper-actions">
+                        <button class="app-button app-button-primary" disabled="@isSaving" @onclick="() => Accept(order.Id)">Nhận đơn</button>
+                    </div>
+                }
+                else if (string.Equals(order.Status, "shipping", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="shipper-actions">
+                        <button class="app-button app-button-primary" disabled="@isSaving" @onclick="() => Deliver(order.Id)">Đã giao, chờ khách xác nhận</button>
+                    </div>
+                }
+            </article>
+        }
+    }
 }
 
 @code {
-    private List<ShipmentRecord> items = new();
-    private string search = "";
-    private string status = "";
-    private int pageIndex = 1;
-    private int totalPages = 1;
+    private List<SellerOrder> available = new();
+    private List<SellerOrder> mine = new();
+    private string tab = "open";
     private bool isLoading = true;
-    private string? errorMessage;
+    private bool isSaving;
+    private bool isError;
+    private string? message;
 
     protected override async Task OnInitializedAsync()
     {
+        OrdersLive.OrderClaimed += OnClaimedAsync;
         await Session.EnsureAsync();
+        await OrdersLive.EnsureConnectedAsync();
         await LoadAsync();
     }
 
-    private async Task Search()
+    public void Dispose() => OrdersLive.OrderClaimed -= OnClaimedAsync;
+
+    private Task OnClaimedAsync(OrderClaimedNotice notice)
     {
-        pageIndex = 1;
-        await LoadAsync();
-    }
+        return InvokeAsync(() =>
+        {
+            if (Session.Profile != null && notice.ShipperUserId == Session.Profile.Id)
+            {
+                return;
+            }
 
-    private Task Previous() => Go(pageIndex - 1);
-
-    private Task Next() => Go(pageIndex + 1);
-
-    private async Task Go(int page)
-    {
-        pageIndex = page;
-        await LoadAsync();
+            var removed = available.RemoveAll(order => order.Id == notice.OrderId);
+            if (removed > 0)
+            {
+                isError = true;
+                message = "Đơn hàng đã được shipper khác nhận.";
+                StateHasChanged();
+            }
+        });
     }
 
     private async Task LoadAsync()
@@ -100,43 +139,105 @@ else
         }
 
         isLoading = true;
-        var query = new List<string>
-        {
-            $"Page={pageIndex}",
-            "PageSize=10"
-        };
-        if (!string.IsNullOrWhiteSpace(status))
-        {
-            query.Add($"Status={Uri.EscapeDataString(status)}");
-        }
-
-        var term = search.Trim();
-        if (long.TryParse(term, out var orderId))
-        {
-            query.Add($"OrderId={orderId}");
-        }
-        else if (!string.IsNullOrWhiteSpace(term))
-        {
-            query.Add($"Search={Uri.EscapeDataString(term)}");
-        }
-
-        var result = await Api.GetAsync<PagedResult<ShipmentRecord>>(
-            "api/shipments/my?" + string.Join("&", query));
+        var ready = await Api.GetAsync<List<SellerOrder>>("api/orders/available");
+        var owned = await Api.GetAsync<List<SellerOrder>>("api/orders/delivering");
         isLoading = false;
-        if (result.StatusCode == 401)
+
+        if (!ready.Ok)
         {
-            return;
+            isError = true;
+            message = ready.Error ?? "Không tải được đơn chờ nhận.";
+            available = new();
+        }
+        else
+        {
+            available = ready.Data ?? new();
         }
 
-        if (!result.Ok || result.Data == null)
+        if (!owned.Ok)
         {
-            errorMessage = result.Error ?? "Không tải được danh sách giao hàng.";
-            items = new();
-            return;
+            isError = true;
+            message = owned.Error ?? message ?? "Không tải được đơn đang giao.";
+            mine = new();
         }
-
-        errorMessage = null;
-        items = result.Data.Items;
-        totalPages = result.Data.TotalPages;
+        else
+        {
+            mine = owned.Data ?? new();
+        }
     }
+
+    private async Task Accept(long id)
+    {
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{id}/accept");
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã nhận đơn thành công." : result.Error;
+        if (result.Ok)
+        {
+            tab = "pending";
+            await LoadAsync();
+        }
+    }
+
+    private async Task Deliver(long id)
+    {
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{id}/deliver");
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã giao. Đơn đang chờ khách xác nhận." : result.Error;
+        if (result.Ok)
+        {
+            tab = "waiting";
+            await LoadAsync();
+        }
+    }
+
+    private List<SellerOrder> Pending => mine.Where(IsPending).ToList();
+
+    private List<SellerOrder> Waiting => mine
+        .Where(order => string.Equals(order.Status, "awaiting_receipt", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<SellerOrder> Received => mine
+        .Where(order => string.Equals(order.Status, "delivered", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<SellerOrder> VisibleOrders => tab switch
+    {
+        "pending" => Pending,
+        "waiting" => Waiting,
+        "received" => Received,
+        _ => available
+    };
+
+    private string TabNote => tab switch
+    {
+        "pending" => "Đơn bạn đã nhận và chưa giao tới khách.",
+        "waiting" => "Bạn đã giao. Đơn đang chờ khách xác nhận đã nhận hàng.",
+        "received" => "Khách đã xác nhận nhận được hàng.",
+        _ => "Đơn shop đã xác nhận, chưa có shipper nhận."
+    };
+
+    private string EmptyText => tab switch
+    {
+        "pending" => "Không có đơn nào chưa giao.",
+        "waiting" => "Không có đơn nào đang chờ khách xác nhận.",
+        "received" => "Chưa có đơn nào khách đã nhận.",
+        _ => "Chưa có đơn nào đang chờ shipper nhận."
+    };
+
+    private static bool IsPending(SellerOrder order) =>
+        string.Equals(order.Status, "shipping", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(order.Status, "confirmed", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(order.Status, "processing", StringComparison.OrdinalIgnoreCase);
+
+    private static string BadgeClass(string? status) => status?.Trim().ToLowerInvariant() switch
+    {
+        "delivered" => "ok",
+        "awaiting_receipt" => "warn",
+        "shipping" => "warn",
+        _ => ""
+    };
 }

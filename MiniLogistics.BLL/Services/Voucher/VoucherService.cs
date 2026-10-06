@@ -5,6 +5,7 @@ using MiniLogistics.DAL.UnitOfWork;
 
 using VoucherModel =
     MiniLogistics.DAL.Models.Voucher;
+using MiniLogistics.DAL.Models;
 
 namespace MiniLogistics.BLL.Services.Voucher;
 
@@ -136,6 +137,7 @@ public class VoucherService : IVoucherService
         // PAGINATION
         // =================================================
 
+        await AttachProductIds(result);
         return CreatePagedResponse(
             result,
             request);
@@ -250,6 +252,7 @@ public class VoucherService : IVoucherService
                 .OrderByDescending(x => x.Id)
                 .ToList();
 
+        await AttachProductIds(result);
         return CreatePagedResponse(
             result,
             request);
@@ -542,7 +545,9 @@ public class VoucherService : IVoucherService
         await _unitOfWork
             .SaveChangesAsync();
 
-        return MapToResponseDTO(voucher);
+        await SaveProductLinksAsync(voucher, request.ProductIds, actorRole);
+
+        return await WithProducts(voucher);
     }
 
 
@@ -1163,6 +1168,87 @@ public class VoucherService : IVoucherService
             CreatedAt =
                 voucher.CreatedAt
         };
+    }
+
+    private async Task<VoucherResponseDTO> WithProducts(VoucherModel voucher)
+    {
+        var dto = MapToResponseDTO(voucher);
+        dto.ProductIds = await ProductIdsOf(voucher.Id);
+        return dto;
+    }
+
+    private async Task<List<long>> ProductIdsOf(long voucherId)
+    {
+        var links = await _unitOfWork.VoucherProducts
+            .FindAsync(link => link.VoucherId == voucherId);
+        return links.Select(link => link.ProductId).Distinct().ToList();
+    }
+
+    private async Task AttachProductIds(List<VoucherResponseDTO> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var ids = items.Select(item => item.Id).ToList();
+        var links = await _unitOfWork.VoucherProducts
+            .FindAsync(link => ids.Contains(link.VoucherId));
+        var grouped = links
+            .GroupBy(link => link.VoucherId)
+            .ToDictionary(group => group.Key, group => group.Select(link => link.ProductId).Distinct().ToList());
+        foreach (var item in items)
+        {
+            item.ProductIds = grouped.TryGetValue(item.Id, out var productIds)
+                ? productIds
+                : new List<long>();
+        }
+    }
+
+    private async Task SaveProductLinksAsync(
+        VoucherModel voucher,
+        IEnumerable<long>? productIds,
+        string actorRole)
+    {
+        if (!string.Equals(voucher.Scope, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var ids = (productIds ?? Array.Empty<long>())
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            throw new BadRequestException(
+                "Chọn ít nhất một sản phẩm để áp dụng voucher.");
+        }
+
+        if (!voucher.ShopId.HasValue)
+        {
+            throw new BadRequestException(
+                "Voucher shop chưa có cửa hàng.");
+        }
+
+        foreach (var productId in ids)
+        {
+            var product = await _unitOfWork.Products.GetByIdAsync(productId);
+            if (product == null || product.ShopId != voucher.ShopId.Value)
+            {
+                throw new BadRequestException(
+                    "Sản phẩm không thuộc cửa hàng của voucher.");
+            }
+
+            await _unitOfWork.VoucherProducts.AddAsync(new VoucherProduct
+            {
+                VoucherId = voucher.Id,
+                ProductId = productId
+            });
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+        _ = actorRole;
     }
 
 

@@ -31,6 +31,7 @@ using MiniLogistics.BLL.Services.ReportSnapshot;
 using MiniLogistics.BLL.Services.Address;
 using MiniLogistics.BLL.Services.Shop;
 using MiniLogistics.BLL.Services.Voucher;
+using MiniLogistics.BLL.Services.OrderVoucher;
 using MiniLogistics.BLL.Services.SellerDashboard;
 using MiniLogistics.BLL.Services.AdminDashboard;
 using MiniLogistics.BLL.Services.UserVoucher;
@@ -259,6 +260,10 @@ builder.Services.AddScoped<
     IVoucherService,
     VoucherService>();
 
+builder.Services.AddScoped<
+    IOrderVoucherService,
+    OrderVoucherService>();
+
 
 // =====================================================
 // 17. REVIEW
@@ -331,6 +336,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IShopService,
     ShopService>();
+
+builder.Services.AddScoped<
+    MiniLogistics.BLL.Services.Referral.IReferralService,
+    MiniLogistics.BLL.Services.Referral.ReferralService>();
 
 
 // =====================================================
@@ -502,7 +511,8 @@ builder.Services.AddCors(
                     .WithOrigins(
                         allowedOrigins)
                     .AllowAnyHeader()
-                    .AllowAnyMethod();
+                    .AllowAnyMethod()
+                    .AllowCredentials();
             });
     });
 

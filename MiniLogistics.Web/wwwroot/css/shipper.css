@@ -202,6 +202,46 @@
     min-height: 88px;
 }
 
+.shipper-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.shipper-tabs button {
+    min-height: 64px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: white;
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+}
+
+.shipper-tabs button.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.shipper-tabs strong {
+    display: block;
+    font-size: 20px;
+}
+
+.shipper-tabs span {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.shipper-note {
+    margin: 0 0 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
 .shipper-actions {
     display: grid;
     gap: 8px;

@@ -55,4 +55,8 @@ public interface IUserService
     Task<UserResponseDTO> UpdateMyProfileAsync(
         long userId,
         UpdateMyProfileDTO request);
+
+    Task<string?> ReplaceAvatarUrlAsync(
+        long userId,
+        string avatarUrl);
 }

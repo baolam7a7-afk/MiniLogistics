@@ -1,10 +1,15 @@
 @page "/orders/{Id:long}"
 @layout CustomerLayout
 
+@using MiniLogistics.Web.Components
 @using MiniLogistics.Web.Models.Order
+@using MiniLogistics.Web.Models.Review
 @using MiniLogistics.Web.Services.Order
+@using MiniLogistics.Web.Services.Product
+@using MiniLogistics.Web.Services.Review
 
 @inject OrderService OrderService
+@inject ReviewService ReviewService
 @inject NavigationManager Navigation
 
 <PageTitle>Chi tiết đơn hàng</PageTitle>
@@ -86,6 +91,15 @@
     }
     else
     {
+        <section class="order-detail-card" style="margin-bottom:20px;padding:16px 18px">
+            <h2 style="margin:0 0 4px">Tiến trình đơn hàng</h2>
+            <OrderFlow Status="@order.Status" CancelReason="@order.CancelReason" />
+            @if (string.Equals(order.Status, "awaiting_receipt", StringComparison.OrdinalIgnoreCase))
+            {
+                <p>Đơn hàng đang chờ bạn xác nhận đã nhận hàng.</p>
+            }
+        </section>
+
         <!-- ORDER INFORMATION -->
 
         <div class="order-detail-grid">
@@ -131,6 +145,22 @@
                             </strong>
                         </div>
 
+                        @if (!string.IsNullOrWhiteSpace(order.ShippingAddressText))
+                        {
+                            <div>
+                                <span>Địa chỉ giao</span>
+                                <strong>@order.ShippingAddressText</strong>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(order.ShopName))
+                        {
+                            <div>
+                                <span>Cửa hàng</span>
+                                <strong>@order.ShopName</strong>
+                            </div>
+                        }
+
                     </div>
 
                 </section>
@@ -156,7 +186,7 @@
                             <div class="order-detail-item">
 
                                 <div class="order-detail-product-icon">
-                                    📦
+                                    <img src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="@item.ProductName" />
                                 </div>
 
                                 <div class="order-detail-product-info">
@@ -174,6 +204,42 @@
                                         Số lượng:
                                         @item.Quantity
                                     </span>
+                                    @if (string.Equals(order.Status, "delivered", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <div class="order-item-review">
+                                            <div class="order-review-product">
+                                                <img src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="@item.ProductName" />
+                                                <div>
+                                                    <strong>@item.ProductName</strong>
+                                                    <span>@(string.IsNullOrWhiteSpace(item.VariantName) ? "Sản phẩm này" : item.VariantName)</span>
+                                                </div>
+                                            </div>
+                                            @if (editingItemId == item.Id)
+                                            {
+                                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                                                    @for (var star = 1; star <= 5; star++)
+                                                    {
+                                                        var value = star;
+                                                        <button type="button" class="app-button @(draftRating == value ? "app-button-primary" : "app-button-secondary")" @onclick="() => draftRating = value">@value sao</button>
+                                                    }
+                                                </div>
+                                                <textarea @bind="draftContent" maxlength="1000" placeholder="Nhận xét (không bắt buộc)" style="width:100%;margin-top:8px"></textarea>
+                                                <button type="button" class="app-button app-button-primary" disabled="@isSavingReview" @onclick="() => SaveReview(item)">
+                                                    @(FindReview(item.Id) == null ? "Gửi đánh giá" : "Lưu đánh giá")
+                                                </button>
+                                            }
+                                            else if (FindReview(item.Id) is ReviewResponse existing)
+                                            {
+                                                <p>@Stars(existing.Rating)</p>
+                                                <p>@(string.IsNullOrWhiteSpace(existing.Content) ? "Không có nhận xét." : existing.Content)</p>
+                                                <button type="button" class="app-button app-button-secondary" @onclick="() => BeginEdit(existing)">Đánh giá lại</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="app-button app-button-secondary" @onclick="() => BeginNew(item.Id)">Đánh giá sản phẩm</button>
+                                            }
+                                        </div>
+                                    }
 
                                 </div>
 
@@ -338,6 +404,15 @@
 
                     <div class="order-detail-actions">
 
+                        @if (CanConfirmReceipt(order.Status))
+                        {
+                            <button class="app-button app-button-primary"
+                                    disabled="@isConfirming"
+                                    @onclick="OpenReceipt">
+                                Đã nhận được hàng
+                            </button>
+                        }
+
                         @if (CanCancel(order.Status))
                         {
                             <button class="app-button app-button-danger"
@@ -377,6 +452,20 @@
 
 </div>
 
+@if (showReceipt)
+{
+    <div class="order-modal-backdrop">
+        <div class="order-modal">
+            <h3>Xác nhận nhận hàng</h3>
+            <p>Bạn có chắc chắn đã nhận được hàng?</p>
+            <div class="order-modal-actions">
+                <button class="app-button app-button-secondary" @onclick="CloseReceipt">Chưa</button>
+                <button class="app-button app-button-primary" disabled="@isConfirming" @onclick="ConfirmReceiptAsync">Đã nhận được hàng</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
 
     [Parameter]
@@ -388,7 +477,21 @@
 
     private bool isCancelling;
 
+    private bool isConfirming;
+
+    private bool showReceipt;
+
     private string? errorMessage;
+
+    private List<ReviewResponse> reviews = new();
+
+    private long? editingItemId;
+
+    private int draftRating = 5;
+
+    private string draftContent = "";
+
+    private bool isSavingReview;
 
     protected override async Task OnInitializedAsync()
     {
@@ -404,6 +507,13 @@
         {
             order =
                 await OrderService.GetOrderByIdAsync(Id);
+
+            if (order != null &&
+                string.Equals(order.Status, "delivered", StringComparison.OrdinalIgnoreCase))
+            {
+                var mine = await ReviewService.GetMyReviewsAsync(page: 1, pageSize: 100);
+                reviews = mine?.Items ?? new();
+            }
 
             if (order == null)
             {
@@ -457,6 +567,95 @@
         }
     }
 
+    private void OpenReceipt() => showReceipt = true;
+
+    private void CloseReceipt() => showReceipt = false;
+
+    private async Task ConfirmReceiptAsync()
+    {
+        if (order == null || isConfirming)
+        {
+            return;
+        }
+
+        isConfirming = true;
+        try
+        {
+            var updated = await OrderService.ConfirmReceivedAsync(order.Id);
+            showReceipt = false;
+            order = updated ?? order;
+            if (updated == null)
+            {
+                await LoadOrderAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            showReceipt = false;
+        }
+        finally
+        {
+            isConfirming = false;
+        }
+    }
+
+    private ReviewResponse? FindReview(long orderItemId) =>
+        reviews.FirstOrDefault(review => review.OrderItemId == orderItemId);
+
+    private void BeginNew(long orderItemId)
+    {
+        editingItemId = orderItemId;
+        draftRating = 5;
+        draftContent = "";
+    }
+
+    private void BeginEdit(ReviewResponse review)
+    {
+        editingItemId = review.OrderItemId;
+        draftRating = review.Rating;
+        draftContent = review.Content ?? "";
+    }
+
+    private async Task SaveReview(OrderItem item)
+    {
+        if (order == null || isSavingReview)
+        {
+            return;
+        }
+
+        isSavingReview = true;
+        errorMessage = null;
+        var content = string.IsNullOrWhiteSpace(draftContent) ? null : draftContent.Trim();
+        var existing = FindReview(item.Id);
+        var ok = existing == null
+            ? await ReviewService.CreateReviewAsync(new CreateReviewRequest
+            {
+                OrderId = order.Id,
+                OrderItemId = item.Id,
+                ProductId = item.ProductId,
+                Rating = draftRating,
+                Content = content
+            })
+            : await ReviewService.UpdateReviewAsync(existing.Id, new UpdateReviewRequest
+            {
+                Rating = draftRating,
+                Content = content
+            });
+        isSavingReview = false;
+        if (!ok)
+        {
+            errorMessage = "Không lưu được đánh giá.";
+            return;
+        }
+
+        editingItemId = null;
+        await LoadOrderAsync();
+    }
+
+    private static string Stars(int value) =>
+        new string('★', Math.Clamp(value, 0, 5)) + new string('☆', Math.Max(0, 5 - value));
+
     private void GoBack()
     {
         Navigation.NavigateTo("/orders");
@@ -470,6 +669,14 @@
     private void GoToProducts()
     {
         Navigation.NavigateTo("/products");
+    }
+
+    private static bool CanConfirmReceipt(string? status)
+    {
+        return string.Equals(
+            status,
+            "awaiting_receipt",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CanCancel(string? status)
@@ -489,12 +696,12 @@
     {
         return status?.ToLowerInvariant() switch
         {
-            "pending" or "paid" => "Chờ xác nhận",
+            "pending" or "paid" => "Chờ shop xác nhận",
             "awaiting_payment" => "Chờ thanh toán",
-            "confirmed" => "Đã xác nhận",
-            "processing" => "Đang xử lý",
+            "confirmed" or "processing" => "Đã xác nhận",
             "shipping" or "shipped" => "Đang giao",
-            "delivered" => "Đã giao",
+            "awaiting_receipt" => "Chờ xác nhận nhận hàng",
+            "delivered" => "Đã giao thành công",
             "completed" => "Hoàn thành",
             "cancelled" => "Đã hủy",
             _ => status ?? "Không xác định"
@@ -509,7 +716,7 @@
             "confirmed" => "status-confirmed",
             "awaiting_payment" or "paid" => "status-pending",
             "processing" => "status-processing",
-            "shipping" or "shipped" => "status-shipped",
+            "shipping" or "shipped" or "awaiting_receipt" => "status-shipped",
             "delivered" => "status-delivered",
             "completed" => "status-completed",
             "cancelled" => "status-cancelled",

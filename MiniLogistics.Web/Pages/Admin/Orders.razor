@@ -8,7 +8,7 @@
 <div class="seller-page-head">
     <div>
         <h1>Đơn hàng</h1>
-        <p>Toàn bộ đơn trên sàn. Admin chỉ được xác nhận, chuyển xử lý hoặc hủy ở các bước đầu. Giao hàng thuộc shipper.</p>
+        <p>Toàn bộ đơn trên sàn. Admin xác nhận hoặc hủy khi đơn đang chờ shop. Giao hàng thuộc shipper, hoàn tất thuộc khách.</p>
     </div>
 </div>
 
@@ -16,17 +16,20 @@
     <input class="seller-input" placeholder="Mã đơn" @bind="search" />
     <select class="seller-select" @bind="status">
         <option value="">Mọi trạng thái</option>
-        <option value="pending">Chờ xác nhận</option>
+        <option value="pending">Chờ shop xác nhận</option>
         <option value="confirmed">Đã xác nhận</option>
-        <option value="processing">Đang xử lý</option>
         <option value="shipping">Đang giao</option>
-        <option value="delivered">Đã giao</option>
+        <option value="awaiting_receipt">Chờ khách xác nhận</option>
+        <option value="delivered">Đã giao thành công</option>
         <option value="cancelled">Đã hủy</option>
         <option value="awaiting_payment">Chờ thanh toán</option>
         <option value="paid">Đã thanh toán</option>
     </select>
+    <input class="seller-input" type="date" @bind="fromDate" />
+    <input class="seller-input" type="date" @bind="toDate" />
     <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
 </div>
+<p class="seller-muted">Lọc theo ngày áp dụng trên trang đang xem, cùng cách với trang đơn của seller.</p>
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
@@ -37,7 +40,7 @@
 {
     <div class="seller-loading">Đang tải đơn hàng...</div>
 }
-else if (items.Count == 0)
+else if (!visible.Any())
 {
     <div class="seller-empty">Không có đơn hàng phù hợp.</div>
 }
@@ -51,6 +54,7 @@ else
                         <th>Mã</th>
                         <th>Shop</th>
                         <th>Khách</th>
+                        <th>Điện thoại</th>
                         <th>Tổng</th>
                         <th>Trạng thái</th>
                         <th>Đặt lúc</th>
@@ -58,12 +62,13 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var order in items)
+                    @foreach (var order in visible)
                     {
                         <tr>
                             <td>@order.OrderCode</td>
-                            <td>#@order.ShopId</td>
-                            <td>#@order.CustomerId</td>
+                            <td>@(order.ShopName ?? $"#{order.ShopId}")</td>
+                            <td>@(order.CustomerName ?? $"#{order.CustomerId}")</td>
+                            <td>@(order.CustomerPhone ?? "—")</td>
                             <td>@SellerText.Money(order.Total)</td>
                             <td><span class="seller-badge">@SellerText.OrderStatus(order.Status)</span></td>
                             <td>@SellerText.When(order.PlacedAt)</td>
@@ -83,7 +88,27 @@ else
     private int totalPages;
     private string search = "";
     private string status = "";
+    private DateTime? fromDate;
+    private DateTime? toDate;
     private bool isLoading = true;
+
+    private IEnumerable<SellerOrder> visible => items.Where(order =>
+    {
+        var day = order.PlacedAt.Kind == DateTimeKind.Utc
+            ? order.PlacedAt.ToLocalTime().Date
+            : order.PlacedAt.Date;
+        if (fromDate is { Year: >= 2000 } from && day < from.Date)
+        {
+            return false;
+        }
+
+        if (toDate is { Year: >= 2000 } to && day > to.Date)
+        {
+            return false;
+        }
+
+        return true;
+    });
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()

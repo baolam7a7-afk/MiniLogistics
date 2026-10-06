@@ -27,7 +27,10 @@ public class UserVoucherResponseDTO
     public decimal? MinOrderValue { get; set; }
     public DateTime StartAt { get; set; }
     public DateTime EndAt { get; set; }
+    public int? UsageLimit { get; set; }
+    public int UsedCount { get; set; }
     public string Status { get; set; } = string.Empty;
+    public List<long> ProductIds { get; set; } = new();
     public DateTime ClaimedAt { get; set; }
 }
 
@@ -57,7 +60,9 @@ public class UserVoucherService : IUserVoucherService
             item.Status = "expired";
         }
 
-        return items.Select(Map);
+        var result = items.Select(Map).ToList();
+        await AttachProductIds(result.Select(item => (item.VoucherId, item.ProductIds)));
+        return result;
     }
 
     public async Task<IEnumerable<VoucherResponseDTO>> GetClaimableAsync(long userId, long? shopId = null)
@@ -85,8 +90,7 @@ public class UserVoucherService : IUserVoucherService
         }
 
         var list = await query.OrderByDescending(v => v.Id).Take(50).ToListAsync();
-
-        return list.Select(v => new VoucherResponseDTO
+        var result = list.Select(v => new VoucherResponseDTO
         {
             Id = v.Id,
             Scope = v.Scope,
@@ -104,7 +108,30 @@ public class UserVoucherService : IUserVoucherService
             EndAt = v.EndAt,
             Status = v.Status,
             CreatedAt = v.CreatedAt
-        });
+        }).ToList();
+        await AttachProductIds(result.Select(item => (item.Id, item.ProductIds)));
+        return result;
+    }
+
+    private async Task AttachProductIds(IEnumerable<(long VoucherId, List<long> ProductIds)> items)
+    {
+        var list = items.ToList();
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        var ids = list.Select(item => item.VoucherId).ToList();
+        var links = await _uow.VoucherProducts.Query()
+            .AsNoTracking()
+            .Where(link => ids.Contains(link.VoucherId))
+            .ToListAsync();
+        foreach (var item in list)
+        {
+            item.ProductIds.AddRange(links
+                .Where(link => link.VoucherId == item.VoucherId)
+                .Select(link => link.ProductId));
+        }
     }
 
     public async Task<UserVoucherResponseDTO> ClaimAsync(long userId, long voucherId)
@@ -161,6 +188,8 @@ public class UserVoucherService : IUserVoucherService
         MinOrderValue = x.Voucher?.MinOrderValue,
         StartAt = x.Voucher?.StartAt ?? default,
         EndAt = x.Voucher?.EndAt ?? default,
+        UsageLimit = x.Voucher?.UsageLimit,
+        UsedCount = x.Voucher?.UsedCount ?? 0,
         Status = x.Status,
         ClaimedAt = x.ClaimedAt
     };

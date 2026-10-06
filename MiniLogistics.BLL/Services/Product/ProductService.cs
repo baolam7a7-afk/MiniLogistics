@@ -86,6 +86,7 @@ public class ProductService : IProductService
 
         var query = _unitOfWork.Products.Query()
             .AsNoTracking()
+            .Include(p => p.Shop)
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)
@@ -131,6 +132,7 @@ public class ProductService : IProductService
     {
         var product = await _unitOfWork.Products.Query()
             .AsNoTracking()
+            .Include(p => p.Shop)
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)
@@ -176,6 +178,7 @@ public class ProductService : IProductService
 
         var products = await _unitOfWork.Products.Query()
             .AsNoTracking()
+            .Include(p => p.Shop)
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)
@@ -206,6 +209,7 @@ public class ProductService : IProductService
 
         var products = await _unitOfWork.Products.Query()
             .AsNoTracking()
+            .Include(p => p.Shop)
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)
@@ -607,6 +611,86 @@ public class ProductService : IProductService
         return true;
     }
 
+    public async Task<ProductResponseDTO?> SetStatusAsync(long id, string status)
+    {
+        var allowed = new[] { "active", "draft", "inactive" };
+        var normalized = status?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized) || !allowed.Contains(normalized))
+        {
+            throw new BadRequestException("Trạng thái sản phẩm không hợp lệ.");
+        }
+
+        var product = await _unitOfWork.Products.Query()
+            .FirstOrDefaultAsync(item => item.Id == id);
+        if (product == null)
+        {
+            return null;
+        }
+
+        product.Status = normalized;
+        product.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync();
+        return await GetByIdAsync(id);
+    }
+
+    public async Task<ProductResponseDTO?> AdminEditAsync(long id, AdminProductEditDTO request)
+    {
+        if (request == null)
+        {
+            throw new BadRequestException("Request không được null.");
+        }
+
+        var name = request.Name?.Trim() ?? "";
+        if (name.Length is 0 or > 300)
+        {
+            throw new BadRequestException("Tên sản phẩm không hợp lệ.");
+        }
+
+        var status = request.Status?.Trim().ToLowerInvariant();
+        if (status is not ("active" or "draft" or "inactive"))
+        {
+            throw new BadRequestException("Trạng thái sản phẩm không hợp lệ.");
+        }
+
+        var product = await _unitOfWork.Products.Query()
+            .FirstOrDefaultAsync(item => item.Id == id);
+        if (product == null)
+        {
+            return null;
+        }
+
+        product.Name = name;
+        product.Description = string.IsNullOrWhiteSpace(request.Description)
+            ? null
+            : request.Description.Trim();
+        product.Status = status;
+        product.UpdatedAt = DateTime.UtcNow;
+
+        foreach (var edit in request.Variants ?? new())
+        {
+            if (edit.Price < 0)
+            {
+                throw new BadRequestException("Giá không hợp lệ.");
+            }
+
+            var variantName = edit.VariantName?.Trim() ?? "";
+            if (variantName.Length is 0 or > 300)
+            {
+                throw new BadRequestException("Tên biến thể không hợp lệ.");
+            }
+
+            var variant = await _unitOfWork.ProductVariants.Query()
+                .FirstOrDefaultAsync(item => item.Id == edit.Id && item.ProductId == id)
+                ?? throw new BadRequestException("Biến thể không thuộc sản phẩm.");
+            variant.VariantName = variantName;
+            variant.Price = edit.Price;
+            variant.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+        return await GetByIdAsync(id);
+    }
+
 
     // =====================================================
     // CHECK SHOP
@@ -804,6 +888,7 @@ public class ProductService : IProductService
         {
             Id = product.Id,
             ShopId = product.ShopId,
+            ShopName = product.Shop?.Name,
             CategoryId = product.CategoryId,
             CategoryName = product.Category?.Name,
             Name = product.Name,

@@ -142,7 +142,9 @@ public class ShopController : ControllerBase
         var result =
             await _shopService.CreateAsync(
                 userId,
-                request);
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString());
 
         return CreatedAtAction(
             nameof(GetById),

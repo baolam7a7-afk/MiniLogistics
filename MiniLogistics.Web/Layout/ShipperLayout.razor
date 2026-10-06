@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject ShipperSession Session
+@inject ShipperOrderLiveService OrdersLive
 @inject TokenStorageService TokenStorage
 @inject AuthStateService AuthState
 @inject NavigationManager Navigation
@@ -42,6 +43,10 @@ else
         <div>
             <header class="shipper-top">
                 <a href="/shipper">
+                    @if (!string.IsNullOrWhiteSpace(Session.Profile.AvatarUrl))
+                    {
+                        <img src="@Session.Profile.AvatarUrl" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />
+                    }
                     MiniLogistics
                     <span>@(Session.Profile.FullName ?? Session.Profile.Email)</span>
                 </a>
@@ -65,6 +70,10 @@ else
     {
         Session.UiChanged += StateHasChanged;
         await Session.EnsureAsync();
+        if (Session.Profile != null)
+        {
+            await OrdersLive.EnsureConnectedAsync();
+        }
     }
 
     private async Task Logout()

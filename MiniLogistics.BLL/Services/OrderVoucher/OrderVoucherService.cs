@@ -94,15 +94,16 @@ public class OrderVoucherService : IOrderVoucherService
                 // =========================================
 
                 var existingOrderVouchers =
-                    await _unitOfWork.OrderVouchers
+                    (await _unitOfWork.OrderVouchers
                         .FindAsync(
                             x =>
-                                x.OrderId == order.Id);
+                                x.OrderId == order.Id))
+                    .ToList();
 
-                if (existingOrderVouchers.Any())
+                if (existingOrderVouchers.Count >= 2)
                 {
                     throw new BadRequestException(
-                        "Order này đã có Voucher.");
+                        "Mỗi đơn chỉ được dùng tối đa 2 voucher: 1 của admin và 1 của shop.");
                 }
 
 
@@ -191,6 +192,23 @@ public class OrderVoucherService : IOrderVoucherService
                         "Scope của Voucher không hợp lệ.");
                 }
 
+                if (existingOrderVouchers.Count > 0)
+                {
+                    var usedIds = existingOrderVouchers
+                        .Select(item => item.VoucherId)
+                        .ToList();
+                    var used = await _unitOfWork.Vouchers
+                        .FindAsync(item => usedIds.Contains(item.Id));
+                    if (used.Any(item =>
+                            string.Equals(item.Scope, voucher.Scope, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        throw new BadRequestException(
+                            voucher.Scope == "platform"
+                                ? "Chỉ được chọn 1 voucher của admin."
+                                : "Chỉ được chọn 1 voucher của shop.");
+                    }
+                }
+
 
                 // =========================================
                 // 13. CHECK SHOP
@@ -209,6 +227,32 @@ public class OrderVoucherService : IOrderVoucherService
                         throw new BadRequestException(
                             "Voucher không áp dụng cho Shop của Order.");
                     }
+                }
+
+                var orderItems =
+                    await _unitOfWork.OrderItems
+                        .FindAsync(item => item.OrderId == order.Id);
+                var productLinks =
+                    await _unitOfWork.VoucherProducts
+                        .FindAsync(link => link.VoucherId == voucher.Id);
+                var eligibleSubtotal = order.Subtotal;
+                var limitedToProducts =
+                    voucher.Scope == "shop" && productLinks.Any();
+                if (limitedToProducts)
+                {
+                    var allowed = productLinks
+                        .Select(link => link.ProductId)
+                        .ToHashSet();
+                    var matched = orderItems
+                        .Where(item => allowed.Contains(item.ProductId))
+                        .ToList();
+                    if (matched.Count == 0)
+                    {
+                        throw new BadRequestException(
+                            "Voucher này chỉ giảm giá cho một số sản phẩm. Đơn hàng không có sản phẩm đó.");
+                    }
+
+                    eligibleSubtotal = matched.Sum(item => item.LineTotal);
                 }
 
 
@@ -240,7 +284,7 @@ public class OrderVoucherService : IOrderVoucherService
                 if (voucher.DiscountType == "percent")
                 {
                     discountAmount =
-                        order.Subtotal
+                        eligibleSubtotal
                         * voucher.DiscountValue
                         / 100m;
 
@@ -280,18 +324,26 @@ public class OrderVoucherService : IOrderVoucherService
                 // 16. KHÔNG CHO GIẢM QUÁ SUBTOTAL
                 // =========================================
 
-                if (discountAmount >
-                    order.Subtotal)
+                var discountCap = limitedToProducts
+                    ? eligibleSubtotal
+                    : order.Subtotal;
+                if (discountAmount > discountCap)
                 {
-                    discountAmount =
-                        order.Subtotal;
+                    discountAmount = discountCap;
+                }
+
+                var alreadyDiscounted = existingOrderVouchers.Sum(item => item.DiscountAmount);
+                var room = order.Subtotal - alreadyDiscounted;
+                if (discountAmount > room)
+                {
+                    discountAmount = room;
                 }
 
 
                 if (discountAmount <= 0)
                 {
                     throw new BadRequestException(
-                        "DiscountAmount phải lớn hơn 0.");
+                        "Đơn đã được giảm tối đa, không áp thêm voucher này.");
                 }
 
 
@@ -325,7 +377,7 @@ public class OrderVoucherService : IOrderVoucherService
                 // =========================================
 
                 order.DiscountTotal =
-                    discountAmount;
+                    alreadyDiscounted + discountAmount;
 
 
                 // =========================================

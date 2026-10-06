@@ -43,7 +43,7 @@
                 {
                     <span class="product-price">@FormatPrice(Product.MinPrice.Value)</span>
                 }
-                <span class="product-shop">Shop #@Product.ShopId</span>
+                <span class="product-shop">@ShopLabel</span>
             </div>
             <a href="@($"/products/{Product.Id}")"
                class="app-button app-button-primary app-button-sm"
@@ -62,6 +62,11 @@
         string.IsNullOrWhiteSpace(Product.Name)
             ? "P"
             : Product.Name.Trim()[0].ToString().ToUpperInvariant();
+
+    private string ShopLabel =>
+        string.IsNullOrWhiteSpace(Product.ShopName)
+            ? $"Shop #{Product.ShopId}"
+            : Product.ShopName;
 
     private string StatusText =>
         Product.Status?.Trim().ToLowerInvariant() switch

@@ -11,59 +11,53 @@ public class TokenStorageService
         _jsRuntime = jsRuntime;
     }
 
-    // =========================================================
-    // SAVE TOKENS
-    // =========================================================
+    public int Version { get; private set; }
 
     public async Task SetTokensAsync(
         string accessToken,
         string refreshToken)
     {
+        Version++;
         await _jsRuntime.InvokeVoidAsync(
-            "localStorage.setItem",
+            "sessionStorage.setItem",
             "accessToken",
             accessToken);
-
         await _jsRuntime.InvokeVoidAsync(
-            "localStorage.setItem",
+            "sessionStorage.setItem",
             "refreshToken",
             refreshToken);
+        await RemoveSharedCopiesAsync();
     }
-
-    // =========================================================
-    // GET ACCESS TOKEN
-    // =========================================================
 
     public async Task<string?> GetAccessTokenAsync()
     {
         return await _jsRuntime.InvokeAsync<string?>(
-            "localStorage.getItem",
+            "sessionStorage.getItem",
             "accessToken");
     }
-
-    // =========================================================
-    // GET REFRESH TOKEN
-    // =========================================================
 
     public async Task<string?> GetRefreshTokenAsync()
     {
         return await _jsRuntime.InvokeAsync<string?>(
-            "localStorage.getItem",
+            "sessionStorage.getItem",
             "refreshToken");
     }
 
-    // =========================================================
-    // CLEAR
-    // =========================================================
-
     public async Task ClearAsync()
     {
+        Version++;
         await _jsRuntime.InvokeVoidAsync(
-            "localStorage.removeItem",
+            "sessionStorage.removeItem",
             "accessToken");
-
         await _jsRuntime.InvokeVoidAsync(
-            "localStorage.removeItem",
+            "sessionStorage.removeItem",
             "refreshToken");
+        await RemoveSharedCopiesAsync();
+    }
+
+    private async Task RemoveSharedCopiesAsync()
+    {
+        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "accessToken");
+        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
     }
 }

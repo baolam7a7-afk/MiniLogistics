@@ -3,8 +3,10 @@
 
 @using MiniLogistics.Web.Models.Cart
 @using MiniLogistics.Web.Services.Cart
+@using MiniLogistics.Web.Services.Product
 
 @inject CartService CartService
+@inject CheckoutSelection CheckoutSelection
 @inject NavigationManager NavigationManager
 
 <PageTitle>Giỏ hàng</PageTitle>
@@ -101,8 +103,13 @@
                         Sản phẩm
                     </h2>
 
+                    <label>
+                        <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" />
+                        Chọn tất cả
+                    </label>
+
                     <span>
-                        @cart.Items.Count sản phẩm
+                        @SelectedItems.Count() / @cart.Items.Count sản phẩm
                     </span>
 
                 </div>
@@ -112,10 +119,26 @@
                 {
                     <div class="cart-item">
 
+                        <label class="cart-item-check">
+                            <input type="checkbox"
+                                   checked="@selectedIds.Contains(item.Id)"
+                                   @onchange="args => ToggleItem(item.Id, args)" />
+                        </label>
+
                         <!-- IMAGE -->
 
                         <div class="cart-item-image">
-                            <span>📦</span>
+                            @{
+                                var imageUrl = VariantImages.Resolve(item.VariantName, item.ImageUrl);
+                            }
+                            @if (!string.IsNullOrWhiteSpace(imageUrl))
+                            {
+                                <img src="@imageUrl" alt="@item.ProductName" />
+                            }
+                            else
+                            {
+                                <span>📦</span>
+                            }
                         </div>
 
 
@@ -237,7 +260,7 @@
                     </span>
 
                     <strong>
-                        @FormatPrice(cart.TotalAmount)
+                        @FormatPrice(SelectedTotal)
                     </strong>
 
                 </div>
@@ -263,15 +286,16 @@
                     </span>
 
                     <strong>
-                        @FormatPrice(cart.TotalAmount)
+                        @FormatPrice(SelectedTotal)
                     </strong>
 
                 </div>
 
                 <button type="button"
                         class="app-button app-button-primary cart-checkout-button"
+                        disabled="@(!SelectedItems.Any())"
                         @onclick="GoToCheckout">
-                    Tiến hành thanh toán
+                    Thanh toán sản phẩm đã chọn
                 </button>
 
                 <button type="button"
@@ -305,6 +329,7 @@
     private bool isLoading = true;
 
     private readonly HashSet<long> updatingItems = new();
+    private readonly HashSet<long> selectedIds = new();
 
     private string message = string.Empty;
 
@@ -326,6 +351,15 @@
             message = string.Empty;
 
             cart = await CartService.GetCartAsync();
+            var currentIds = cart?.Items.Select(item => item.Id).ToHashSet() ?? new HashSet<long>();
+            selectedIds.RemoveWhere(id => !currentIds.Contains(id));
+            if (selectedIds.Count == 0)
+            {
+                foreach (var id in currentIds)
+                {
+                    selectedIds.Add(id);
+                }
+            }
 
             if (cart == null)
             {
@@ -526,8 +560,46 @@
     }
 
 
+    private IEnumerable<CartItem> SelectedItems =>
+        cart?.Items.Where(item => selectedIds.Contains(item.Id)) ?? Enumerable.Empty<CartItem>();
+
+    private decimal SelectedTotal => SelectedItems.Sum(item => item.TotalPrice);
+
+    private bool AllSelected =>
+        cart != null && cart.Items.Count > 0 && cart.Items.All(item => selectedIds.Contains(item.Id));
+
+    private void ToggleItem(long itemId, ChangeEventArgs args)
+    {
+        if (args.Value is bool on && on)
+        {
+            selectedIds.Add(itemId);
+        }
+        else
+        {
+            selectedIds.Remove(itemId);
+        }
+    }
+
+    private void ToggleAll(ChangeEventArgs args)
+    {
+        selectedIds.Clear();
+        if (args.Value is bool on && on && cart != null)
+        {
+            foreach (var item in cart.Items)
+            {
+                selectedIds.Add(item.Id);
+            }
+        }
+    }
+
     private void GoToCheckout()
     {
+        CheckoutSelection.CartItemIds.Clear();
+        foreach (var id in selectedIds)
+        {
+            CheckoutSelection.CartItemIds.Add(id);
+        }
+
         NavigationManager.NavigateTo("/checkout");
     }
 

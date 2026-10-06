@@ -1,0 +1,276 @@
+@page "/admin/referrals"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Giới thiệu mở shop</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Chiết khấu giới thiệu mở shop</h1>
+        <p>Cấu hình thưởng, kiểm tra gian lận và duyệt chi vào ví người giới thiệu.</p>
+    </div>
+    <button class="app-button app-button-secondary" @onclick="Settle">Đối soát thưởng đến hạn</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+<div class="seller-grid">
+    <article class="seller-stat"><span>Shop mới qua mã</span><strong>@summary.ReferredShopCount</strong></article>
+    <article class="seller-stat"><span>Đã chi hoa hồng</span><strong>@SellerText.Money(summary.PaidAmount)</strong></article>
+    <article class="seller-stat"><span>Đang giữ</span><strong>@SellerText.Money(summary.HeldAmount)</strong></article>
+    <article class="seller-stat"><span>Chi phí / shop (CAC)</span><strong>@SellerText.Money(summary.CostPerShop)</strong></article>
+    <article class="seller-stat"><span>Doanh thu đơn đầu</span><strong>@SellerText.Money(summary.FirstOrderRevenue)</strong></article>
+    <article class="seller-stat"><span>ROI</span><strong>@summary.Roi.ToString("0.##")</strong></article>
+    <article class="seller-stat"><span>Chờ duyệt</span><strong>@summary.PendingCount</strong></article>
+    <article class="seller-stat"><span>Nghi gian lận</span><strong>@summary.FlaggedCount</strong></article>
+</div>
+
+<section class="seller-card">
+    <h2>Cấu hình chương trình</h2>
+    <div class="seller-form">
+        <label>Kiểu thưởng
+            <select class="seller-input" @bind="policy.RewardMode">
+                <option value="flat">Tiền cố định</option>
+                <option value="percent">% phí sàn</option>
+            </select>
+        </label>
+        <label>Tiền cố định
+            <input class="seller-input" type="number" @bind="policy.FlatAmount" />
+        </label>
+        <label>% hưởng trên phí sàn
+            <input class="seller-input" type="number" @bind="policy.SharePercent" />
+        </label>
+        <label>% phí sàn trên đơn đầu
+            <input class="seller-input" type="number" @bind="policy.PlatformFeePercent" />
+        </label>
+        <label>Số sản phẩm tối thiểu
+            <input class="seller-input" type="number" @bind="policy.MinProductCount" />
+        </label>
+        <label>Ngày giữ thưởng
+            <input class="seller-input" type="number" @bind="policy.HoldingDays" />
+        </label>
+        <label>Cách chi
+            <select class="seller-input" @bind="policy.PayoutMode">
+                <option value="manual">Admin duyệt</option>
+                <option value="auto">Tự động khi hết hạn giữ</option>
+            </select>
+        </label>
+        <label><input type="checkbox" @bind="policy.RequireApprovedShop" /> Shop phải được duyệt</label>
+        <label><input type="checkbox" @bind="policy.RequireFirstOrder" /> Phải có đơn giao thành công</label>
+        <label><input type="checkbox" @bind="policy.IsEnabled" /> Đang bật chương trình</label>
+        <button class="app-button app-button-primary" @onclick="SavePolicy">Lưu cấu hình</button>
+    </div>
+</section>
+
+<section class="seller-card">
+    <div class="seller-page-head">
+        <h2>Lượt giới thiệu</h2>
+        <select class="seller-input" style="max-width:220px" @bind="status" @bind:after="LoadList">
+            <option value="">Tất cả</option>
+            <option value="pending">Chờ duyệt</option>
+            <option value="approved">Đã duyệt</option>
+            <option value="rejected">Từ chối</option>
+            <option value="flagged">Nghi gian lận</option>
+        </select>
+    </div>
+    <label>Lý do từ chối / gắn cờ
+        <input class="seller-input" @bind="reason" />
+    </label>
+    @if (items.Count == 0)
+    {
+        <p class="seller-muted">Chưa có lượt giới thiệu.</p>
+    }
+    else
+    {
+        <div class="seller-table-wrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Shop mới</th>
+                        <th>Người giới thiệu</th>
+                        <th>Mã</th>
+                        <th>Trạng thái</th>
+                        <th>Cảnh báo</th>
+                        <th>Thưởng</th>
+                        <th>Được chi từ</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@(item.ReferredShopName ?? "—")</td>
+                            <td>@(item.ReferrerName ?? "—")</td>
+                            <td>@item.Code</td>
+                            <td><span class="seller-badge">@Label(item.Status)</span></td>
+                            <td>@(string.IsNullOrWhiteSpace(item.FraudFlags) ? "—" : item.FraudFlags)</td>
+                            <td>@SellerText.Money(item.RewardAmount)</td>
+                            <td>@(item.PayableAt == null ? "Chưa đủ điều kiện" : SellerText.When(item.PayableAt.Value))</td>
+                            <td>
+                                <div class="seller-actions">
+                                    @if (item.Status is "pending" or "flagged")
+                                    {
+                                        <button class="app-button app-button-secondary" @onclick="() => Evaluate(item.Id)">Kiểm tra</button>
+                                    }
+                                    @if (item.Status == "pending")
+                                    {
+                                        <button class="app-button app-button-primary" @onclick="() => Approve(item.Id)">Duyệt chi</button>
+                                        <button class="app-button app-button-danger" @onclick="() => Reject(item.Id)">Từ chối</button>
+                                        <button class="app-button app-button-secondary" @onclick="() => Flag(item.Id)">Gắn cờ</button>
+                                    }
+                                    @if (item.Status == "flagged")
+                                    {
+                                        <button class="app-button app-button-secondary" @onclick="() => Unflag(item.Id)">Bỏ cờ</button>
+                                        <button class="app-button app-button-danger" @onclick="() => Reject(item.Id)">Từ chối</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private ReferralSummary summary = new();
+    private ReferralPolicy policy = new();
+    private List<SellerReferralRow> items = new();
+    private string status = "";
+    private string reason = "";
+    private string? message;
+    private bool isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAll();
+    }
+
+    private async Task LoadAll()
+    {
+        var summaryResult = await Api.GetAsync<ReferralSummary>("api/referrals/summary");
+        if (summaryResult.Ok && summaryResult.Data != null)
+        {
+            summary = summaryResult.Data;
+        }
+
+        var policyResult = await Api.GetAsync<ReferralPolicy>("api/referrals/policy");
+        if (policyResult.Ok && policyResult.Data != null)
+        {
+            policy = policyResult.Data;
+        }
+
+        await LoadList();
+    }
+
+    private async Task LoadList()
+    {
+        var url = string.IsNullOrWhiteSpace(status)
+            ? "api/referrals"
+            : $"api/referrals?status={status}";
+        var result = await Api.GetAsync<List<SellerReferralRow>>(url);
+        items = result.Data ?? new();
+        if (!result.Ok)
+        {
+            isError = true;
+            message = result.Error;
+        }
+    }
+
+    private async Task SavePolicy()
+    {
+        var result = await Api.PutAsync<ReferralPolicy>("api/referrals/policy", policy);
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu cấu hình." : result.Error;
+        if (result.Ok && result.Data != null)
+        {
+            policy = result.Data;
+        }
+    }
+
+    private async Task Settle()
+    {
+        var result = await Api.PostAsync<SettleResult>("api/referrals/settle");
+        isError = !result.Ok;
+        message = result.Ok ? $"Đã tự chi {result.Data?.Paid ?? 0} lượt đến hạn." : result.Error;
+        await LoadAll();
+    }
+
+    private async Task Evaluate(long id) => await Act(() => Api.PostAsync<SellerReferralRow>($"api/referrals/{id}/evaluate"));
+    private async Task Approve(long id) => await Act(() => Api.PostAsync<SellerReferralRow>($"api/referrals/{id}/approve"));
+    private async Task Unflag(long id) => await Act(() => Api.PostAsync<SellerReferralRow>($"api/referrals/{id}/unflag"));
+
+    private Task Reject(long id) =>
+        Act(() => Api.PostAsync<SellerReferralRow>($"api/referrals/{id}/reject", new { reason }));
+
+    private Task Flag(long id) =>
+        Act(() => Api.PostAsync<SellerReferralRow>($"api/referrals/{id}/flag", new { reason }));
+
+    private async Task Act(Func<Task<ApiResult<SellerReferralRow>>> call)
+    {
+        var result = await call();
+        isError = !result.Ok;
+        message = result.Ok ? "Đã cập nhật lượt giới thiệu." : result.Error;
+        await LoadAll();
+    }
+
+    private static string Label(string value) => value switch
+    {
+        "pending" => "Chờ duyệt",
+        "approved" => "Đã duyệt",
+        "rejected" => "Từ chối",
+        "flagged" => "Nghi gian lận",
+        _ => value
+    };
+
+    private sealed class ReferralSummary
+    {
+        public int ReferredShopCount { get; set; }
+        public int PendingCount { get; set; }
+        public int FlaggedCount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal HeldAmount { get; set; }
+        public decimal FirstOrderRevenue { get; set; }
+        public decimal CostPerShop { get; set; }
+        public decimal Roi { get; set; }
+    }
+
+    private sealed class ReferralPolicy
+    {
+        public string RewardMode { get; set; } = "flat";
+        public decimal FlatAmount { get; set; }
+        public decimal SharePercent { get; set; }
+        public decimal PlatformFeePercent { get; set; }
+        public int MinProductCount { get; set; }
+        public bool RequireApprovedShop { get; set; }
+        public bool RequireFirstOrder { get; set; }
+        public int HoldingDays { get; set; }
+        public string PayoutMode { get; set; } = "manual";
+        public bool IsEnabled { get; set; }
+    }
+
+    private sealed class SellerReferralRow
+    {
+        public long Id { get; set; }
+        public string Code { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? ReferrerName { get; set; }
+        public string? ReferredShopName { get; set; }
+        public string? FraudFlags { get; set; }
+        public decimal RewardAmount { get; set; }
+        public DateTime? PayableAt { get; set; }
+        public string? ReviewNote { get; set; }
+    }
+
+    private sealed class SettleResult
+    {
+        public int Paid { get; set; }
+    }
+}

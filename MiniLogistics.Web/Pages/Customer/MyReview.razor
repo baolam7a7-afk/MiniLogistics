@@ -2,6 +2,7 @@
 @page "/reviews"
 @layout CustomerLayout
 @using MiniLogistics.Web.Models.Review
+@using MiniLogistics.Web.Services.Product
 @using MiniLogistics.Web.Services.Review
 @inject ReviewService ReviewService
 
@@ -71,14 +72,20 @@
             {
                 <article class="my-review-card" @key="review.Id">
                     <div class="my-review-card-top">
-                        <div class="my-review-product-icon">P</div>
+                        <img class="my-review-product-icon"
+                             src="@VariantImages.Resolve(review.VariantName, review.ProductImageUrl)"
+                             alt="@(review.ProductName ?? "Sản phẩm")" />
 
                         <div class="my-review-product-info">
                             <span class="my-review-label">Sản phẩm</span>
-                            <h3>Mã sản phẩm #@review.ProductId</h3>
+                            <h3>@(string.IsNullOrWhiteSpace(review.ProductName) ? $"Sản phẩm #{review.ProductId}" : review.ProductName)</h3>
+                            @if (!string.IsNullOrWhiteSpace(review.VariantName))
+                            {
+                                <span class="my-review-meta">Phân loại: @review.VariantName</span>
+                            }
                             <span class="my-review-meta">
-                                Đơn hàng #@review.OrderId
-                                · @review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                Mua lúc @(review.PurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                · Đánh giá @review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                             </span>
                         </div>
 
@@ -91,15 +98,18 @@
                     @if (editingReviewId == review.Id)
                     {
                         <div class="my-review-edit">
-                            <label>Đánh giá của bạn</label>
-
-                            <select @bind="editRating">
-                                <option value="5">5 sao - Rất hài lòng</option>
-                                <option value="4">4 sao - Hài lòng</option>
-                                <option value="3">3 sao - Bình thường</option>
-                                <option value="2">2 sao - Chưa hài lòng</option>
-                                <option value="1">1 sao - Không hài lòng</option>
-                            </select>
+                            <label>Số sao</label>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                @for (var star = 1; star <= 5; star++)
+                                {
+                                    var value = star;
+                                    <button type="button"
+                                            class="my-review-btn @(editRating == value ? "my-review-btn-primary" : "my-review-btn-light")"
+                                            @onclick="() => editRating = value">
+                                        @value sao
+                                    </button>
+                                }
+                            </div>
 
                             <label>Nội dung</label>
                             <textarea @bind="editContent"

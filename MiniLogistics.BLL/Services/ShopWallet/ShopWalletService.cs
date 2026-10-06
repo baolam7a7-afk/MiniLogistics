@@ -193,6 +193,33 @@ public class ShopWalletService : IShopWalletService
         return MapToResponse(wallet, shop);
     }
 
+    public async Task<List<ShopWalletResponseDTO>> ListAsync()
+    {
+        var shops = (await _unitOfWork.Shops.GetAllAsync())
+            .OrderBy(shop => shop.Name)
+            .ToList();
+        var wallets = await _unitOfWork.ShopWallets.GetAllAsync();
+        var byShop = wallets
+            .GroupBy(wallet => wallet.ShopId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return shops.Select(shop =>
+        {
+            if (byShop.TryGetValue(shop.Id, out var wallet))
+            {
+                return MapToResponse(wallet, shop);
+            }
+
+            return new ShopWalletResponseDTO
+            {
+                ShopId = shop.Id,
+                ShopName = shop.Name,
+                OwnerUserId = shop.OwnerUserId,
+                Balance = 0
+            };
+        }).ToList();
+    }
+
 
     // =====================================================
     // MAPPING

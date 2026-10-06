@@ -14,4 +14,6 @@ public interface IShopWalletService
 
     Task<ShopWalletResponseDTO?> GetByIdAsync(
         long walletId);
+
+    Task<List<ShopWalletResponseDTO>> ListAsync();
 }

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MiniLogistics.DAL.Data;
 using MiniLogistics.DAL.Models;
 using MiniLogistics.DAL.Repositories;
@@ -215,6 +216,12 @@ public class UnitOfWork : IUnitOfWork
         _vouchers ??=
             new Repository<Voucher>(_context);
 
+    private IRepository<VoucherProduct>? _voucherProducts;
+
+    public IRepository<VoucherProduct> VoucherProducts =>
+        _voucherProducts ??=
+            new Repository<VoucherProduct>(_context);
+
 
     private IRepository<OrderVoucher>? _orderVouchers;
 
@@ -345,6 +352,24 @@ public class UnitOfWork : IUnitOfWork
         _reportSnapshots ??=
             new Repository<ReportSnapshot>(_context);
 
+    private IRepository<ReferralPolicy>? _referralPolicies;
+
+    public IRepository<ReferralPolicy> ReferralPolicies =>
+        _referralPolicies ??=
+            new Repository<ReferralPolicy>(_context);
+
+    private IRepository<SellerReferral>? _sellerReferrals;
+
+    public IRepository<SellerReferral> SellerReferrals =>
+        _sellerReferrals ??=
+            new Repository<SellerReferral>(_context);
+
+    private IRepository<ReferralRewardTransaction>? _referralRewardTransactions;
+
+    public IRepository<ReferralRewardTransaction> ReferralRewardTransactions =>
+        _referralRewardTransactions ??=
+            new Repository<ReferralRewardTransaction>(_context);
+
 
     // =====================================================
     // SAVE CHANGES
@@ -382,5 +407,37 @@ public class UnitOfWork : IUnitOfWork
 
             throw;
         }
+    }
+
+
+    public Task<int> ClaimOpenShipmentAsync(
+        long orderId,
+        long shipperUserId,
+        DateTime now)
+    {
+        return _context.Shipments
+            .Where(shipment =>
+                shipment.OrderId == orderId &&
+                shipment.ShipperUserId == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(shipment => shipment.ShipperUserId, shipperUserId)
+                .SetProperty(shipment => shipment.Status, "shipping")
+                .SetProperty(shipment => shipment.AssignedAt, now)
+                .SetProperty(shipment => shipment.PickedAt, now)
+                .SetProperty(shipment => shipment.UpdatedAt, now));
+    }
+
+
+    public Task<int> MarkOrderShippingIfOpenAsync(
+        long orderId,
+        DateTime now)
+    {
+        return _context.Orders
+            .Where(order =>
+                order.Id == orderId &&
+                (order.Status == "confirmed" || order.Status == "processing"))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(order => order.Status, "shipping")
+                .SetProperty(order => order.UpdatedAt, now));
     }
 }

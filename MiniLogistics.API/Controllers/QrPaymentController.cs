@@ -21,7 +21,6 @@ public class QrPaymentController : ControllerBase
         long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpPost("orders/{orderId:long}")]
-    [Authorize(Roles = "customer")]
     public async Task<IActionResult> Create(long orderId) =>
         Ok(await _service.CreateOrGetAsync(GetUserId(), orderId));
 
