@@ -37,3 +37,4 @@ MiniLogistics.API/appsettings.Local.json
 
 # Local agent kit
 .agents/
+agents.zip

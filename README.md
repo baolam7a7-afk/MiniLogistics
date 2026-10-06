@@ -1,81 +1,39 @@
 # MiniLogistics
 
-Nền tảng **marketplace logistics mini** (kiểu sàn thương mại điện tử + vận chuyển): khách mua hàng, seller quản lý shop, shipper giao hàng, admin điều hành hệ thống.
+Nền tảng marketplace kết hợp vận chuyển: khách mua hàng, người bán quản lý shop, shipper giao hàng và admin điều hành hệ thống.
 
-## Tech stack
+Demo: http://minilogistics.somee.com
 
-| Layer | Project | Công nghệ |
-|-------|---------|-----------|
-| API | `MiniLogistics.API` | ASP.NET Core Web API, JWT, Swagger, .NET 10 |
-| Business | `MiniLogistics.BLL` | Services + DTOs, BCrypt, Google Auth |
-| Data | `MiniLogistics.DAL` | EF Core + SQL Server, Repository + Unit of Work |
-| Client | `MiniLogistics.Web` | Blazor WebAssembly |
+## Công nghệ
+
+| Thành phần | Project | Công nghệ |
+|---|---|---|
+| API | `MiniLogistics.API` | ASP.NET Core, JWT, SignalR, .NET 10 |
+| Nghiệp vụ | `MiniLogistics.BLL` | Services, DTO, BCrypt |
+| Dữ liệu | `MiniLogistics.DAL` | EF Core, SQL Server |
+| Giao diện | `MiniLogistics.Web` | Blazor WebAssembly |
 
 Solution: `LogisticsShop.slnx`
 
-## Kiến trúc nhanh
+## Vai trò
 
-```
-Blazor WASM (Web)
-       │  HTTP + JWT
-       ▼
-   ASP.NET API
-       │
-       ▼
-     BLL (Services)
-       │
-       ▼
-  DAL → SQL Server (LogisticsDb)
-```
+- **Khách hàng:** danh mục, giỏ hàng, thanh toán, voucher, đơn hàng, đánh giá, chat với shop.
+- **Người bán:** sản phẩm, kho, đơn hàng, voucher, doanh thu, chat với khách và admin.
+- **Shipper:** nhận đơn và cập nhật trạng thái giao hàng.
+- **Admin:** duyệt shop, ngừng bán, tài chính, người dùng và chat với seller.
 
-## Vai trò người dùng
+## Chạy local
 
-- **customer** — duyệt sản phẩm, giỏ hàng, đặt COD, đơn hàng, địa chỉ, đánh giá
-- **seller** — shop, sản phẩm, kho, voucher, đơn, ví, rút tiền *(API có sẵn; UI chưa có)*
-- **shipper** — nhận / cập nhật shipment *(API có sẵn; UI chưa có)*
-- **admin** — duyệt shop, user, dashboard, hoàn tiền, payout *(API có sẵn; UI chưa có)*
-
-## Chạy dự án (local)
-
-### Yêu cầu
-
-- .NET 10 SDK
-- SQL Server (local hoặc Docker) — connection trong `MiniLogistics.API/appsettings.json`
-
-### Database
+Cần .NET 10 SDK và SQL Server. Chuỗi kết nối nằm trong `MiniLogistics.API/appsettings.json`.
 
 ```bash
 dotnet ef database update --project MiniLogistics.DAL --startup-project MiniLogistics.API
-```
-
-### API
-
-```bash
 dotnet run --project MiniLogistics.API
-```
-
-- HTTP: `http://localhost:5136`
-- Swagger (Development): `/swagger`
-
-### Web (Blazor)
-
-```bash
 dotnet run --project MiniLogistics.Web
 ```
 
-- Mặc định: `http://localhost:5107` (CORS đã cấu hình origin này)
-- API base URL hiện hard-code trong `MiniLogistics.Web/Program.cs`
+- API: http://localhost:5136
+- Web: http://localhost:5107
+- Địa chỉ API của web: `MiniLogistics.Web/wwwroot/appsettings.json`
 
-## Tài liệu
-
-| File | Nội dung |
-|------|----------|
-| [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | Mô tả đầy đủ module, entity, API, UI |
-| [docs/OPTIMIZATION_ROADMAP.md](docs/OPTIMIZATION_ROADMAP.md) | Gợi ý tối ưu & lộ trình nâng cấp |
-
-## Trạng thái hiện tại (tóm tắt)
-
-- Backend marketplace khá đầy đủ (~32 controllers, ~29 BLL services, 34 entities).
-- Frontend mới cover **luồng customer** (catalog → cart → checkout COD → orders → profile).
-- Chưa có test project, seller/admin/shipper UI, cổng thanh toán online.
-- Secrets (JWT, DB password) đang nằm trong `appsettings.json` — cần chuyển sang User Secrets / env trước khi deploy.
+Khi chạy local, web và API là hai tiến trình riêng. Bản trên Somee gộp cả hai vào một website.
