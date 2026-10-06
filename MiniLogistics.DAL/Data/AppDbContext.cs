@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Voucher> Vouchers => Set<Voucher>();
+    public DbSet<VoucherProduct> VoucherProducts => Set<VoucherProduct>();
     public DbSet<UserVoucher> UserVouchers => Set<UserVoucher>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
@@ -46,6 +47,9 @@ public class AppDbContext : DbContext
     public DbSet<ShopWalletTransaction> ShopWalletTransactions => Set<ShopWalletTransaction>();
     public DbSet<PayoutRequest> PayoutRequests => Set<PayoutRequest>();
     public DbSet<ReportSnapshot> ReportSnapshots => Set<ReportSnapshot>();
+    public DbSet<ReferralPolicy> ReferralPolicies => Set<ReferralPolicy>();
+    public DbSet<SellerReferral> SellerReferrals => Set<SellerReferral>();
+    public DbSet<ReferralRewardTransaction> ReferralRewardTransactions => Set<ReferralRewardTransaction>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -61,6 +65,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.FullName).HasMaxLength(200);
             e.Property(x => x.AvatarUrl).HasMaxLength(1000);
             e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("active").IsRequired();
+            e.Property(x => x.ReferralCode).HasMaxLength(20);
+            e.HasIndex(x => x.ReferralCode).IsUnique().HasFilter("[ReferralCode] IS NOT NULL");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
         });
         b.Entity<Role>(e =>
@@ -130,13 +136,15 @@ public class AppDbContext : DbContext
         {
             e.ToTable("shops"); e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(200).IsRequired(); e.Property(x => x.Slug).HasMaxLength(255).IsRequired();
-            e.HasIndex(x => x.Slug).IsUnique(); e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("pending");
+            e.HasIndex(x => x.Slug).IsUnique(); e.HasIndex(x => x.OwnerUserId).IsUnique(); e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("pending");
+            e.Property(x => x.StatusReason).HasMaxLength(500);
             e.HasOne(x => x.OwnerUser).WithMany(x => x.Shops).HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<Product>(e =>
         {
             e.ToTable("products"); e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(300).IsRequired(); e.Property(x => x.Slug).HasMaxLength(255).IsRequired();
+            e.Property(x => x.InactiveReason).HasMaxLength(500);
             e.HasIndex(x => new { x.ShopId, x.Slug }).IsUnique();
             e.HasOne(x => x.Shop).WithMany(x => x.Products).HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
@@ -224,6 +232,13 @@ public class AppDbContext : DbContext
             e.Property(x => x.MaxDiscount).HasPrecision(18, 2); e.Property(x => x.MinOrderValue).HasPrecision(18, 2);
             e.HasOne(x => x.Shop).WithMany(x => x.Vouchers).HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
         });
+        b.Entity<VoucherProduct>(e =>
+        {
+            e.ToTable("voucher_products");
+            e.HasKey(x => new { x.VoucherId, x.ProductId });
+            e.HasOne(x => x.Voucher).WithMany().HasForeignKey(x => x.VoucherId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<Order>(e =>
         {
             e.ToTable("orders"); e.HasKey(x => x.Id); e.HasIndex(x => x.OrderCode).IsUnique();
@@ -231,7 +246,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.Currency).HasMaxLength(3).HasDefaultValue("VND"); e.Property(x => x.PaymentMethod).HasMaxLength(20).IsRequired();
             e.Property(x => x.Subtotal).HasPrecision(18, 2); e.Property(x => x.ShippingFee).HasPrecision(18, 2);
             e.Property(x => x.DiscountTotal).HasPrecision(18, 2); e.Property(x => x.Total).HasPrecision(18, 2);
+            e.Property(x => x.CancelReason).HasMaxLength(500);
             e.HasOne(x => x.Customer).WithMany(x => x.CustomerOrders).HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ConfirmedByUser).WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Shop).WithMany(x => x.Orders).HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.ShippingAddress).WithMany().HasForeignKey(x => x.ShippingAddressId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -278,7 +295,14 @@ public class AppDbContext : DbContext
         {
             e.ToTable("conversations");
             e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.CustomerUserId, x.SellerUserId, x.ShopId }).IsUnique();
+            e.Property(x => x.Channel).HasMaxLength(20).HasDefaultValue("shop");
+            e.HasIndex(x => new { x.CustomerUserId, x.ShopId, x.ProductId })
+                .IsUnique()
+                .HasFilter("[ShopId] IS NOT NULL AND [ProductId] IS NOT NULL");
+            e.HasIndex(x => x.ShopId)
+                .IsUnique()
+                .HasFilter("[Channel] = 'platform' AND [ShopId] IS NOT NULL")
+                .HasDatabaseName("IX_conversations_platform_shop");
             e.HasOne(x => x.CustomerUser).WithMany().HasForeignKey(x => x.CustomerUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.SellerUser).WithMany().HasForeignKey(x => x.SellerUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Shop).WithMany().HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
@@ -381,6 +405,43 @@ public class AppDbContext : DbContext
         {
             e.ToTable("report_snapshots"); e.HasKey(x => x.Id); e.Property(x => x.Scope).HasMaxLength(20).IsRequired(); e.Property(x => x.MetricsJson).IsRequired();
             e.HasOne(x => x.Shop).WithMany(x => x.ReportSnapshots).HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ReferralPolicy>(e =>
+        {
+            e.ToTable("referral_policies");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.RewardMode).HasMaxLength(20).IsRequired();
+            e.Property(x => x.PayoutMode).HasMaxLength(20).IsRequired();
+            e.Property(x => x.FlatAmount).HasPrecision(18, 2);
+            e.Property(x => x.SharePercent).HasPrecision(5, 2);
+            e.Property(x => x.PlatformFeePercent).HasPrecision(5, 2);
+        });
+        b.Entity<SellerReferral>(e =>
+        {
+            e.ToTable("seller_referrals");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Code).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.SignupIp).HasMaxLength(64);
+            e.Property(x => x.DeviceHint).HasMaxLength(300);
+            e.Property(x => x.FraudFlags).HasMaxLength(200);
+            e.Property(x => x.ReviewNote).HasMaxLength(500);
+            e.Property(x => x.RewardAmount).HasPrecision(18, 2);
+            e.HasIndex(x => x.ReferredShopId).IsUnique();
+            e.HasOne(x => x.ReferrerUser).WithMany().HasForeignKey(x => x.ReferrerUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ReferredUser).WithMany().HasForeignKey(x => x.ReferredUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ReferredShop).WithMany().HasForeignKey(x => x.ReferredShopId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ReviewedByUser).WithMany().HasForeignKey(x => x.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ReferralRewardTransaction>(e =>
+        {
+            e.ToTable("referral_reward_transactions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+            e.HasIndex(x => x.SellerReferralId).IsUnique();
+            e.HasOne(x => x.SellerReferral).WithMany(x => x.Rewards).HasForeignKey(x => x.SellerReferralId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ShopWalletTransaction).WithMany().HasForeignKey(x => x.ShopWalletTransactionId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

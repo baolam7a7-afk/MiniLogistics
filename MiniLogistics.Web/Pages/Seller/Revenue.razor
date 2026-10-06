@@ -1,0 +1,142 @@
+@page "/seller/revenue"
+@layout SellerLayout
+@implements IDisposable
+@inject SellerApi Api
+@inject SellerSession Session
+
+<PageTitle>Doanh thu 95%</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Doanh thu nhận về</h1>
+        <p>Mỗi sản phẩm bán được, seller nhận 95%. Phí sàn là 5%, tính trên đơn đã giao.</p>
+    </div>
+</div>
+
+@if (Session.Shop == null)
+{
+    <div class="app-alert app-alert-warning">Chưa có cửa hàng.</div>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="app-alert app-alert-danger">@error</div>
+}
+else if (isLoading || report == null)
+{
+    <div class="seller-loading">Đang tải doanh thu...</div>
+}
+else
+{
+    <div class="seller-grid">
+        <article class="seller-stat">
+            <span>Tiền sản phẩm</span>
+            <strong>@SellerText.Money(report.ProductSales)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Phí sàn 5%</span>
+            <strong>@SellerText.Money(report.PlatformFee)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Seller nhận 95%</span>
+            <strong>@SellerText.Money(report.SellerShare)</strong>
+        </article>
+    </div>
+
+    @if (report.Lines.Count == 0)
+    {
+        <div class="seller-empty">Chưa có đơn đã giao.</div>
+    }
+    else
+    {
+        <section class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Đơn</th>
+                            <th>Sản phẩm</th>
+                            <th>Tiền hàng</th>
+                            <th>Phí 5%</th>
+                            <th>Nhận 95%</th>
+                            <th>Thời gian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in report.Lines)
+                        {
+                            <tr>
+                                <td>@line.OrderCode</td>
+                                <td>@line.Products</td>
+                                <td>@SellerText.Money(line.ProductSales)</td>
+                                <td>@SellerText.Money(line.PlatformFee)</td>
+                                <td>@SellerText.Money(line.SellerShare)</td>
+                                <td>@SellerText.When(line.PlacedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private FinanceReport? report;
+    private bool isLoading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.ShopChanged += OnShopChanged;
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async void OnShopChanged() => await InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        if (Session.Shop == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var result = await Api.GetAsync<FinanceReport>($"api/finance/seller?shopId={Session.Shop.Id}");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            error = result.Error;
+            report = null;
+            return;
+        }
+
+        error = null;
+        report = result.Data;
+    }
+
+    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+
+    private sealed class FinanceReport
+    {
+        public decimal ProductSales { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal SellerShare { get; set; }
+        public List<FinanceLine> Lines { get; set; } = new();
+    }
+
+    private sealed class FinanceLine
+    {
+        public string OrderCode { get; set; } = "";
+        public string Products { get; set; } = "";
+        public decimal ProductSales { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal SellerShare { get; set; }
+        public DateTime PlacedAt { get; set; }
+    }
+}

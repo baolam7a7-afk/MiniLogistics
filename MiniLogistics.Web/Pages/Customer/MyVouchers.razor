@@ -1,5 +1,6 @@
 @page "/vouchers"
 @layout CustomerLayout
+@implements IDisposable
 
 @using System.Net.Http.Json
 @using MiniLogistics.Web.Services.Auth
@@ -26,7 +27,7 @@
     }
 
     <div class="store-section-head">
-        <h2 class="store-section-title">Có thể nhận</h2>
+        <h2 class="store-section-title">Voucher có thể sử dụng</h2>
     </div>
 
     @if (isLoading)
@@ -35,7 +36,7 @@
     }
     else if (claimable.Count == 0)
     {
-        <p class="text-muted">Không còn voucher mới để nhận.</p>
+        <p class="text-muted">Hiện chưa có voucher nào có thể nhận.</p>
     }
     else
     {
@@ -47,6 +48,7 @@
                         <span class="product-category-badge">@(v.Scope == "platform" ? "Admin" : "Seller")</span>
                         <h3 class="product-name">@(v.Name ?? v.Code)</h3>
                         <p class="product-description">@v.Code · @FormatDiscount(v)</p>
+                        <p class="product-voucher-note">@TargetText(v.ProductNames, v.Scope)</p>
                         <p class="text-muted" style="font-size:12px">
                             HSD: @v.EndAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                             @if (v.MinOrderValue.HasValue)
@@ -65,23 +67,24 @@
     }
 
     <div class="store-section-head" style="margin-top:36px">
-        <h2 class="store-section-title">Đã nhận</h2>
+        <h2 class="store-section-title">Đã nhận, còn dùng được</h2>
     </div>
 
-    @if (mine.Count == 0)
+    @if (!usableMine.Any())
     {
         <p class="text-muted">Bạn chưa có voucher nào.</p>
     }
     else
     {
         <div class="product-grid store-product-grid">
-            @foreach (var v in mine)
+            @foreach (var v in usableMine)
             {
                 <article class="product-card store-product-card" style="cursor:default">
                     <div class="product-card-body">
                         <span class="product-status">@v.Status</span>
                         <h3 class="product-name">@(v.Name ?? v.Code)</h3>
                         <p class="product-description">@v.Code · @FormatOwnedDiscount(v)</p>
+                        <p class="product-voucher-note">@TargetText(v.ProductNames, v.Scope)</p>
                         <p class="text-muted" style="font-size:12px">
                             Nhận: @v.ClaimedAt.ToLocalTime().ToString("dd/MM/yyyy")
                         </p>
@@ -98,6 +101,9 @@
     private bool isLoading = true;
     private string? errorMessage;
     private string? successMessage;
+    private PeriodicTimer? refreshTimer;
+    private IEnumerable<OwnedVoucher> usableMine =>
+        mine.Where(v => v.Status is "available" or "active");
 
     protected override async Task OnInitializedAsync()
     {
@@ -109,11 +115,30 @@
         }
 
         await Reload();
+        _ = WatchAsync();
     }
 
-    private async Task Reload()
+    private async Task WatchAsync()
     {
-        isLoading = true;
+        refreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(8));
+        while (await refreshTimer.WaitForNextTickAsync())
+        {
+            await InvokeAsync(async () =>
+            {
+                await Reload(quiet: true);
+                StateHasChanged();
+            });
+        }
+    }
+
+    public void Dispose() => refreshTimer?.Dispose();
+
+    private async Task Reload(bool quiet = false)
+    {
+        if (!quiet)
+        {
+            isLoading = true;
+        }
         errorMessage = null;
         try
         {
@@ -133,7 +158,10 @@
         }
         finally
         {
-            isLoading = false;
+            if (!quiet)
+            {
+                isLoading = false;
+            }
         }
     }
 
@@ -190,6 +218,16 @@
             ? $"Giảm {v.DiscountValue:0.#}%"
             : $"Giảm {v.DiscountValue:N0} ₫";
 
+    private static string TargetText(List<string>? names, string scope)
+    {
+        if (names is { Count: > 0 })
+        {
+            return $"Trừ cho {string.Join(", ", names)}";
+        }
+
+        return "Áp dụng cho đơn hàng";
+    }
+
     private sealed class ClaimableVoucher
     {
         public long Id { get; set; }
@@ -200,6 +238,7 @@
         public decimal DiscountValue { get; set; }
         public decimal? MinOrderValue { get; set; }
         public DateTime EndAt { get; set; }
+        public List<string> ProductNames { get; set; } = new();
     }
 
     private sealed class OwnedVoucher
@@ -208,9 +247,11 @@
         public long VoucherId { get; set; }
         public string Code { get; set; } = "";
         public string? Name { get; set; }
+        public string Scope { get; set; } = "";
         public string DiscountType { get; set; } = "";
         public decimal DiscountValue { get; set; }
         public string Status { get; set; } = "";
+        public List<string> ProductNames { get; set; } = new();
         public DateTime ClaimedAt { get; set; }
     }
 }

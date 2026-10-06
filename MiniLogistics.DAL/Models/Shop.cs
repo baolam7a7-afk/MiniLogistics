@@ -12,6 +12,7 @@ public class Shop
     public string? Description { get; set; }
     public string? LogoUrl { get; set; }
     public string Status { get; set; } = "pending";
+    public string? StatusReason { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

@@ -6,6 +6,8 @@ public class ProductItem
 
     public long ShopId { get; set; }
 
+    public string? ShopName { get; set; }
+
     public long CategoryId { get; set; }
 
     public string? CategoryName { get; set; }
@@ -21,6 +23,10 @@ public class ProductItem
     public string? ImageUrl { get; set; }
 
     public decimal? MinPrice { get; set; }
+
+    public string? VoucherNote { get; set; }
+
+    public decimal? VoucherPrice { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

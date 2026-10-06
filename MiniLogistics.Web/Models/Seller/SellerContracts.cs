@@ -18,6 +18,7 @@ public class ShopRecord
     public string? Description { get; set; }
     public string? LogoUrl { get; set; }
     public string Status { get; set; } = "";
+    public string? StatusReason { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -141,6 +142,8 @@ public class SellerProduct
     public string Slug { get; set; } = "";
     public string? Description { get; set; }
     public string Status { get; set; } = "";
+    public string? InactiveReason { get; set; }
+    public int? LowStockThreshold { get; set; }
     public string? ImageUrl { get; set; }
     public decimal? MinPrice { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -182,7 +185,21 @@ public class SellerOrder
     public decimal Total { get; set; }
     public string PaymentMethod { get; set; } = "";
     public string? Note { get; set; }
+    public string? CustomerName { get; set; }
+    public string? CustomerPhone { get; set; }
+    public string? ShopName { get; set; }
+    public string? ReceiverName { get; set; }
+    public string? ReceiverPhone { get; set; }
+    public string? ShippingAddressText { get; set; }
+    public string? CancelReason { get; set; }
     public DateTime PlacedAt { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public DateTime? CustomerConfirmedAt { get; set; }
+    public long? ShipperId { get; set; }
+    public string? ShipperName { get; set; }
+    public DateTime? ShipperAcceptedAt { get; set; }
+    public DateTime? DeliveredAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<SellerOrderItem> Items { get; set; } = new();
     public List<SellerOrderLog> StatusLogs { get; set; } = new();
@@ -195,6 +212,7 @@ public class SellerOrderItem
     public long VariantId { get; set; }
     public string ProductName { get; set; } = "";
     public string VariantName { get; set; } = "";
+    public string? ImageUrl { get; set; }
     public decimal UnitPrice { get; set; }
     public int Quantity { get; set; }
     public decimal LineTotal { get; set; }
@@ -207,6 +225,37 @@ public class SellerOrderLog
     public string ToStatus { get; set; } = "";
     public string? Message { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+public class SellerConversation
+{
+    public long Id { get; set; }
+    public long? ShopId { get; set; }
+    public string? PeerName { get; set; }
+    public string? ShopName { get; set; }
+    public string? ShopLogoUrl { get; set; }
+    public string? ShopDescription { get; set; }
+    public string? ShopStatus { get; set; }
+    public double? ShopRating { get; set; }
+    public string? ProductName { get; set; }
+    public string? ProductImageUrl { get; set; }
+    public decimal? ProductPrice { get; set; }
+    public int? ProductStock { get; set; }
+    public string? ProductSummary { get; set; }
+    public string? LastMessagePreview { get; set; }
+    public DateTime? LastMessageAt { get; set; }
+    public int UnreadCount { get; set; }
+}
+
+public class SellerChatMessage
+{
+    public long Id { get; set; }
+    public string Content { get; set; } = "";
+    public string SenderName { get; set; } = "";
+    public string? SenderAvatarUrl { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public bool IsRead { get; set; }
+    public bool IsMine { get; set; }
 }
 
 public class SellerVoucher
@@ -227,6 +276,8 @@ public class SellerVoucher
     public DateTime EndAt { get; set; }
     public string Status { get; set; } = "";
     public DateTime CreatedAt { get; set; }
+    public List<long> ProductIds { get; set; } = new();
+    public List<string> ProductNames { get; set; } = new();
 }
 
 public class ShopWalletRecord
@@ -294,6 +345,10 @@ public class SellerReview
     public int Rating { get; set; }
     public string? Content { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? ProductName { get; set; }
+    public string? VariantName { get; set; }
+    public string? ProductImageUrl { get; set; }
+    public DateTime? PurchasedAt { get; set; }
 }
 
 public class ReviewReplyRecord

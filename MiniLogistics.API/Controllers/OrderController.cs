@@ -2,7 +2,9 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
+using MiniLogistics.API.Hubs;
 using MiniLogistics.BLL.DTOs.Order;
 using MiniLogistics.BLL.Services.Order;
 
@@ -14,11 +16,14 @@ namespace MiniLogistics.API.Controllers;
 public class OrderController : ControllerBase
 {
     private readonly IOrderService _orderService;
+    private readonly IHubContext<ChatHub> _hub;
 
     public OrderController(
-        IOrderService orderService)
+        IOrderService orderService,
+        IHubContext<ChatHub> hub)
     {
         _orderService = orderService;
+        _hub = hub;
     }
 
 
@@ -28,7 +33,6 @@ public class OrderController : ControllerBase
     // =====================================================
 
     [HttpPost]
-    [Authorize(Roles = "customer")]
     public async Task<IActionResult> Create(
         [FromBody] CreateOrderDTO request)
     {
@@ -56,7 +60,6 @@ public class OrderController : ControllerBase
     // =====================================================
 
     [HttpGet("my")]
-    [Authorize(Roles = "customer")]
     public async Task<IActionResult> GetMyOrders(
         [FromQuery] OrderPaginationRequestDTO request)
     {
@@ -78,7 +81,7 @@ public class OrderController : ControllerBase
     // =====================================================
 
     [HttpGet("{id:long}")]
-    [Authorize(Roles = "customer,seller,admin")]
+    [Authorize(Roles = "customer,seller,admin,shipper")]
     public async Task<IActionResult> GetById(
         long id)
     {
@@ -139,12 +142,147 @@ public class OrderController : ControllerBase
 
 
     // =====================================================
+    // SHOP CONFIRM
+    // SELLER / ADMIN
+    // =====================================================
+
+    [HttpPost("{id:long}/confirm")]
+    [Authorize(Roles = "seller,admin")]
+    public async Task<IActionResult> Confirm(
+        long id)
+    {
+        var result =
+            await _orderService.ConfirmByShopAsync(
+                id,
+                GetCurrentUserId(),
+                GetCurrentRole());
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SHOP CANCEL
+    // SELLER / ADMIN
+    // =====================================================
+
+    [HttpPost("{id:long}/shop-cancel")]
+    [Authorize(Roles = "seller,admin")]
+    public async Task<IActionResult> CancelByShop(
+        long id,
+        [FromBody] CancelOrderDTO request)
+    {
+        var result =
+            await _orderService.CancelByShopAsync(
+                id,
+                GetCurrentUserId(),
+                GetCurrentRole(),
+                request);
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SHIPPER: ORDERS READY TO ACCEPT
+    // =====================================================
+
+    [HttpGet("available")]
+    [Authorize(Roles = "shipper")]
+    public async Task<IActionResult> GetAvailable()
+    {
+        var result =
+            await _orderService.GetAvailableForShipperAsync(
+                GetCurrentUserId());
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SHIPPER: ORDERS ASSIGNED TO ME
+    // =====================================================
+
+    [HttpGet("delivering")]
+    [Authorize(Roles = "shipper")]
+    public async Task<IActionResult> GetDelivering()
+    {
+        var result =
+            await _orderService.GetShipperDeliveriesAsync(
+                GetCurrentUserId());
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SHIPPER ACCEPTS THE ORDER
+    // =====================================================
+
+    [HttpPost("{id:long}/accept")]
+    [Authorize(Roles = "shipper")]
+    public async Task<IActionResult> Accept(
+        long id)
+    {
+        var shipperUserId = GetCurrentUserId();
+        var result =
+            await _orderService.AcceptByShipperAsync(
+                id,
+                shipperUserId);
+
+        await _hub.Clients
+            .Group(ChatHub.ShipperGroup)
+            .SendAsync("OrderClaimed", new
+            {
+                orderId = id,
+                shipperUserId
+            });
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // SHIPPER MARKS HANDED TO CUSTOMER
+    // =====================================================
+
+    [HttpPost("{id:long}/deliver")]
+    [Authorize(Roles = "shipper")]
+    public async Task<IActionResult> Deliver(
+        long id)
+    {
+        var result =
+            await _orderService.DeliverByShipperAsync(
+                id,
+                GetCurrentUserId());
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
+    // CUSTOMER CONFIRMS RECEIPT
+    // =====================================================
+
+    [HttpPost("{id:long}/received")]
+    public async Task<IActionResult> Received(
+        long id)
+    {
+        var result =
+            await _orderService.ConfirmReceivedAsync(
+                id,
+                GetCurrentUserId());
+
+        return Ok(result);
+    }
+
+
+    // =====================================================
     // CANCEL
     // CUSTOMER
     // =====================================================
 
     [HttpPost("{id:long}/cancel")]
-    [Authorize(Roles = "customer")]
     public async Task<IActionResult> Cancel(
         long id)
     {

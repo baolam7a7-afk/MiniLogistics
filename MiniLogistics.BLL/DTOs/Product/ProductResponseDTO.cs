@@ -6,6 +6,8 @@ public class ProductResponseDTO
 
     public long ShopId { get; set; }
 
+    public string? ShopName { get; set; }
+
     public long CategoryId { get; set; }
 
     public string? CategoryName { get; set; }
@@ -17,6 +19,10 @@ public class ProductResponseDTO
     public string? Description { get; set; }
 
     public string Status { get; set; } = string.Empty;
+
+    public string? InactiveReason { get; set; }
+
+    public int? LowStockThreshold { get; set; }
 
     public string? ImageUrl { get; set; }
 

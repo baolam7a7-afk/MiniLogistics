@@ -66,21 +66,26 @@
                 <p class="text-success">Đã thanh toán lúc @payment.PaidAt.Value.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</p>
             }
 
+            @if (!string.IsNullOrWhiteSpace(statusNote))
+            {
+                <p style="margin-top:16px">@statusNote</p>
+            }
+
             <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px">
-                <button class="app-button app-button-secondary" @onclick="RefreshStatus" disabled="@isBusy">
-                    Kiểm tra trạng thái
+                <button type="button" class="app-button app-button-secondary" @onclick="RefreshStatus" disabled="@isBusy">
+                    @(isBusy ? "Đang kiểm tra..." : "Kiểm tra trạng thái")
                 </button>
 
                 @if (payment.Status is "pending" or "expired")
                 {
-                    <button class="app-button app-button-primary" @onclick="RecreateQr" disabled="@isBusy">
+                    <button type="button" class="app-button app-button-primary" @onclick="RecreateQr" disabled="@isBusy">
                         Tạo lại QR
                     </button>
                 }
 
                 @if (payment.Status == "pending")
                 {
-                    <button class="app-button app-button-success" @onclick="ConfirmDemo" disabled="@isBusy">
+                    <button type="button" class="app-button app-button-success" @onclick="ConfirmDemo" disabled="@isBusy">
                         Xác nhận đã chuyển (demo)
                     </button>
                 }
@@ -100,6 +105,7 @@
     private bool isLoading = true;
     private bool isBusy;
     private string? errorMessage;
+    private string? statusNote;
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,21 +141,35 @@
 
     private async Task RefreshStatus()
     {
-        if (payment is null) return;
+        if (payment is null || payment.PaymentId <= 0)
+        {
+            errorMessage = "Chưa có giao dịch để kiểm tra. Hãy tạo lại QR.";
+            statusNote = null;
+            return;
+        }
+
         isBusy = true;
         errorMessage = null;
         try
         {
             using var req = await Auth(HttpMethod.Get, $"api/payments/qr/{payment.PaymentId}");
             var res = await Http.SendAsync(req);
-            if (res.IsSuccessStatusCode)
-                payment = await res.Content.ReadFromJsonAsync<QrPaymentDto>();
-            else
+            if (!res.IsSuccessStatusCode)
+            {
                 errorMessage = "Không kiểm tra được trạng thái.";
+                statusNote = null;
+                return;
+            }
+
+            payment = await res.Content.ReadFromJsonAsync<QrPaymentDto>();
+            statusNote = payment == null
+                ? "Không đọc được trạng thái thanh toán."
+                : $"Đã kiểm tra lúc {DateTime.Now:HH:mm:ss}: {StatusText(payment.Status)}.";
         }
         catch
         {
-            errorMessage = "Lỗi mạng.";
+            errorMessage = "Lỗi mạng khi kiểm tra trạng thái.";
+            statusNote = null;
         }
         finally
         {

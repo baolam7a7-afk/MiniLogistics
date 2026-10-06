@@ -55,6 +55,7 @@ else
                             <th>Tên</th>
                             <th>Danh mục</th>
                             <th>Giá từ</th>
+                            <th>Số lượng</th>
                             <th>Trạng thái</th>
                             <th></th>
                         </tr>
@@ -72,9 +73,19 @@ else
                                 <td>@item.Name</td>
                                 <td>@(item.CategoryName ?? item.CategoryId.ToString())</td>
                                 <td>@(item.MinPrice.HasValue ? SellerText.Money(item.MinPrice.Value) : "—")</td>
+                                <td>
+                                    <strong>@StockOf(item.Id)</strong>
+                                    @if (item.LowStockThreshold is int limit && StockOf(item.Id) <= limit)
+                                    {
+                                        <div class="seller-muted">Sắp hết · báo khi còn @limit</div>
+                                    }
+                                </td>
                                 <td><span class="seller-badge">@SellerText.ProductStatus(item.Status)</span></td>
                                 <td class="seller-actions">
                                     <a class="app-button app-button-secondary" href="@($"/seller/products/{item.Id}/edit")">Sửa</a>
+                                    <button class="app-button app-button-secondary" @onclick="() => OpenStock(item, true)">Nhập hàng</button>
+                                    <button class="app-button app-button-secondary" @onclick="() => OpenStock(item, false)">Xuất hàng</button>
+                                    <button class="app-button app-button-secondary" @onclick="() => OpenAlert(item)">Báo sắp hết</button>
                                     <button class="app-button app-button-secondary" @onclick="() => ToggleSale(item)">
                                         @(item.Status == "active" ? "Ngừng bán" : "Hiện bán")
                                     </button>
@@ -93,6 +104,55 @@ else
     }
 }
 
+@if (stockProduct != null)
+{
+    <div class="order-modal-backdrop" @onclick="ClosePopups">
+        <div class="order-modal" @onclick:stopPropagation="true">
+            <h3>@(stockIn ? "Nhập hàng" : "Xuất hàng")</h3>
+            <p>@stockProduct.Name</p>
+            @if (stockVariants.Count == 0)
+            {
+                <p class="seller-muted">Sản phẩm chưa có phiên bản.</p>
+            }
+            else
+            {
+                <label class="seller-field">Phiên bản
+                    <select class="seller-select" @bind="stockVariantId">
+                        @foreach (var variant in stockVariants)
+                        {
+                            <option value="@variant.Id">@variant.VariantName · còn @variant.Stock</option>
+                        }
+                    </select>
+                </label>
+                <label class="seller-field">Số lượng
+                    <input class="seller-input" type="number" min="1" @bind="stockQty" />
+                </label>
+            }
+            <div class="order-modal-actions">
+                <button type="button" class="app-button app-button-secondary" @onclick="ClosePopups">Đóng</button>
+                <button type="button" class="app-button app-button-primary" @onclick="SubmitStock" disabled="@(stockVariants.Count == 0)">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (alertProduct != null)
+{
+    <div class="order-modal-backdrop" @onclick="ClosePopups">
+        <div class="order-modal" @onclick:stopPropagation="true">
+            <h3>Báo sắp hết</h3>
+            <p>@alertProduct.Name</p>
+            <label class="seller-field">Báo khi còn từ số này trở xuống
+                <input class="seller-input" type="number" min="0" @bind="alertThreshold" />
+            </label>
+            <div class="order-modal-actions">
+                <button type="button" class="app-button app-button-secondary" @onclick="ClosePopups">Đóng</button>
+                <button type="button" class="app-button app-button-primary" @onclick="SaveAlert">Lưu</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<SellerProduct> items = new();
     private string search = "";
@@ -102,6 +162,14 @@ else
     private bool isLoading = true;
     private bool isError;
     private string? message;
+    private Dictionary<long, int> stockByProduct = new();
+    private SellerProduct? stockProduct;
+    private SellerProduct? alertProduct;
+    private List<SellerVariant> stockVariants = new();
+    private long stockVariantId;
+    private int stockQty = 1;
+    private int alertThreshold;
+    private bool stockIn;
 
     protected override async Task OnInitializedAsync()
     {
@@ -165,6 +233,89 @@ else
 
         items = result.Data.Items;
         totalPages = Math.Max(result.Data.TotalPages, 1);
+        await LoadStockAsync();
+    }
+
+    private async Task LoadStockAsync()
+    {
+        var next = new Dictionary<long, int>();
+        foreach (var item in items)
+        {
+            var variants = await Api.GetAsync<List<SellerVariant>>($"api/product-variants/product/{item.Id}");
+            next[item.Id] = variants.Data?.Sum(variant => Math.Max(0, variant.Stock)) ?? 0;
+        }
+
+        stockByProduct = next;
+    }
+
+    private int StockOf(long productId) =>
+        stockByProduct.TryGetValue(productId, out var qty) ? qty : 0;
+
+    private async Task OpenStock(SellerProduct item, bool inbound)
+    {
+        stockProduct = item;
+        alertProduct = null;
+        stockIn = inbound;
+        stockQty = 1;
+        var variants = await Api.GetAsync<List<SellerVariant>>($"api/product-variants/product/{item.Id}");
+        stockVariants = variants.Data ?? new();
+        stockVariantId = stockVariants.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private void OpenAlert(SellerProduct item)
+    {
+        alertProduct = item;
+        stockProduct = null;
+        alertThreshold = item.LowStockThreshold ?? 5;
+    }
+
+    private void ClosePopups()
+    {
+        stockProduct = null;
+        alertProduct = null;
+    }
+
+    private async Task SubmitStock()
+    {
+        if (stockProduct == null || stockVariantId <= 0 || stockQty < 1)
+        {
+            isError = true;
+            message = "Nhập số lượng lớn hơn 0.";
+            return;
+        }
+
+        var action = stockIn ? "increase" : "decrease";
+        var result = await Api.PostAsync<System.Text.Json.JsonElement>(
+            $"api/inventory/variant/{stockVariantId}/{action}",
+            new { Quantity = stockQty });
+        isError = !result.Ok;
+        message = result.Ok
+            ? (stockIn ? "Đã nhập hàng." : "Đã xuất hàng.")
+            : result.Error;
+        if (result.Ok)
+        {
+            ClosePopups();
+            await LoadAsync();
+        }
+    }
+
+    private async Task SaveAlert()
+    {
+        if (alertProduct == null || alertThreshold < 0)
+        {
+            return;
+        }
+
+        var result = await Api.PutAsync<SellerProduct>(
+            $"api/products/{alertProduct.Id}/low-stock",
+            new { Threshold = alertThreshold });
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu mức báo sắp hết." : result.Error;
+        if (result.Ok)
+        {
+            ClosePopups();
+            await LoadAsync();
+        }
     }
 
     private Task ToggleSale(SellerProduct item) =>

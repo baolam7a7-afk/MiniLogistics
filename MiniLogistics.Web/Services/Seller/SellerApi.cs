@@ -33,6 +33,47 @@ public class SellerApi
     public Task<ApiResult<T>> PutAsync<T>(string url, object? body = null) =>
         SendAsync<T>(HttpMethod.Put, url, body);
 
+    public async Task<ApiResult<T>> UploadAsync<T>(string url, byte[] bytes, string fileName, string contentType)
+    {
+        var token = await _tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return new ApiResult<T>
+            {
+                StatusCode = 401,
+                Error = "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại."
+            };
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
+        request.Content = form;
+
+        try
+        {
+            using var response = await _http.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ApiResult<T>
+                {
+                    StatusCode = (int)response.StatusCode,
+                    Error = await ReadErrorAsync(response)
+                };
+            }
+
+            var data = await response.Content.ReadFromJsonAsync<T>();
+            return new ApiResult<T> { Ok = true, StatusCode = (int)response.StatusCode, Data = data };
+        }
+        catch (HttpRequestException)
+        {
+            return new ApiResult<T> { Error = "Không kết nối được API. Kiểm tra máy chủ đang chạy." };
+        }
+    }
+
     public async Task<ApiResult<bool>> DeleteAsync(string url)
     {
         var result = await SendAsync<JsonElement>(HttpMethod.Delete, url, null);

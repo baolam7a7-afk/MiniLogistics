@@ -1,5 +1,6 @@
 @page "/seller/reviews"
 @layout SellerLayout
+@using MiniLogistics.Web.Services.Product
 @implements IDisposable
 @inject SellerApi Api
 @inject SellerSession Session
@@ -20,7 +21,7 @@
 else
 {
     <div class="seller-filters">
-        <select class="seller-select" @bind="productId" @bind:after="LoadReviews">
+        <select class="seller-select" @bind="productId" @bind:after="ReloadSelectedReviews">
             @foreach (var product in products)
             {
                 <option value="@product.Id">@product.Name</option>
@@ -49,9 +50,25 @@ else
         @foreach (var review in reviews)
         {
             <section class="seller-card">
-                <h2>@review.Rating / 5</h2>
-                <p>@(string.IsNullOrWhiteSpace(review.Content) ? "Không có nội dung." : review.Content)</p>
-                <p class="seller-muted">Khách #@review.CustomerId · @SellerText.When(review.CreatedAt)</p>
+                <div class="seller-review-product">
+                    <img src="@VariantImages.Resolve(review.VariantName, review.ProductImageUrl ?? products.FirstOrDefault(product => product.Id == review.ProductId)?.ImageUrl)" alt="" />
+                    <div>
+                        <strong>@(review.ProductName ?? products.FirstOrDefault(product => product.Id == review.ProductId)?.Name ?? "Sản phẩm")</strong>
+                        @if (!string.IsNullOrWhiteSpace(review.VariantName))
+                        {
+                            <span>Phân loại: @review.VariantName</span>
+                        }
+                    </div>
+                </div>
+                <div class="seller-row">
+                    <strong style="color:#d97706;letter-spacing:2px">@Stars(review.Rating)</strong>
+                    <span class="seller-badge">@review.Rating / 5</span>
+                </div>
+                <p>@(string.IsNullOrWhiteSpace(review.Content) ? "Khách không viết nhận xét." : review.Content)</p>
+                <p class="seller-muted">
+                    Mua lúc @(review.PurchasedAt.HasValue ? SellerText.When(review.PurchasedAt.Value) : "—")
+                    · Đánh giá @SellerText.When(review.CreatedAt)
+                </p>
                 @if (replies.TryGetValue(review.Id, out var reply) && reply != null)
                 {
                     <p><strong>Phản hồi:</strong> @reply.Content</p>
@@ -83,6 +100,22 @@ else
         Session.ShopChanged += OnShopChanged;
         await Session.EnsureAsync();
         await LoadProductsAsync();
+        _ = WatchAsync();
+    }
+
+    private PeriodicTimer? refreshTimer;
+
+    private async Task WatchAsync()
+    {
+        refreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(8));
+        while (await refreshTimer.WaitForNextTickAsync())
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadReviews(quiet: true);
+                StateHasChanged();
+            });
+        }
     }
 
     private async void OnShopChanged() => await InvokeAsync(async () =>
@@ -112,20 +145,32 @@ else
         await LoadReviews();
     }
 
-    private async Task LoadReviews()
+    private Task ReloadSelectedReviews() => LoadReviews();
+
+    private async Task LoadReviews(bool quiet = false)
     {
-        reviews = new();
-        replies = new();
+        if (!quiet)
+        {
+            reviews = new();
+            replies = new();
+        }
+
         if (productId <= 0)
         {
             isLoading = false;
             return;
         }
 
-        isLoading = true;
+        if (!quiet)
+        {
+            isLoading = true;
+        }
         var result = await Api.GetAsync<PagedResult<SellerReview>>(
-            $"api/reviews/product/{productId}?Page=1&PageSize=20");
-        isLoading = false;
+            $"api/review/product/{productId}?Page=1&PageSize=20");
+        if (!quiet)
+        {
+            isLoading = false;
+        }
         if (!result.Ok || result.Data == null)
         {
             isError = true;
@@ -136,7 +181,10 @@ else
         reviews = result.Data.Items;
         foreach (var review in reviews)
         {
-            drafts[review.Id] = "";
+            if (!drafts.ContainsKey(review.Id))
+            {
+                drafts[review.Id] = "";
+            }
             var reply = await Api.GetAsync<ReviewReplyRecord>($"api/review-replies/review/{review.Id}");
             replies[review.Id] = reply.Ok ? reply.Data : null;
         }
@@ -166,5 +214,11 @@ else
         }
     }
 
-    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+        Session.ShopChanged -= OnShopChanged;
+    }
+
+    private static string Stars(int value) => new string('★', Math.Clamp(value, 0, 5)) + new string('☆', Math.Max(0, 5 - value));
 }

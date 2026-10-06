@@ -1,0 +1,122 @@
+@page "/admin/finance"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+
+<PageTitle>Phí sàn</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>Phí sàn 5%</h1>
+        <p>Mỗi sản phẩm bán được, sàn nhận 5% tiền hàng của đơn đã giao. Seller nhận 95%.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="app-alert app-alert-danger">@error</div>
+}
+
+@if (isLoading || report == null)
+{
+    <div class="seller-loading">Đang tải doanh thu sàn...</div>
+}
+else
+{
+    <div class="seller-grid">
+        <article class="seller-stat">
+            <span>Tiền sản phẩm</span>
+            <strong>@SellerText.Money(report.ProductSales)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Sàn nhận 5%</span>
+            <strong>@SellerText.Money(report.PlatformFee)</strong>
+        </article>
+        <article class="seller-stat">
+            <span>Seller nhận 95%</span>
+            <strong>@SellerText.Money(report.SellerShare)</strong>
+        </article>
+    </div>
+
+    @if (report.Lines.Count == 0)
+    {
+        <div class="seller-empty">Chưa có đơn đã giao.</div>
+    }
+    else
+    {
+        <section class="seller-card">
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Shop</th>
+                            <th>Đơn</th>
+                            <th>Sản phẩm</th>
+                            <th>Tiền hàng</th>
+                            <th>Phí 5%</th>
+                            <th>Seller 95%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in report.Lines)
+                        {
+                            <tr>
+                                <td><a href="@($"/admin/shops/{line.ShopId}")">@line.ShopName</a></td>
+                                <td>@line.OrderCode</td>
+                                <td>@line.Products</td>
+                                <td>@SellerText.Money(line.ProductSales)</td>
+                                <td>@SellerText.Money(line.PlatformFee)</td>
+                                <td>@SellerText.Money(line.SellerShare)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private Report? report;
+    private bool isLoading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureAsync();
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var result = await Api.GetAsync<Report>("api/finance/platform");
+        isLoading = false;
+        if (!result.Ok || result.Data == null)
+        {
+            error = result.Error;
+            return;
+        }
+
+        report = result.Data;
+    }
+
+    private sealed class Report
+    {
+        public decimal ProductSales { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal SellerShare { get; set; }
+        public List<Line> Lines { get; set; } = new();
+    }
+
+    private sealed class Line
+    {
+        public long ShopId { get; set; }
+        public string ShopName { get; set; } = "";
+        public string OrderCode { get; set; } = "";
+        public string Products { get; set; } = "";
+        public decimal ProductSales { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal SellerShare { get; set; }
+    }
+}

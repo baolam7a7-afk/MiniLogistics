@@ -1,5 +1,7 @@
 @page "/admin/orders/{OrderId:long}"
 @layout AdminLayout
+@using MiniLogistics.Web.Components
+@using MiniLogistics.Web.Services.Product
 @inject SellerApi Api
 @inject AdminSession Session
 
@@ -28,10 +30,18 @@ else if (order == null)
 else
 {
     <section class="seller-card">
-        <p>Trạng thái: <strong>@SellerText.OrderStatus(order.Status)</strong></p>
-        <p>Khách #@order.CustomerId · Shop #@order.ShopId · Địa chỉ #@order.ShippingAddressId</p>
+        <h2>@SellerText.OrderStatus(order.Status)</h2>
+        <OrderFlow Status="@order.Status" CancelReason="@order.CancelReason" />
+        <p>Khách: <strong>@(order.CustomerName ?? $"#{order.CustomerId}")</strong> · @(order.CustomerPhone ?? "—")</p>
+        <p>Địa chỉ: @(order.ShippingAddressText ?? "—")</p>
+        <p>Shop: @(order.ShopName ?? $"#{order.ShopId}")</p>
+        <p>Đặt lúc: <strong>@SellerText.When(order.PlacedAt)</strong></p>
         <p>Tạm tính @SellerText.Money(order.Subtotal) · Phí ship @SellerText.Money(order.ShippingFee) · Giảm @SellerText.Money(order.DiscountTotal)</p>
         <p>Tổng <strong>@SellerText.Money(order.Total)</strong> · @order.PaymentMethod</p>
+        @if (order.ConfirmedAt.HasValue)
+        {
+            <p class="seller-muted">Shop xác nhận lúc @SellerText.When(order.ConfirmedAt.Value)</p>
+        }
         @if (!string.IsNullOrWhiteSpace(order.Note))
         {
             <p>Ghi chú: @order.Note</p>
@@ -50,8 +60,10 @@ else
                 <table class="seller-table">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>Sản phẩm</th>
                             <th>Biến thể</th>
+                            <th>Giá</th>
                             <th>SL</th>
                             <th>Thành tiền</th>
                         </tr>
@@ -60,8 +72,10 @@ else
                         @foreach (var item in order.Items)
                         {
                             <tr>
+                                <td><img class="order-line-image" src="@VariantImages.Resolve(item.VariantName, item.ImageUrl)" alt="" /></td>
                                 <td>@item.ProductName</td>
                                 <td>@item.VariantName</td>
+                                <td>@SellerText.Money(item.UnitPrice)</td>
                                 <td>@item.Quantity</td>
                                 <td>@SellerText.Money(item.LineTotal)</td>
                             </tr>
@@ -72,23 +86,62 @@ else
         }
     </section>
 
-    @if (AdminText.NextOrderStatuses(order.Status).Count > 0)
+    @if (CanAct)
     {
         <section class="seller-card">
-            <h2>Đổi trạng thái</h2>
-            <label class="seller-field">Ghi chú
-                <input class="seller-input" @bind="note" />
-            </label>
+            <h2>Xử lý đơn</h2>
+            <p class="seller-muted">Cùng quyền với seller: xác nhận hoặc hủy khi đơn đang chờ. Không đổi trạng thái giao hàng.</p>
             <div class="seller-actions">
-                @foreach (var next in AdminText.NextOrderStatuses(order.Status))
-                {
-                    <button class="app-button @(next == "cancelled" ? "app-button-danger" : "app-button-primary")" @onclick="() => Change(next)">
-                        @SellerText.OrderStatus(next)
-                    </button>
-                }
+                <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Confirm">Xác nhận đơn</button>
+                <button class="app-button app-button-danger" disabled="@isSaving" @onclick="OpenCancel">Hủy đơn</button>
             </div>
         </section>
     }
+
+    @if (order.StatusLogs.Count > 0)
+    {
+        <section class="seller-card">
+            <h2>Lịch sử</h2>
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Từ</th>
+                            <th>Đến</th>
+                            <th>Ghi chú</th>
+                            <th>Lúc</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in order.StatusLogs)
+                        {
+                            <tr>
+                                <td>@SellerText.OrderStatus(log.FromStatus)</td>
+                                <td>@SellerText.OrderStatus(log.ToStatus)</td>
+                                <td>@(log.Message ?? "—")</td>
+                                <td>@SellerText.When(log.CreatedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@if (showCancel)
+{
+    <div class="order-modal-backdrop">
+        <div class="order-modal">
+            <h3>Hủy đơn</h3>
+            <p>Nhập lý do hủy. Khách hàng sẽ thấy lý do này.</p>
+            <textarea class="seller-input" rows="4" @bind="cancelReason" maxlength="500" placeholder="Lý do hủy"></textarea>
+            <div class="order-modal-actions">
+                <button class="app-button app-button-secondary" @onclick="CloseCancel">Đóng</button>
+                <button class="app-button app-button-danger" disabled="@(isSaving || string.IsNullOrWhiteSpace(cancelReason))" @onclick="Cancel">Xác nhận hủy</button>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -96,9 +149,20 @@ else
 
     private SellerOrder? order;
     private bool isLoading = true;
+    private bool isSaving;
     private bool isError;
+    private bool showCancel;
     private string? message;
-    private string note = "";
+    private string cancelReason = "";
+
+    private bool CanAct
+    {
+        get
+        {
+            var status = order?.Status?.Trim().ToLowerInvariant();
+            return status is "pending" or "paid";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -128,22 +192,43 @@ else
         order = result.Data;
     }
 
-    private async Task Change(string status)
+    private async Task Confirm()
     {
-        var result = await Api.PutAsync<SellerOrder>($"api/orders/{OrderId}/status", new
-        {
-            Status = status,
-            Message = string.IsNullOrWhiteSpace(note) ? null : note
-        });
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{OrderId}/confirm");
+        isSaving = false;
         isError = !result.Ok;
-        message = result.Ok ? "Đã cập nhật trạng thái đơn." : result.Error;
+        message = result.Ok ? "Đã xác nhận đơn." : result.Error;
         if (result.Data != null)
         {
             order = result.Data;
         }
-        else if (result.Ok)
+    }
+
+    private void OpenCancel()
+    {
+        cancelReason = "";
+        showCancel = true;
+    }
+
+    private void CloseCancel() => showCancel = false;
+
+    private async Task Cancel()
+    {
+        if (string.IsNullOrWhiteSpace(cancelReason))
         {
-            await LoadAsync();
+            return;
+        }
+
+        isSaving = true;
+        var result = await Api.PostAsync<SellerOrder>($"api/orders/{OrderId}/shop-cancel", new { Reason = cancelReason.Trim() });
+        isSaving = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã hủy đơn." : result.Error;
+        if (result.Ok)
+        {
+            showCancel = false;
+            order = result.Data ?? order;
         }
     }
 }

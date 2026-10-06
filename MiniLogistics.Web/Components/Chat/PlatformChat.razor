@@ -1,0 +1,376 @@
+@inject SellerApi Api
+@inject SellerSession SellerSession
+@inject AdminSession AdminSession
+@inject ChatLiveService Live
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using MiniLogistics.Web.Services.Chat
+@implements IDisposable
+
+<div class="chat-page @(SellerSide ? "platform-chat-solo" : null)">
+    <div class="seller-page-head">
+        <div>
+            <h1>@(SellerSide ? "Chat với admin" : "Chat với seller")</h1>
+            <p>@(SellerSide ? "Nhắn admin bất cứ lúc nào cần." : "Chọn cửa hàng để nhắn seller. Mọi shop đều có sẵn khung chat.")</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="app-alert app-alert-danger">@errorMessage</div>
+    }
+
+    <div class="seller-chat-layout">
+        @if (!SellerSide)
+        {
+        <aside class="seller-card seller-chat-list">
+            @if (conversations.Count == 0)
+            {
+                <p class="seller-muted">Chưa có cửa hàng.</p>
+            }
+            else
+            {
+                @foreach (var item in conversations)
+                {
+                    <button type="button"
+                            class="seller-chat-item @(IsCurrent(item) ? "active" : null)"
+                            @onclick="() => Open(item)">
+                        <span>
+                            <strong>@(item.ShopName ?? "Cửa hàng") · @(item.PeerName ?? "Admin")</strong>
+                            <span class="seller-muted" style="display:block">@(item.LastMessagePreview ?? "Chưa có tin")</span>
+                        </span>
+                        @if (item.UnreadCount > 0)
+                        {
+                            <span class="seller-chat-badge">@SellerText.CountBadge(item.UnreadCount)</span>
+                        }
+                    </button>
+                }
+            }
+        </aside>
+        }
+
+        <section class="seller-card seller-chat-thread">
+            @if (ConversationId is null or 0 || current == null)
+            {
+                <div class="platform-chat-empty">
+                    <div>
+                        <strong>@(SellerSide ? "Đang mở chat với admin..." : "Chọn cửa hàng bên trái")</strong>
+                        <p>@(SellerSide ? "Khung chat sẽ hiện ngay tại đây." : "Tin nhắn với seller hiện đầy khung bên phải.")</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="shop-chat-head">
+                    <strong>@(current.ShopName ?? "Cửa hàng")</strong>
+                    <span class="seller-muted">@(current.PeerName ?? "Admin")</span>
+                </div>
+                <div class="seller-chat-messages" @ref="messagePane">
+                    @foreach (var message in messages)
+                    {
+                        <div @key="message.Id" style="align-self:@(message.IsMine ? "flex-end" : "flex-start");max-width:75%">
+                            <small class="seller-muted">@(message.IsMine ? "Bạn" : message.SenderName)</small>
+                            <div style="background:@(message.IsMine ? "#0f766e" : "#f1f5f9");color:@(message.IsMine ? "#fff" : "#0f172a");padding:10px 12px;border-radius:14px">
+                                @message.Content
+                            </div>
+                            <small class="seller-muted">@message.CreatedAt.ToLocalTime().ToString("HH:mm dd/MM")</small>
+                        </div>
+                    }
+                </div>
+                <form class="seller-chat-compose" @onsubmit="Send" @onsubmit:preventDefault>
+                    <input class="seller-input" style="flex:1" @bind="draft" @bind:event="oninput" placeholder="Nhập tin nhắn..." />
+                    <button class="app-button app-button-primary" type="submit" disabled="@isSending">Gửi</button>
+                </form>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter] public long? ConversationId { get; set; }
+    [Parameter] public string BasePath { get; set; } = "/seller/support";
+    [Parameter] public string Audience { get; set; } = "seller";
+
+    private List<SellerConversation> conversations = new();
+    private List<SellerChatMessage> messages = new();
+    private string draft = "";
+    private string? errorMessage;
+    private bool isSending;
+    private bool scrollPending;
+    private ElementReference messagePane;
+    private Func<ChatInboxNotice, Task>? onInbox;
+    private Func<Task>? onRestored;
+    private readonly HashSet<long> seenMessages = new();
+
+    private bool SellerSide => Audience == "seller";
+    private SellerConversation? current =>
+        conversations.FirstOrDefault(item => item.Id == ConversationId);
+
+    private bool IsCurrent(SellerConversation item) =>
+        item.Id > 0 && item.Id == ConversationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (SellerSide)
+        {
+            await SellerSession.EnsureAsync();
+        }
+
+        onInbox = OnInboxAsync;
+        onRestored = async () =>
+        {
+            await LoadConversations();
+            if (ConversationId is > 0)
+            {
+                await LoadMessages(ConversationId.Value);
+            }
+        };
+        Live.InboxChanged += onInbox;
+        Live.ConnectionRestored += onRestored;
+        await Live.EnsureConnectedAsync();
+        await LoadConversations();
+        if (SellerSide && (ConversationId is null or 0) && SellerSession.Shop?.Id is long shopId)
+        {
+            await OpenShop(shopId);
+        }
+        else if (!SellerSide && (ConversationId is null or 0) && conversations.Count > 0)
+        {
+            await Open(conversations[0]);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ConversationId is > 0)
+        {
+            await Live.JoinAsync(ConversationId.Value);
+            await LoadMessages(ConversationId.Value);
+        }
+        else
+        {
+            messages = new();
+        }
+    }
+
+    private async Task LoadConversations()
+    {
+        var result = await Api.GetAsync<List<SellerConversation>>("api/chat/platform");
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error ?? "Không tải được chat với admin.";
+            conversations = new();
+            return;
+        }
+
+        errorMessage = null;
+        conversations = result.Data;
+        if (SellerSide)
+        {
+            await SellerSession.RefreshSupportUnreadAsync();
+        }
+        else
+        {
+            await AdminSession.RefreshSupportUnreadAsync();
+        }
+    }
+
+    private async Task LoadMessages(long id)
+    {
+        var result = await Api.GetAsync<List<SellerChatMessage>>($"api/chat/conversations/{id}/messages");
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error ?? "Không tải được hội thoại.";
+            return;
+        }
+
+        messages = result.Data;
+        var row = conversations.FirstOrDefault(item => item.Id == id);
+        if (row != null)
+        {
+            row.UnreadCount = 0;
+        }
+
+        scrollPending = true;
+        if (SellerSide)
+        {
+            await SellerSession.RefreshSupportUnreadAsync();
+        }
+        else
+        {
+            await AdminSession.RefreshSupportUnreadAsync();
+        }
+    }
+
+    private Task OnInboxAsync(ChatInboxNotice incoming)
+    {
+        if (!string.Equals(incoming.Channel, "platform", StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            if (incoming.MessageId > 0 && !seenMessages.Add(incoming.MessageId))
+            {
+                return;
+            }
+
+            if (incoming.MessageId <= 0)
+            {
+                await LoadConversations();
+                StateHasChanged();
+                return;
+            }
+
+            var row = conversations.FirstOrDefault(item => item.Id == incoming.ConversationId);
+            if (row == null)
+            {
+                await LoadConversations();
+                row = conversations.FirstOrDefault(item => item.Id == incoming.ConversationId);
+            }
+
+            var open = ConversationId == incoming.ConversationId;
+            if (row != null)
+            {
+                row.LastMessagePreview = incoming.Content;
+                row.LastMessageAt = incoming.CreatedAt;
+                if (!open && incoming.SenderId != (SellerSide ? SellerSession.Profile?.Id : AdminSession.Profile?.Id))
+                {
+                    row.UnreadCount++;
+                }
+            }
+
+            if (open && messages.All(item => item.Id != incoming.MessageId))
+            {
+                var mine = incoming.SenderId == (SellerSide ? SellerSession.Profile?.Id : AdminSession.Profile?.Id);
+                messages.Add(new SellerChatMessage
+                {
+                    Id = incoming.MessageId,
+                    Content = incoming.Content,
+                    SenderName = mine ? "Bạn" : incoming.SenderName,
+                    CreatedAt = incoming.CreatedAt,
+                    IsMine = mine
+                });
+                scrollPending = true;
+                if (!mine)
+                {
+                    await Api.PostAsync<object>($"api/chat/conversations/{incoming.ConversationId}/read", new { });
+                }
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task Send()
+    {
+        if (ConversationId is null or 0 || string.IsNullOrWhiteSpace(draft))
+        {
+            return;
+        }
+
+        isSending = true;
+        var text = draft.Trim();
+        var result = await Api.PostAsync<SellerChatMessage>(
+            $"api/chat/conversations/{ConversationId}/messages",
+            new { content = text });
+        isSending = false;
+        if (!result.Ok || result.Data == null)
+        {
+            errorMessage = result.Error ?? "Gửi tin nhắn thất bại.";
+            return;
+        }
+
+        draft = "";
+        if (messages.All(item => item.Id != result.Data.Id))
+        {
+            result.Data.IsMine = true;
+            messages.Add(result.Data);
+        }
+
+        var row = conversations.FirstOrDefault(item => item.Id == ConversationId);
+        if (row != null)
+        {
+            row.LastMessagePreview = text;
+            row.LastMessageAt = result.Data.CreatedAt;
+        }
+
+        scrollPending = true;
+    }
+
+    private async Task Open(SellerConversation item)
+    {
+        if (item.Id > 0)
+        {
+            if (ConversationId != item.Id)
+            {
+                Navigation.NavigateTo($"{BasePath}/{item.Id}");
+            }
+
+            return;
+        }
+
+        if (item.ShopId is long shopId)
+        {
+            await OpenShop(shopId);
+        }
+    }
+
+    private async Task OpenShop(long shopId)
+    {
+        var opened = await Api.PostAsync<SellerConversation>($"api/chat/platform/{shopId}/open", new { });
+        if (!opened.Ok || opened.Data == null || opened.Data.Id <= 0)
+        {
+            errorMessage = opened.Error ?? "Không mở được khung chat.";
+            return;
+        }
+
+        if (conversations.All(item => item.Id != opened.Data.Id))
+        {
+            var placeholder = conversations.FirstOrDefault(item => item.Id == 0 && item.ShopId == shopId);
+            if (placeholder != null)
+            {
+                placeholder.Id = opened.Data.Id;
+            }
+            else
+            {
+                conversations.Insert(0, opened.Data);
+            }
+        }
+
+        if (ConversationId != opened.Data.Id)
+        {
+            Navigation.NavigateTo($"{BasePath}/{opened.Data.Id}", replace: SellerSide);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!scrollPending)
+        {
+            return;
+        }
+
+        scrollPending = false;
+        try
+        {
+            await JS.InvokeVoidAsync("miniLogistics.scrollToEnd", messagePane);
+        }
+        catch
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        if (onInbox != null)
+        {
+            Live.InboxChanged -= onInbox;
+        }
+
+        if (onRestored != null)
+        {
+            Live.ConnectionRestored -= onRestored;
+        }
+    }
+}

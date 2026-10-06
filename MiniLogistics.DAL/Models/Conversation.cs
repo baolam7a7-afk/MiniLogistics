@@ -12,6 +12,8 @@ public class Conversation
 
     public long? ProductId { get; set; }
 
+    public string Channel { get; set; } = "shop";
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? LastMessageAt { get; set; }

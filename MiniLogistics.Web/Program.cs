@@ -14,17 +14,24 @@ using MiniLogistics.Web.Services.Category;
 using MiniLogistics.Web.Services.Seller;
 using MiniLogistics.Web.Services.Shipper;
 using MiniLogistics.Web.Services.Admin;
+using MiniLogistics.Web.Services.Chat;
+using MiniLogistics.Web.Services.Voucher;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// HTTP Client
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+{
+    apiBaseUrl = builder.HostEnvironment.BaseAddress;
+}
+
 builder.Services.AddScoped(sp =>
     new HttpClient
     {
-        BaseAddress = new Uri("http://localhost:5136/")
+        BaseAddress = new Uri(apiBaseUrl)
     });
 
 // Authentication
@@ -35,6 +42,7 @@ builder.Services.AddScoped<AuthStateService>();
 // Product, Cart, Address, Order
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<CartService>();
+builder.Services.AddScoped<CheckoutSelection>();
 builder.Services.AddScoped<AddressService>();
 builder.Services.AddScoped<OrderService>();
 
@@ -45,6 +53,9 @@ builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<SellerApi>();
 builder.Services.AddScoped<SellerSession>();
 builder.Services.AddScoped<ShipperSession>();
+builder.Services.AddScoped<ShipperOrderLiveService>();
 builder.Services.AddScoped<AdminSession>();
+builder.Services.AddScoped<ChatLiveService>();
+builder.Services.AddScoped<VoucherOfferService>();
 
 await builder.Build().RunAsync();

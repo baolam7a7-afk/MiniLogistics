@@ -19,6 +19,7 @@
         <option value="pending">Chờ duyệt</option>
         <option value="approved">Đã duyệt</option>
         <option value="rejected">Từ chối</option>
+        <option value="suspended">Ngừng bán</option>
     </select>
     <button class="app-button app-button-secondary" @onclick="Search">Lọc</button>
 </div>
@@ -45,6 +46,7 @@ else
                     <tr>
                         <th>Shop</th>
                         <th>Chủ</th>
+                        <th>Ví</th>
                         <th>Trạng thái</th>
                         <th>Tạo lúc</th>
                         <th></th>
@@ -55,10 +57,11 @@ else
                     {
                         <tr>
                             <td>
-                                <strong>@shop.Name</strong>
-                                <div class="seller-muted">@shop.Slug · #@shop.Id</div>
+                                <a href="@($"/admin/shops/{shop.Id}")"><strong>@shop.Name</strong></a>
+                                <div class="seller-muted">@shop.Slug</div>
                             </td>
                             <td>#@shop.OwnerUserId</td>
+                            <td>@SellerText.Money(WalletOf(shop.Id))</td>
                             <td><span class="seller-badge">@SellerText.ShopStatus(shop.Status)</span></td>
                             <td>@SellerText.When(shop.CreatedAt)</td>
                             <td>
@@ -88,6 +91,7 @@ else
     private bool isLoading = true;
     private bool isError;
     private string? message;
+    private Dictionary<long, decimal> wallets = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -138,7 +142,12 @@ else
 
         items = result.Data.Items;
         totalPages = result.Data.TotalPages;
+        var walletResult = await Api.GetAsync<List<ShopWalletRecord>>("api/shop-wallets");
+        wallets = walletResult.Data?.ToDictionary(item => item.ShopId, item => item.Balance) ?? new();
     }
+
+    private decimal WalletOf(long shopId) =>
+        wallets.TryGetValue(shopId, out var balance) ? balance : 0;
 
     private async Task Approve(long id)
     {

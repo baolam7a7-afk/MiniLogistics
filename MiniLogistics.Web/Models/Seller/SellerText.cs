@@ -16,16 +16,19 @@ public static class SellerText
         return local.ToString("dd/MM/yyyy HH:mm");
     }
 
+    public static string CountBadge(int count) =>
+        count > 99 ? "99+" : count.ToString();
+
     public static string OrderStatus(string? status) => status?.Trim().ToLowerInvariant() switch
     {
-        "pending" => "Chờ xác nhận",
+        "pending" or "paid" => "Chờ shop xác nhận",
         "confirmed" => "Đã xác nhận",
-        "processing" => "Đang xử lý",
+        "processing" => "Đã xác nhận",
         "shipping" => "Đang giao",
-        "delivered" => "Đã giao",
+        "awaiting_receipt" => "Chờ khách xác nhận",
+        "delivered" => "Đã giao thành công",
         "cancelled" => "Đã hủy",
         "awaiting_payment" => "Chờ thanh toán",
-        "paid" => "Đã thanh toán",
         _ => string.IsNullOrWhiteSpace(status) ? "—" : status
     };
 
@@ -42,6 +45,7 @@ public static class SellerText
         "pending" => "Chờ duyệt",
         "approved" => "Đã duyệt",
         "rejected" => "Bị từ chối",
+        "suspended" => "Ngừng bán",
         _ => string.IsNullOrWhiteSpace(status) ? "—" : status
     };
 

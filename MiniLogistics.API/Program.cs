@@ -31,6 +31,7 @@ using MiniLogistics.BLL.Services.ReportSnapshot;
 using MiniLogistics.BLL.Services.Address;
 using MiniLogistics.BLL.Services.Shop;
 using MiniLogistics.BLL.Services.Voucher;
+using MiniLogistics.BLL.Services.OrderVoucher;
 using MiniLogistics.BLL.Services.SellerDashboard;
 using MiniLogistics.BLL.Services.AdminDashboard;
 using MiniLogistics.BLL.Services.UserVoucher;
@@ -259,6 +260,10 @@ builder.Services.AddScoped<
     IVoucherService,
     VoucherService>();
 
+builder.Services.AddScoped<
+    IOrderVoucherService,
+    OrderVoucherService>();
+
 
 // =====================================================
 // 17. REVIEW
@@ -332,6 +337,14 @@ builder.Services.AddScoped<
     IShopService,
     ShopService>();
 
+builder.Services.AddScoped<
+    MiniLogistics.BLL.Services.Finance.IFinanceService,
+    MiniLogistics.BLL.Services.Finance.FinanceService>();
+
+builder.Services.AddScoped<
+    MiniLogistics.BLL.Services.Referral.IReferralService,
+    MiniLogistics.BLL.Services.Referral.ReferralService>();
+
 
 // =====================================================
 // 24. GROUP A - RETURN REQUEST
@@ -375,6 +388,8 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IChatService,
     ChatService>();
+
+builder.Services.AddScoped<ChatRealtime>();
 
 builder.Services.AddScoped<
     IQrPaymentService,
@@ -502,7 +517,8 @@ builder.Services.AddCors(
                     .WithOrigins(
                         allowedOrigins)
                     .AllowAnyHeader()
-                    .AllowAnyMethod();
+                    .AllowAnyMethod()
+                    .AllowCredentials();
             });
     });
 
@@ -563,6 +579,8 @@ var webRootPath = Path.Combine(
 
 Directory.CreateDirectory(webRootPath);
 
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(webRootPath)
@@ -623,6 +641,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHub<ChatHub>("/hubs/chat");
+
+app.MapFallbackToFile("index.html");
 
 
 // =====================================================

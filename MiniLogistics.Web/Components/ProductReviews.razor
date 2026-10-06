@@ -1,0 +1,46 @@
+@using MiniLogistics.Web.Models.Review
+@using MiniLogistics.Web.Services.Product
+@inject HttpClient Http
+
+<section class="app-card" style="margin-top:24px">
+    <h2>Đánh giá sản phẩm</h2>
+    @if (published.Count == 0)
+    {
+        <p class="seller-muted">Chưa có đánh giá.</p>
+    }
+    else
+    {
+        @foreach (var review in published)
+        {
+            <article style="border-top:1px solid #e2e8f0;padding:12px 0;display:grid;grid-template-columns:56px 1fr;gap:12px">
+                <img src="@VariantImages.Resolve(review.VariantName, review.ProductImageUrl)" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" />
+                <div>
+                    <strong>@(string.IsNullOrWhiteSpace(review.ProductName) ? "Sản phẩm" : review.ProductName)</strong>
+                    @if (!string.IsNullOrWhiteSpace(review.VariantName))
+                    {
+                        <span class="seller-muted"> · @review.VariantName</span>
+                    }
+                    <div>
+                        <strong>@Stars(review.Rating)</strong>
+                        <span class="seller-muted"> · @review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                    </div>
+                    <p>@(string.IsNullOrWhiteSpace(review.Content) ? "Không có nhận xét." : review.Content)</p>
+                </div>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public long ProductId { get; set; }
+
+    private List<ReviewResponse> published = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var list = await Http.GetFromJsonAsync<ReviewListResponse>($"api/review/product/{ProductId}?Page=1&PageSize=20");
+        published = list?.Items ?? new();
+    }
+
+    private static string Stars(int value) => new string('★', Math.Clamp(value, 0, 5)) + new string('☆', Math.Max(0, 5 - value));
+}

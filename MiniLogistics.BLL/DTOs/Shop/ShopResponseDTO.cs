@@ -16,6 +16,8 @@ public class ShopResponseDTO
 
     public string Status { get; set; } = null!;
 
+    public string? StatusReason { get; set; }
+
     public DateTime? ApprovedAt { get; set; }
 
     public DateTime CreatedAt { get; set; }

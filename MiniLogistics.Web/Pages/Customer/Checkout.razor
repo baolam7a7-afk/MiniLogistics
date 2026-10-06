@@ -5,14 +5,22 @@
 @using MiniLogistics.Web.Models.Address
 @using MiniLogistics.Web.Models.Cart
 @using MiniLogistics.Web.Models.Order
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
 @using MiniLogistics.Web.Services.Address
+@using MiniLogistics.Web.Services.Auth
 @using MiniLogistics.Web.Services.Cart
 @using MiniLogistics.Web.Services.Order
+@using MiniLogistics.Web.Services.Product
 
 @inject CartService CartService
+@inject CheckoutSelection CheckoutSelection
 @inject AddressService AddressService
 @inject OrderService OrderService
+@inject HttpClient Http
+@inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <PageTitle>Thanh toán</PageTitle>
 
@@ -223,7 +231,17 @@
                             <div class="checkout-product">
 
                                 <div class="checkout-product-icon">
-                                    📦
+                                    @{
+                                        var imageUrl = VariantImages.Resolve(item.VariantName, item.ImageUrl);
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(imageUrl))
+                                    {
+                                        <img src="@imageUrl" alt="@item.ProductName" />
+                                    }
+                                    else
+                                    {
+                                        <span>📦</span>
+                                    }
                                 </div>
 
                                 <div class="checkout-product-info">
@@ -248,13 +266,22 @@
 
                                 <div class="checkout-product-price">
 
-                                    <span>
-                                        @FormatMoney(item.Price)
-                                    </span>
+                                    @if (LineDiscount(item) is decimal lineOff && lineOff > 0)
+                                    {
+                                        <span class="product-price-old">@FormatMoney(item.TotalPrice)</span>
+                                        <span class="checkout-line-off">Trừ @FormatMoney(lineOff)</span>
+                                        <strong>@FormatMoney(item.TotalPrice - lineOff)</strong>
+                                    }
+                                    else
+                                    {
+                                        <span>
+                                            @FormatMoney(item.Price)
+                                        </span>
 
-                                    <strong>
-                                        @FormatMoney(item.TotalPrice)
-                                    </strong>
+                                        <strong>
+                                            @FormatMoney(item.TotalPrice)
+                                        </strong>
+                                    }
 
                                 </div>
 
@@ -395,6 +422,15 @@
                     </div>
 
 
+                    <div class="checkout-summary-row">
+                        <span>Giảm giá</span>
+                        <button type="button"
+                                class="checkout-summary-action @(VoucherDiscount > 0 ? null : "checkout-summary-action-pick")"
+                                @onclick="OpenVoucherPopup">
+                            @(VoucherDiscount > 0 ? $"-{FormatMoney(VoucherDiscount)}" : "Chọn voucher")
+                        </button>
+                    </div>
+
                     <div class="checkout-summary-divider"></div>
 
 
@@ -405,7 +441,7 @@
                         </span>
 
                         <strong>
-                            @FormatMoney(cart!.TotalAmount + shippingFee)
+                            @FormatMoney(PayableTotal)
                         </strong>
 
                     </div>
@@ -451,7 +487,92 @@
 
 </div>
 
+@if (showVoucherPopup)
+{
+    <div class="address-modal-overlay" @onclick="CloseVoucherPopup">
+        <div class="address-modal" @onclick:stopPropagation="true">
+            <div class="address-modal-header">
+                <div>
+                    <h2>Chọn voucher</h2>
+                    <p>Tối đa 2 voucher: 1 của admin và 1 của shop.</p>
+                </div>
+                <button type="button" class="modal-close-button" @onclick="CloseVoucherPopup">×</button>
+            </div>
+            <div class="voucher-popup-body">
+                @if (isLoadingVouchers)
+                {
+                    <p>Đang tải voucher...</p>
+                }
+                else
+                {
+                    <h3 class="voucher-group-title">Voucher admin · @AdminOptions.Count()</h3>
+                    @if (!AdminOptions.Any())
+                    {
+                        <p class="checkout-voucher-empty">Không có voucher admin khả dụng.</p>
+                    }
+                    else
+                    {
+                        @foreach (var voucher in AdminOptions)
+                        {
+                            <label class="voucher-option @(draftAdminId == voucher.Id ? "selected" : null) @(BlockReason(voucher) != null ? "disabled" : null)">
+                                <input type="checkbox"
+                                       disabled="@(BlockReason(voucher) != null)"
+                                       checked="@(draftAdminId == voucher.Id)"
+                                       @onchange="() => ToggleDraft(voucher, true)" />
+                                <span>
+                                    <strong>@(voucher.Name ?? voucher.Code)</strong>
+                                    <small>@voucher.Code · @DiscountLabel(voucher)</small>
+                                    <small class="product-voucher-note">@TargetText(voucher)</small>
+                                    <small class="voucher-meta">@QuantityLabel(voucher) · @CountdownLabel(voucher)</small>
+                                    @if (BlockReason(voucher) is string adminReason)
+                                    {
+                                        <small class="voucher-block">@adminReason</small>
+                                    }
+                                </span>
+                            </label>
+                        }
+                    }
 
+                    <h3 class="voucher-group-title">Voucher shop · @SellerOptions.Count()</h3>
+                    @if (SelectedShopIds.Count > 1)
+                    {
+                        <p class="checkout-voucher-empty">Đơn đang có sản phẩm của nhiều shop. Chỉ dùng được voucher admin.</p>
+                    }
+                    else if (!SellerOptions.Any())
+                    {
+                        <p class="checkout-voucher-empty">Không có voucher shop cho đơn này.</p>
+                    }
+                    else
+                    {
+                        @foreach (var voucher in SellerOptions)
+                        {
+                            <label class="voucher-option @(draftSellerId == voucher.Id ? "selected" : null) @(BlockReason(voucher) != null ? "disabled" : null)">
+                                <input type="checkbox"
+                                       disabled="@(BlockReason(voucher) != null)"
+                                       checked="@(draftSellerId == voucher.Id)"
+                                       @onchange="() => ToggleDraft(voucher, false)" />
+                                <span>
+                                    <strong>@(voucher.Name ?? voucher.Code)</strong>
+                                    <small>@voucher.Code · @DiscountLabel(voucher)</small>
+                                    <small class="product-voucher-note">@TargetText(voucher)</small>
+                                    <small class="voucher-meta">@QuantityLabel(voucher) · @CountdownLabel(voucher)</small>
+                                    @if (BlockReason(voucher) is string shopReason)
+                                    {
+                                        <small class="voucher-block">@shopReason</small>
+                                    }
+                                </span>
+                            </label>
+                        }
+                    }
+                }
+                <div class="order-modal-actions">
+                    <button type="button" class="app-button app-button-secondary" @onclick="CloseVoucherPopup">Hủy</button>
+                    <button type="button" class="app-button app-button-primary" @onclick="ConfirmVouchers">Dùng voucher đã chọn</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
 
@@ -468,6 +589,15 @@
     private string selectedPaymentMethod = "cod";
 
     private string note = string.Empty;
+    private bool showVoucherPopup;
+    private bool isLoadingVouchers;
+    private Timer? voucherClock;
+    private DateTime voucherNow = DateTime.UtcNow;
+    private List<CheckoutVoucher> voucherOptions = new();
+    private long? draftAdminId;
+    private long? draftSellerId;
+    private CheckoutVoucher? adminVoucher;
+    private CheckoutVoucher? sellerVoucher;
 
     private decimal shippingFee = 0m;
 
@@ -511,6 +641,13 @@
             // -----------------------------------------------------
 
             cart = await CartService.GetCartAsync();
+            if (cart != null && CheckoutSelection.CartItemIds.Count > 0)
+            {
+                cart.Items = cart.Items
+                    .Where(item => CheckoutSelection.CartItemIds.Contains(item.Id))
+                    .ToList();
+                cart.TotalAmount = cart.Items.Sum(item => item.TotalPrice);
+            }
 
             if (cart == null)
             {
@@ -731,6 +868,24 @@
             // CREATE ORDER SUCCESS
             // -----------------------------------------------------
 
+            foreach (var voucher in new[] { adminVoucher, sellerVoucher })
+            {
+                if (voucher == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await OrderService.ApplyVoucherAsync(order.Id, voucher.Code);
+                }
+                catch (Exception voucherError)
+                {
+                    submitError = $"{voucherError.Message} Đơn #{order.Id} đã được tạo.";
+                    return;
+                }
+            }
+
             if (string.Equals(selectedPaymentMethod, "qr", StringComparison.OrdinalIgnoreCase))
             {
                 Navigation.NavigateTo($"/orders/{order.Id}/qr-payment");
@@ -835,4 +990,430 @@
         || cart == null
         || cart.Items.Count == 0
         || selectedAddressId <= 0;
+
+    private decimal PayableTotal =>
+        Math.Max(0, (cart?.TotalAmount ?? 0) + shippingFee - VoucherDiscount);
+
+    private decimal VoucherDiscount
+    {
+        get
+        {
+            var room = cart?.TotalAmount ?? 0;
+            var admin = Estimate(adminVoucher, room);
+            room -= admin;
+            return admin + Estimate(sellerVoucher, room);
+        }
+    }
+
+    private List<long> SelectedShopIds =>
+        cart?.Items.Select(item => item.ShopId).Distinct().ToList() ?? new();
+
+    private IEnumerable<CheckoutVoucher> AdminOptions =>
+        voucherOptions.Where(voucher => voucher.Scope == "platform");
+
+    private IEnumerable<CheckoutVoucher> SellerOptions =>
+        SelectedShopIds.Count == 1
+            ? voucherOptions.Where(voucher =>
+                voucher.Scope == "shop" && voucher.ShopId == SelectedShopIds[0])
+            : Enumerable.Empty<CheckoutVoucher>();
+
+    private async Task OpenVoucherPopup()
+    {
+        showVoucherPopup = true;
+        draftAdminId = adminVoucher?.Id;
+        draftSellerId = sellerVoucher?.Id;
+        StartVoucherClock();
+        await LoadVouchersAsync();
+    }
+
+    private void CloseVoucherPopup()
+    {
+        showVoucherPopup = false;
+        StopVoucherClock();
+    }
+
+    private void ConfirmVouchers()
+    {
+        adminVoucher = voucherOptions.FirstOrDefault(voucher => voucher.Id == draftAdminId);
+        sellerVoucher = voucherOptions.FirstOrDefault(voucher => voucher.Id == draftSellerId);
+        if (adminVoucher != null && BlockReason(adminVoucher) != null)
+        {
+            adminVoucher = null;
+        }
+
+        if (sellerVoucher != null && BlockReason(sellerVoucher) != null)
+        {
+            sellerVoucher = null;
+        }
+
+        showVoucherPopup = false;
+        StopVoucherClock();
+    }
+
+    private void ToggleDraft(CheckoutVoucher voucher, bool admin)
+    {
+        if (BlockReason(voucher) != null)
+        {
+            return;
+        }
+
+        if (admin)
+        {
+            draftAdminId = draftAdminId == voucher.Id ? null : voucher.Id;
+        }
+        else
+        {
+            draftSellerId = draftSellerId == voucher.Id ? null : voucher.Id;
+        }
+    }
+
+    private async Task LoadVouchersAsync()
+    {
+        isLoadingVouchers = true;
+        try
+        {
+            var token = await TokenStorage.GetAccessTokenAsync();
+            var shopId = SelectedShopIds.Count == 1 ? SelectedShopIds[0] : (long?)null;
+            var mine = await SendAsync<List<OwnedVoucherJson>>(
+                HttpMethod.Get, "api/user-vouchers/mine", token);
+            var claimable = await SendAsync<List<ClaimableVoucherJson>>(
+                HttpMethod.Get,
+                shopId.HasValue
+                    ? $"api/user-vouchers/claimable?shopId={shopId.Value}"
+                    : "api/user-vouchers/claimable",
+                token);
+
+            var options = new List<CheckoutVoucher>();
+            foreach (var item in mine ?? new())
+            {
+                if (!string.Equals(item.Status, "available", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                options.Add(new CheckoutVoucher
+                {
+                    Id = item.VoucherId,
+                    Code = item.Code,
+                    Name = item.Name,
+                    Scope = item.Scope,
+                    ShopId = item.ShopId,
+                    DiscountType = item.DiscountType,
+                    DiscountValue = item.DiscountValue,
+                    MaxDiscount = item.MaxDiscount,
+                    MinOrderValue = item.MinOrderValue,
+                    UsageLimit = item.UsageLimit,
+                    UsedCount = item.UsedCount,
+                    EndAt = item.EndAt,
+                    ProductIds = item.ProductIds ?? new(),
+                    ProductNames = item.ProductNames ?? new()
+                });
+            }
+
+            foreach (var item in claimable ?? new())
+            {
+                if (options.Any(option => option.Id == item.Id))
+                {
+                    continue;
+                }
+
+                options.Add(new CheckoutVoucher
+                {
+                    Id = item.Id,
+                    Code = item.Code,
+                    Name = item.Name,
+                    Scope = item.Scope,
+                    ShopId = item.ShopId,
+                    DiscountType = item.DiscountType,
+                    DiscountValue = item.DiscountValue,
+                    MaxDiscount = item.MaxDiscount,
+                    MinOrderValue = item.MinOrderValue,
+                    UsageLimit = item.UsageLimit,
+                    UsedCount = item.UsedCount,
+                    EndAt = item.EndAt,
+                    ProductIds = item.ProductIds ?? new(),
+                    ProductNames = item.ProductNames ?? new()
+                });
+            }
+
+            voucherOptions = options;
+        }
+        catch
+        {
+            voucherOptions = new();
+        }
+        finally
+        {
+            isLoadingVouchers = false;
+        }
+    }
+
+    private async Task<T?> SendAsync<T>(HttpMethod method, string url, string? token)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        var response = await Http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            return default;
+        }
+
+        return await response.Content.ReadFromJsonAsync<T>();
+    }
+
+    private string? BlockReason(CheckoutVoucher voucher)
+    {
+        var subtotal = cart?.TotalAmount ?? 0;
+        if (TimeLeft(voucher) <= TimeSpan.Zero)
+        {
+            return "Voucher đã hết hạn.";
+        }
+
+        if (voucher.UsageLimit is int limit && voucher.UsedCount >= limit)
+        {
+            return "Voucher đã hết lượt.";
+        }
+
+        if (voucher.MinOrderValue.HasValue && subtotal < voucher.MinOrderValue.Value)
+        {
+            return $"Đơn tối thiểu {FormatMoney(voucher.MinOrderValue.Value)}.";
+        }
+
+        if (voucher.Scope == "shop" &&
+            voucher.ProductIds.Count > 0 &&
+            cart?.Items.Any(item => voucher.ProductIds.Contains(item.ProductId)) != true)
+        {
+            return "Voucher chỉ giảm một số sản phẩm không có trong đơn.";
+        }
+
+        return null;
+    }
+
+    private decimal Estimate(CheckoutVoucher? voucher, decimal room)
+    {
+        if (voucher == null || room <= 0 || cart == null || BlockReason(voucher) != null)
+        {
+            return 0;
+        }
+
+        var basis = cart.TotalAmount;
+        if (voucher.Scope == "shop" && voucher.ProductIds.Count > 0)
+        {
+            basis = cart.Items
+                .Where(item => voucher.ProductIds.Contains(item.ProductId))
+                .Sum(item => item.TotalPrice);
+        }
+
+        var amount = voucher.DiscountType == "percent"
+            ? basis * voucher.DiscountValue / 100m
+            : voucher.DiscountValue;
+        if (voucher.MaxDiscount.HasValue && amount > voucher.MaxDiscount.Value)
+        {
+            amount = voucher.MaxDiscount.Value;
+        }
+
+        if (amount > basis)
+        {
+            amount = basis;
+        }
+
+        if (amount > room)
+        {
+            amount = room;
+        }
+
+        return amount < 0 ? 0 : amount;
+    }
+
+    private decimal LineDiscount(CartItem item)
+    {
+        if (cart == null)
+        {
+            return 0;
+        }
+
+        var room = cart.TotalAmount;
+        var off = 0m;
+        foreach (var voucher in new[] { adminVoucher, sellerVoucher })
+        {
+            var amount = Estimate(voucher, room);
+            room -= amount;
+            if (amount <= 0 || voucher == null || voucher.ProductIds.Count == 0 || !LineMatches(voucher, item))
+            {
+                continue;
+            }
+
+            var basis = Basis(voucher);
+            if (basis <= 0)
+            {
+                continue;
+            }
+
+            off += amount * item.TotalPrice / basis;
+        }
+
+        return Math.Round(off, 0, MidpointRounding.AwayFromZero);
+    }
+
+    private bool LineMatches(CheckoutVoucher voucher, CartItem item)
+    {
+        if (string.Equals(voucher.Scope, "shop", StringComparison.OrdinalIgnoreCase) &&
+            voucher.ShopId != item.ShopId)
+        {
+            return false;
+        }
+
+        return voucher.ProductIds.Count == 0 || voucher.ProductIds.Contains(item.ProductId);
+    }
+
+    private decimal Basis(CheckoutVoucher voucher)
+    {
+        if (cart == null)
+        {
+            return 0;
+        }
+
+        if (voucher.ProductIds.Count == 0 &&
+            !string.Equals(voucher.Scope, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            return cart.TotalAmount;
+        }
+
+        return cart.Items
+            .Where(item => LineMatches(voucher, item))
+            .Sum(item => item.TotalPrice);
+    }
+
+    private static string TargetText(CheckoutVoucher voucher)
+    {
+        if (voucher.ProductNames.Count > 0)
+        {
+            return $"Trừ cho {string.Join(", ", voucher.ProductNames)}";
+        }
+
+        return "Áp dụng cho đơn hàng";
+    }
+
+    private static string QuantityLabel(CheckoutVoucher voucher)
+    {
+        if (voucher.UsageLimit is not int limit)
+        {
+            return "Không giới hạn lượt";
+        }
+
+        var left = Math.Max(0, limit - voucher.UsedCount);
+        return $"Còn {left} lượt";
+    }
+
+    private string CountdownLabel(CheckoutVoucher voucher)
+    {
+        var left = TimeLeft(voucher);
+        if (left <= TimeSpan.Zero)
+        {
+            return "Hết hạn";
+        }
+
+        if (left.TotalDays >= 1)
+        {
+            return $"Còn {(int)left.TotalDays} ngày {left.Hours:00}:{left.Minutes:00}:{left.Seconds:00}";
+        }
+
+        return $"Còn {left.Hours:00}:{left.Minutes:00}:{left.Seconds:00}";
+    }
+
+    private TimeSpan TimeLeft(CheckoutVoucher voucher)
+    {
+        var end = voucher.EndAt.Kind switch
+        {
+            DateTimeKind.Local => voucher.EndAt.ToUniversalTime(),
+            DateTimeKind.Utc => voucher.EndAt,
+            _ => DateTime.SpecifyKind(voucher.EndAt, DateTimeKind.Utc)
+        };
+        return end - voucherNow;
+    }
+
+    private void StartVoucherClock()
+    {
+        voucherNow = DateTime.UtcNow;
+        voucherClock ??= new Timer(_ =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                voucherNow = DateTime.UtcNow;
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopVoucherClock()
+    {
+        voucherClock?.Dispose();
+        voucherClock = null;
+    }
+
+    public void Dispose() => StopVoucherClock();
+
+    private static string DiscountLabel(CheckoutVoucher voucher) =>
+        voucher.DiscountType == "percent"
+            ? $"Giảm {voucher.DiscountValue:0.#}%"
+            : $"Giảm {voucher.DiscountValue:N0} ₫";
+
+    private sealed class CheckoutVoucher
+    {
+        public long Id { get; set; }
+        public string Code { get; set; } = "";
+        public string? Name { get; set; }
+        public string Scope { get; set; } = "";
+        public long? ShopId { get; set; }
+        public string DiscountType { get; set; } = "";
+        public decimal DiscountValue { get; set; }
+        public decimal? MaxDiscount { get; set; }
+        public decimal? MinOrderValue { get; set; }
+        public int? UsageLimit { get; set; }
+        public int UsedCount { get; set; }
+        public DateTime EndAt { get; set; }
+        public List<long> ProductIds { get; set; } = new();
+        public List<string> ProductNames { get; set; } = new();
+    }
+
+    private sealed class OwnedVoucherJson
+    {
+        public long VoucherId { get; set; }
+        public string Code { get; set; } = "";
+        public string? Name { get; set; }
+        public string Scope { get; set; } = "";
+        public long? ShopId { get; set; }
+        public string DiscountType { get; set; } = "";
+        public decimal DiscountValue { get; set; }
+        public decimal? MaxDiscount { get; set; }
+        public decimal? MinOrderValue { get; set; }
+        public int? UsageLimit { get; set; }
+        public int UsedCount { get; set; }
+        public DateTime EndAt { get; set; }
+        public string Status { get; set; } = "";
+        public List<long>? ProductIds { get; set; }
+        public List<string>? ProductNames { get; set; }
+    }
+
+    private sealed class ClaimableVoucherJson
+    {
+        public long Id { get; set; }
+        public string Code { get; set; } = "";
+        public string? Name { get; set; }
+        public string Scope { get; set; } = "";
+        public long? ShopId { get; set; }
+        public string DiscountType { get; set; } = "";
+        public decimal DiscountValue { get; set; }
+        public decimal? MaxDiscount { get; set; }
+        public decimal? MinOrderValue { get; set; }
+        public int? UsageLimit { get; set; }
+        public int UsedCount { get; set; }
+        public DateTime EndAt { get; set; }
+        public List<long>? ProductIds { get; set; }
+        public List<string>? ProductNames { get; set; }
+    }
 }

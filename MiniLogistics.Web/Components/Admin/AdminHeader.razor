@@ -1,4 +1,5 @@
 @inject AdminSession Session
+@implements IDisposable
 @inject TokenStorageService TokenStorage
 @inject AuthStateService AuthState
 @inject NavigationManager Navigation
@@ -16,6 +17,10 @@
 
     <div class="seller-header-actions">
         <div class="seller-user">
+            @if (!string.IsNullOrWhiteSpace(Session.Profile?.AvatarUrl))
+            {
+                <img src="@Session.Profile.AvatarUrl" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />
+            }
             <strong>@(Session.Profile?.FullName ?? Session.Profile?.Email)</strong>
             <span>@Session.Profile?.Email</span>
         </div>
@@ -24,6 +29,10 @@
 </header>
 
 @code {
+    protected override void OnInitialized() => Session.UiChanged += StateHasChanged;
+
+    public void Dispose() => Session.UiChanged -= StateHasChanged;
+
     private async Task Logout()
     {
         await TokenStorage.ClearAsync();

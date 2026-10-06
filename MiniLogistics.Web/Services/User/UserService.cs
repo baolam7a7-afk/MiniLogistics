@@ -63,7 +63,7 @@ public class UserService
 
     // POST /api/users/me/avatar
     // Upload ảnh đại diện từ máy tính
-    public async Task<UploadAvatarResponse?> UploadAvatarAsync(
+    public async Task<AvatarUploadResult> UploadAvatarAsync(
         Stream fileStream,
         string fileName,
         string contentType)
@@ -73,26 +73,68 @@ public class UserService
             "api/users/me/avatar");
 
         if (request == null)
-            return null;
+        {
+            return new AvatarUploadResult
+            {
+                Error = "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại."
+            };
+        }
 
         using var content = new MultipartFormDataContent();
         using var fileContent = new StreamContent(fileStream);
 
         fileContent.Headers.ContentType =
-            new MediaTypeHeaderValue(contentType);
+            new MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
 
-        // Tên field "file" phải trùng với tham số IFormFile file ở API
         content.Add(fileContent, "file", fileName);
 
         request.Content = content;
 
         using var response = await _httpClient.SendAsync(request);
-
         if (!response.IsSuccessStatusCode)
-            return null;
+        {
+            return new AvatarUploadResult
+            {
+                Error = await ReadErrorAsync(response)
+            };
+        }
 
-        return await response.Content
-            .ReadFromJsonAsync<UploadAvatarResponse>();
+        var data = await response.Content.ReadFromJsonAsync<UploadAvatarResponse>();
+        if (data == null || string.IsNullOrWhiteSpace(data.AvatarUrl))
+        {
+            return new AvatarUploadResult
+            {
+                Error = "Upload ảnh thất bại. Vui lòng thử lại."
+            };
+        }
+
+        return new AvatarUploadResult
+        {
+            AvatarUrl = data.AvatarUrl
+        };
+    }
+
+    private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadFromJsonAsync<AvatarErrorBody>();
+            if (!string.IsNullOrWhiteSpace(body?.Message))
+            {
+                return body.Message;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+
+        return "Không thể upload ảnh. Vui lòng thử lại.";
+    }
+
+    private sealed class AvatarErrorBody
+    {
+        public string? Message { get; set; }
     }
 
     // Tạo HTTP request kèm JWT

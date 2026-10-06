@@ -38,4 +38,18 @@ public interface IProductService
     Task<bool> DeleteAsync(
         long userId,
         long id);
+
+    Task<ProductResponseDTO?> SetStatusAsync(
+        long id,
+        string status,
+        string? reason = null);
+
+    Task<ProductResponseDTO?> SetLowStockAsync(
+        long userId,
+        long id,
+        int? threshold);
+
+    Task<ProductResponseDTO?> AdminEditAsync(
+        long id,
+        AdminProductEditDTO request);
 }

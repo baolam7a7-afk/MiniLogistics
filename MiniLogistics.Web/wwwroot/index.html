@@ -78,8 +78,19 @@
 
 
     <script src="google-auth.js"></script>
+    <script>
+        window.miniLogistics = window.miniLogistics || {};
+        window.miniLogistics.scrollToEnd = function (element) {
+            if (!element) return;
+            element.scrollTop = element.scrollHeight;
+        };
+        window.miniLogistics.isNearBottom = function (element) {
+            if (!element) return true;
+            return element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+        };
+    </script>
 
-    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
 
 </body>
 

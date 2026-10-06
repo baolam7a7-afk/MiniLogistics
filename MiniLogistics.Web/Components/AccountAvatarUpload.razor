@@ -1,0 +1,92 @@
+@using MiniLogistics.Web.Services.User
+@inject UserService Users
+
+<div>
+    <div style="width:96px;height:96px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center;margin:8px 0 12px">
+        @if (!string.IsNullOrWhiteSpace(ShownUrl))
+        {
+            <img src="@ShownUrl" alt="Ảnh đại diện" style="width:100%;height:100%;object-fit:cover" />
+        }
+        else
+        {
+            <span>Ảnh</span>
+        }
+    </div>
+    <label class="@LabelClass">Ảnh đại diện
+        <InputFile OnChange="OnSelected" accept=".jpg,.jpeg,.png,.webp" class="@InputClass" />
+    </label>
+    <p class="@HintClass">JPG, JPEG, PNG hoặc WEBP. Tối đa 5 MB.</p>
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="app-alert app-alert-danger">@error</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="app-alert app-alert-success">@success</div>
+    }
+    <div class="@ActionsClass">
+        <button type="button" class="app-button app-button-primary" disabled="@(selection == null || isSaving)" @onclick="Save">
+            @(isSaving ? "Đang lưu..." : "Lưu ảnh đại diện")
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? CurrentUrl { get; set; }
+    [Parameter] public EventCallback<string> AvatarSaved { get; set; }
+    [Parameter] public string LabelClass { get; set; } = "";
+    [Parameter] public string InputClass { get; set; } = "";
+    [Parameter] public string HintClass { get; set; } = "";
+    [Parameter] public string ActionsClass { get; set; } = "";
+
+    private AvatarSelection? selection;
+    private bool isSaving;
+    private string? error;
+    private string? success;
+
+    private string? ShownUrl => selection?.PreviewUrl ?? CurrentUrl;
+
+    private async Task OnSelected(InputFileChangeEventArgs args)
+    {
+        error = null;
+        success = null;
+        var (file, readError) = await AvatarFiles.ReadAsync(args.File);
+        selection = file;
+        error = readError;
+    }
+
+    private async Task Save()
+    {
+        if (selection == null || isSaving)
+        {
+            error = "Vui lòng chọn ảnh từ máy.";
+            return;
+        }
+
+        isSaving = true;
+        error = null;
+        success = null;
+        try
+        {
+            await using var stream = new MemoryStream(selection.Bytes);
+            var result = await Users.UploadAvatarAsync(stream, selection.FileName, selection.ContentType);
+            if (!string.IsNullOrWhiteSpace(result.Error) || string.IsNullOrWhiteSpace(result.AvatarUrl))
+            {
+                error = result.Error ?? "Không thể upload ảnh. Vui lòng thử lại.";
+                return;
+            }
+
+            await AvatarSaved.InvokeAsync(result.AvatarUrl);
+            selection = null;
+            success = "Đã lưu ảnh đại diện.";
+        }
+        catch
+        {
+            error = "Không thể upload ảnh. Vui lòng thử lại.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

@@ -2,25 +2,33 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
+  <Target Name="PrepareSomeeClient" AfterTargets="Publish">
+    <Exec Command="powershell -NoProfile -Command &quot;%24pub='$(PublishDir)'; %24www=Join-Path %24pub 'wwwroot'; %24settings=Join-Path %24www 'appsettings.json'; if (Test-Path %24settings) { %24t=[IO.File]::ReadAllText(%24settings); %24t=%24t.Replace('http://localhost:5136/','http://minilogistics.somee.com/'); [IO.File]::WriteAllText(%24settings,%24t) }; %24manifest=Join-Path %24pub 'MiniLogistics.API.staticwebassets.endpoints.json'; if (Test-Path %24manifest) { %24json=Get-Content %24manifest -Raw | ConvertFrom-Json; %24wanted=@('_framework/blazor.webassembly.js','_framework/dotnet.js'); foreach (%24ep in %24json.Endpoints) { if (%24wanted -notcontains %24ep.Route) { continue }; %24encoded=%24false; foreach (%24h in %24ep.ResponseHeaders) { if (%24h.Name -eq 'Content-Encoding') { %24encoded=%24true } }; if (%24encoded) { continue }; %24src=Join-Path %24www (%24ep.AssetFile -replace '/','\'); %24dst=Join-Path %24www (%24ep.Route -replace '/','\'); if ((Test-Path %24src) -and -not (Test-Path %24dst)) { Copy-Item %24src %24dst } } }&quot;" />
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\MiniLogistics.BLL\MiniLogistics.BLL.csproj" />
     <ProjectReference Include="..\MiniLogistics.DAL\MiniLogistics.DAL.csproj" />
+    <ProjectReference Include="..\MiniLogistics.Web\MiniLogistics.Web.csproj" />
   </ItemGroup>
 
 </Project>

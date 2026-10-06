@@ -52,13 +52,6 @@
                    @onkeydown="HandleSearchKeyDown" />
         </div>
 
-        <select class="app-input" @bind="selectedStatus">
-            <option value="">Tất cả trạng thái</option>
-            <option value="active">Đang bán</option>
-            <option value="inactive">Ngừng bán</option>
-            <option value="draft">Nháp</option>
-        </select>
-
         <select class="app-input" @bind="groupByCategory">
             <option value="false">Hiển thị dạng lưới</option>
             <option value="true">Nhóm theo danh mục</option>
@@ -166,7 +159,7 @@
     private List<ProductItem> products = new();
     private List<CategoryItem> categories = new();
     private string searchText = string.Empty;
-    private string selectedStatus = "active";
+    private const string selectedStatus = "active";
     private string groupByCategory = "false";
     private long? selectedCategoryId;
     private string? errorMessage;
@@ -308,7 +301,6 @@
     private async Task ResetFilters()
     {
         searchText = string.Empty;
-        selectedStatus = "active";
         selectedCategoryId = null;
         groupByCategory = "false";
         currentPage = 1;

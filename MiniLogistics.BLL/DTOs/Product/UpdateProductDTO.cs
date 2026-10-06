@@ -23,3 +23,23 @@ public class UpdateProductDTO
     [Required]
     public string Status { get; set; } = "active";
 }
+
+public class AdminProductEditDTO
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public string Status { get; set; } = "active";
+
+    public List<AdminVariantEditDTO> Variants { get; set; } = new();
+}
+
+public class AdminVariantEditDTO
+{
+    public long Id { get; set; }
+
+    public string VariantName { get; set; } = string.Empty;
+
+    public decimal Price { get; set; }
+}

@@ -199,9 +199,11 @@ public class ReviewService : IReviewService
         query = query
             .OrderByDescending(r => r.CreatedAt);
 
-        return CreatePagedResponse(
+        var page = CreatePagedResponse(
             query.Select(MapToResponse),
             request);
+        await EnrichAsync(page.Items);
+        return page;
     }
 
 
@@ -255,9 +257,11 @@ public class ReviewService : IReviewService
         query = query
             .OrderByDescending(r => r.CreatedAt);
 
-        return CreatePagedResponse(
+        var page = CreatePagedResponse(
             query.Select(MapToResponse),
             request);
+        await EnrichAsync(page.Items);
+        return page;
     }
 
 
@@ -428,5 +432,39 @@ public class ReviewService : IReviewService
             CreatedAt = review.CreatedAt,
             UpdatedAt = review.UpdatedAt
         };
+    }
+
+    private async Task EnrichAsync(IEnumerable<ReviewResponseDTO> reviews)
+    {
+        var list = reviews.ToList();
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        var productIds = list.Select(review => review.ProductId).Distinct().ToList();
+        var images = await _unitOfWork.ProductImages
+            .FindAsync(image => productIds.Contains(image.ProductId));
+        var firstImage = images
+            .Where(image => !string.IsNullOrWhiteSpace(image.Url))
+            .GroupBy(image => image.ProductId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(image => image.SortOrder).First().Url);
+
+        foreach (var review in list)
+        {
+            var item = await _unitOfWork.OrderItems.GetByIdAsync(review.OrderItemId);
+            var product = await _unitOfWork.Products.GetByIdAsync(review.ProductId);
+            review.ProductName = item?.ProductNameSnapshot ?? product?.Name;
+            review.VariantName = item?.VariantNameSnapshot;
+            if (firstImage.TryGetValue(review.ProductId, out var url))
+            {
+                review.ProductImageUrl = url;
+            }
+
+            var order = await _unitOfWork.Orders.GetByIdAsync(review.OrderId);
+            review.PurchasedAt = order?.PlacedAt;
+        }
     }
 }

@@ -32,3 +32,8 @@ Thumbs.db
 # Environment / local settings
 .env
 .env.*
+MiniLogistics.API/appsettings.Development.json
+MiniLogistics.API/appsettings.Local.json
+
+# Local agent kit
+.agents/

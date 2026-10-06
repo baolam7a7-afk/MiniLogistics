@@ -1,6 +1,9 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject AdminSession Session
+@inject ChatLiveService Live
+@inject NavigationManager Navigation
+@using MiniLogistics.Web.Services.Chat
 
 @if (!Session.Ready)
 {
@@ -37,18 +40,163 @@ else
                 @Body
             </main>
         </div>
+        @if (notice != null)
+        {
+            <a class="seller-chat-toast" href="@noticeHref">@notice</a>
+        }
     </div>
 }
 
 @code {
+    private Func<ChatInboxNotice, Task>? onInbox;
+    private Func<Task>? onRestored;
+    private Func<Task>? onLink;
+    private readonly HashSet<long> seenMessages = new();
+    private string? notice;
+    private string noticeHref = "/admin/chat";
+    private int noticeVersion;
+
     protected override async Task OnInitializedAsync()
     {
         Session.UiChanged += StateHasChanged;
+        onInbox = OnInboxAsync;
+        onRestored = OnRestoredAsync;
+        onLink = () => InvokeAsync(StateHasChanged);
+        Live.InboxChanged += onInbox;
+        Live.ConnectionRestored += onRestored;
+        Live.LinkChanged += onLink;
         await Session.EnsureAsync();
+    }
+
+    private Task OnInboxAsync(ChatInboxNotice incoming)
+    {
+        if (incoming.MessageId > 0 && !seenMessages.Add(incoming.MessageId))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (incoming.MessageId <= 0)
+        {
+            return OnRestoredAsync();
+        }
+
+        var platform = string.Equals(incoming.Channel, "platform", StringComparison.OrdinalIgnoreCase);
+        if (platform && (incoming.SenderId == Session.Profile?.Id || IsViewingSupport(incoming.ConversationId)))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!platform && (!incoming.FromCustomer || IsViewing(incoming.ConversationId)))
+        {
+            return Task.CompletedTask;
+        }
+
+        var name = string.IsNullOrWhiteSpace(incoming.SenderName)
+            ? "khách hàng"
+            : incoming.SenderName.Trim();
+        var product = string.IsNullOrWhiteSpace(incoming.ProductName)
+            ? ""
+            : "\n" + incoming.ProductName.Trim();
+        var preview = incoming.Content.Length > 80
+            ? incoming.Content[..80]
+            : incoming.Content;
+
+        return InvokeAsync(() =>
+        {
+            if (platform)
+            {
+                Session.NoteIncomingSupport();
+            }
+            else
+            {
+                Session.NoteIncomingChat();
+            }
+
+            notice = $"Tin nhắn mới\n{name}{product}\n\"{preview}\"";
+            noticeHref = incoming.ConversationId > 0
+                ? (platform
+                    ? $"/admin/support/{incoming.ConversationId}"
+                    : $"/admin/chat/{incoming.ConversationId}")
+                : (platform ? "/admin/support" : "/admin/chat");
+            var version = ++noticeVersion;
+            _ = HideNoticeAsync(version);
+            _ = SyncUnreadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private bool IsViewing(long conversationId)
+    {
+        if (conversationId <= 0)
+        {
+            return false;
+        }
+
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/');
+        return path.Equals($"admin/chat/{conversationId}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsViewingSupport(long conversationId)
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/');
+        return path.Equals($"admin/support/{conversationId}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task SyncUnreadAsync()
+    {
+        try
+        {
+            await Session.RefreshChatUnreadAsync();
+        }
+        catch
+        {
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRestoredAsync()
+    {
+        try
+        {
+            await Session.RefreshChatUnreadAsync();
+        }
+        catch
+        {
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HideNoticeAsync(int version)
+    {
+        await Task.Delay(6000);
+        if (version != noticeVersion)
+        {
+            return;
+        }
+
+        notice = null;
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
+        if (onInbox != null)
+        {
+            Live.InboxChanged -= onInbox;
+        }
+
+        if (onRestored != null)
+        {
+            Live.ConnectionRestored -= onRestored;
+        }
+
+        if (onLink != null)
+        {
+            Live.LinkChanged -= onLink;
+        }
+
         Session.UiChanged -= StateHasChanged;
     }
 }

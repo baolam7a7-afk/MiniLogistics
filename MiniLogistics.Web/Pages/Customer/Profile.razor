@@ -66,10 +66,10 @@
                     </div>
 
                     <div class="profile-avatar-preview">
-                        @if (!string.IsNullOrWhiteSpace(profile.AvatarUrl))
+                        @if (!string.IsNullOrWhiteSpace(avatarPreview ?? profile.AvatarUrl))
                         {
-                            <img @key="profile.AvatarUrl"
-                                 src="@profile.AvatarUrl"
+                            <img @key="avatarPreview ?? profile.AvatarUrl"
+                                 src="@(avatarPreview ?? profile.AvatarUrl)"
                                  alt="Ảnh đại diện"
                                  class="profile-avatar-image" />
                         }
@@ -367,6 +367,8 @@
     private string? successMessage;
     private string? avatarError;
     private string? avatarSuccess;
+    private string? avatarPreview;
+    private AvatarSelection? avatarFile;
     private string? passwordError;
     private string? passwordSuccess;
 
@@ -426,40 +428,24 @@
         };
     }
 
-    private void OnAvatarSelected(InputFileChangeEventArgs e)
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
     {
         avatarError = null;
         avatarSuccess = null;
         selectedAvatar = null;
+        avatarPreview = null;
+        avatarFile = null;
 
-        var file = e.File;
-
-        if (file is null)
+        var (file, readError) = await AvatarFiles.ReadAsync(e.File);
+        if (file == null)
         {
-            avatarError = "Vui lòng chọn ảnh.";
+            avatarError = readError;
             return;
         }
 
-        var allowedTypes = new[]
-        {
-            "image/jpeg",
-            "image/png",
-            "image/webp"
-        };
-
-        if (!allowedTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
-        {
-            avatarError = "Định dạng ảnh không hợp lệ. Chỉ hỗ trợ JPG, PNG hoặc WEBP.";
-            return;
-        }
-
-        if (file.Size > 5 * 1024 * 1024)
-        {
-            avatarError = "Dung lượng ảnh vượt quá 5 MB.";
-            return;
-        }
-
-        selectedAvatar = file;
+        avatarFile = file;
+        avatarPreview = file.PreviewUrl;
+        selectedAvatar = e.File;
     }
 
     private async Task UploadSelectedAvatar()
@@ -477,18 +463,19 @@
 
         try
         {
-            await using var stream = selectedAvatar.OpenReadStream(
-                maxAllowedSize: 5 * 1024 * 1024);
+            await using var stream = new MemoryStream(
+                avatarFile?.Bytes ?? []);
 
             var uploadResult = await UserService.UploadAvatarAsync(
                 stream,
-                selectedAvatar.Name,
-                selectedAvatar.ContentType);
+                avatarFile?.FileName ?? "avatar.jpg",
+                avatarFile?.ContentType ?? "image/jpeg");
 
-            if (uploadResult is null ||
+            if (!string.IsNullOrWhiteSpace(uploadResult.Error) ||
                 string.IsNullOrWhiteSpace(uploadResult.AvatarUrl))
             {
-                avatarError = "Upload ảnh thất bại. Vui lòng kiểm tra API và thử lại.";
+                avatarPreview = null;
+                avatarError = uploadResult.Error ?? "Upload ảnh thất bại. Vui lòng thử lại.";
                 return;
             }
 
@@ -498,7 +485,12 @@
 
             if (updatedProfile is null)
             {
-                avatarError = "Ảnh đã upload nhưng chưa lưu được vào hồ sơ. Vui lòng thử lại.";
+                profile.AvatarUrl = uploadResult.AvatarUrl;
+                AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+                selectedAvatar = null;
+                avatarFile = null;
+                avatarPreview = null;
+                avatarSuccess = "Cập nhật ảnh đại diện thành công.";
                 return;
             }
 
@@ -508,10 +500,13 @@
             AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
 
             selectedAvatar = null;
+            avatarFile = null;
+            avatarPreview = null;
             avatarSuccess = "Cập nhật ảnh đại diện thành công.";
         }
         catch
         {
+            avatarPreview = null;
             avatarError = "Không thể upload ảnh. Vui lòng kiểm tra kết nối và thử lại.";
         }
         finally

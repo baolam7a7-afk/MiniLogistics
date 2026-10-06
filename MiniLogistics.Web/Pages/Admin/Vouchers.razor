@@ -8,7 +8,7 @@
 <div class="seller-page-head">
     <div>
         <h1>Voucher</h1>
-        <p>Admin tạo voucher toàn sàn (scope platform, không gắn shop). Seller tự tạo voucher của shop.</p>
+        <p>Voucher của admin có hiệu lực với tất cả sản phẩm trên sàn.</p>
     </div>
 </div>
 
@@ -92,7 +92,10 @@ else
                     {
                         <tr>
                             <td><strong>@item.Code</strong><div class="seller-muted">@item.Name</div></td>
-                            <td>@item.Scope @(item.ShopId.HasValue ? $"#{item.ShopId}" : "")</td>
+                            <td>
+                                @(item.Scope == "platform" ? "Nền tảng" : "Shop")
+                                · @(item.ProductNames.Count == 0 ? "Tất cả sản phẩm" : string.Join(", ", item.ProductNames))
+                            </td>
                             <td>@item.DiscountType @item.DiscountValue</td>
                             <td>@item.UsedCount / @(item.UsageLimit?.ToString() ?? "∞")</td>
                             <td>@SellerText.When(item.StartAt) – @SellerText.When(item.EndAt)</td>

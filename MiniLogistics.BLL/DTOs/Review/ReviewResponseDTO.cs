@@ -10,6 +10,14 @@ public class ReviewResponseDTO
 
     public long ProductId { get; set; }
 
+    public string? ProductName { get; set; }
+
+    public string? VariantName { get; set; }
+
+    public string? ProductImageUrl { get; set; }
+
+    public DateTime? PurchasedAt { get; set; }
+
     public long CustomerId { get; set; }
 
     public int Rating { get; set; }

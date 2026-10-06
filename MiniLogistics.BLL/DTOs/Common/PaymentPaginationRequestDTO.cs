@@ -9,4 +9,6 @@ public class PaymentPaginationRequestDTO : PaginationRequestDTO
     public string? Status { get; set; }
 
     public long? OrderId { get; set; }
+
+    public long? ShopId { get; set; }
 }

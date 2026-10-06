@@ -3,13 +3,16 @@
 @implements IDisposable
 @inject SellerApi Api
 @inject SellerSession Session
+@inject AuthStateService AuthState
+@using Microsoft.AspNetCore.Components.Forms
+@using MiniLogistics.Web.Services.User
 
 <PageTitle>Cửa hàng</PageTitle>
 
 <div class="seller-page-head">
     <div>
         <h1>Cửa hàng</h1>
-        <p>Tên, mô tả và logo. Trạng thái duyệt chỉ admin được đổi.</p>
+        <p>Hồ sơ cá nhân và thông tin cửa hàng nằm cùng một chỗ.</p>
     </div>
 </div>
 
@@ -36,14 +39,45 @@
         <label>Mô tả
             <textarea class="seller-textarea" @bind="description"></textarea>
         </label>
-        <label>URL logo
-            <input class="seller-input" @bind="logoUrl" />
+        <label>Logo cửa hàng
+            <InputFile OnChange="OnLogoSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
         </label>
+        @if (!string.IsNullOrWhiteSpace(logoPreview))
+        {
+            <img src="@logoPreview" alt="Logo" style="width:96px;height:96px;object-fit:cover;border-radius:12px" />
+        }
+        @if (!string.IsNullOrWhiteSpace(myCode))
+        {
+            <p class="seller-muted">Mã giới thiệu của bạn: <strong>@myCode</strong></p>
+        }
+        @if (isCreate)
+        {
+            <label>Mã giới thiệu (nếu có)
+                <input class="seller-input" @bind="referralCode" maxlength="20" />
+            </label>
+        }
         <button class="app-button app-button-primary" disabled="@isSaving" @onclick="Save">
             @(isCreate ? "Tạo cửa hàng" : "Lưu cửa hàng")
         </button>
     </div>
 </section>
+
+@if (profile != null)
+{
+    <section class="seller-card">
+        <h2>Hồ sơ cá nhân</h2>
+        <p>Email: <strong>@profile.Email</strong></p>
+        <div class="seller-form">
+            <label>Họ tên
+                <input class="seller-input" @bind="fullName" />
+            </label>
+            <label>Số điện thoại
+                <input class="seller-input" @bind="phone" />
+            </label>
+            <button class="app-button app-button-primary" disabled="@isSavingProfile" @onclick="SaveProfile">Lưu hồ sơ</button>
+        </div>
+    </section>
+}
 
 @code {
     private bool isCreate = true;
@@ -53,15 +87,35 @@
     private string name = "";
     private string? description;
     private string? logoUrl;
+    private string? logoPreview;
+    private AvatarSelection? pendingLogo;
+    private string? referralCode;
+    private string? myCode;
     private string status = "";
     private DateTime? approvedAt;
     private long shopId;
+    private MiniLogistics.Web.Models.User.UserProfile? profile;
+    private string fullName = "";
+    private string? phone;
+    private bool isSavingProfile;
 
     protected override async Task OnInitializedAsync()
     {
         Session.ShopChanged += OnShopChanged;
         await Session.EnsureAsync();
         BindShop();
+        var me = await Api.GetAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me");
+        if (me.Ok)
+        {
+            profile = me.Data;
+            fullName = profile?.FullName ?? "";
+            phone = profile?.Phone;
+        }
+        var code = await Api.GetAsync<ReferralCodeResponse>("api/referrals/my-code");
+        if (code.Ok)
+        {
+            myCode = code.Data?.Code;
+        }
     }
 
     private void OnShopChanged()
@@ -83,6 +137,7 @@
         name = shop.Name;
         description = shop.Description;
         logoUrl = shop.LogoUrl;
+        logoPreview = shop.LogoUrl;
         status = shop.Status;
         approvedAt = shop.ApprovedAt;
     }
@@ -94,20 +149,36 @@
         {
             Name = name,
             Description = description,
-            LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim()
+            LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim(),
+            ReferralCode = string.IsNullOrWhiteSpace(referralCode) ? null : referralCode.Trim()
         };
 
         if (isCreate)
         {
             var created = await Api.PostAsync<ShopRecord>("api/shops", body);
-            isSaving = false;
             isError = !created.Ok;
             message = created.Ok ? "Đã tạo cửa hàng. Shop mới ở trạng thái chờ duyệt." : created.Error;
             if (created.Ok && created.Data != null)
             {
                 Session.RememberShop(created.Data);
+                if (pendingLogo != null)
+                {
+                    await UploadLogo(created.Data.Id);
+                }
             }
+
+            isSaving = false;
             return;
+        }
+
+        if (pendingLogo != null)
+        {
+            var uploaded = await UploadLogo(shopId);
+            if (!uploaded)
+            {
+                isSaving = false;
+                return;
+            }
         }
 
         var updated = await Api.PutAsync<ShopRecord>($"api/shops/{shopId}", body);
@@ -120,5 +191,74 @@
         }
     }
 
+    private async Task OnLogoSelected(InputFileChangeEventArgs args)
+    {
+        var (file, error) = await AvatarFiles.ReadAsync(args.File);
+        if (file == null)
+        {
+            isError = true;
+            message = error;
+            return;
+        }
+
+        pendingLogo = file;
+        logoPreview = file.PreviewUrl;
+        isError = false;
+        message = null;
+    }
+
+    private async Task<bool> UploadLogo(long id)
+    {
+        if (pendingLogo == null)
+        {
+            return true;
+        }
+
+        var uploaded = await Api.UploadAsync<ShopRecord>(
+            $"api/shops/{id}/logo",
+            pendingLogo.Bytes,
+            pendingLogo.FileName,
+            pendingLogo.ContentType);
+        isError = !uploaded.Ok;
+        if (!uploaded.Ok)
+        {
+            message = uploaded.Error;
+            return false;
+        }
+
+        if (uploaded.Data != null)
+        {
+            logoUrl = uploaded.Data.LogoUrl;
+            logoPreview = uploaded.Data.LogoUrl;
+            Session.RememberShop(uploaded.Data);
+        }
+
+        pendingLogo = null;
+        return true;
+    }
+
+    private async Task SaveProfile()
+    {
+        isSavingProfile = true;
+        var result = await Api.PutAsync<MiniLogistics.Web.Models.User.UserProfile>("api/users/me", new
+        {
+            FullName = fullName,
+            Phone = phone
+        });
+        isSavingProfile = false;
+        isError = !result.Ok;
+        message = result.Ok ? "Đã lưu hồ sơ cá nhân." : result.Error;
+        if (result.Data != null)
+        {
+            profile = result.Data;
+            AuthState.UpdateUserProfile(profile.FullName, profile.AvatarUrl);
+        }
+    }
+
     public void Dispose() => Session.ShopChanged -= OnShopChanged;
+
+    private sealed class ReferralCodeResponse
+    {
+        public string Code { get; set; } = "";
+    }
 }

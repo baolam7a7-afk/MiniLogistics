@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using MiniLogistics.BLL.DTOs.Common;
 using MiniLogistics.BLL.DTOs.Product;
 using MiniLogistics.BLL.Exceptions;
+using MiniLogistics.API.Hubs;
+using MiniLogistics.BLL.Services.Chat;
 using MiniLogistics.BLL.Services.Product;
 
 namespace MiniLogistics.API.Controllers;
@@ -15,11 +17,17 @@ namespace MiniLogistics.API.Controllers;
 public class ProductController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly IChatService _chatService;
+    private readonly ChatRealtime _chatRealtime;
 
     public ProductController(
-        IProductService productService)
+        IProductService productService,
+        IChatService chatService,
+        ChatRealtime chatRealtime)
     {
         _productService = productService;
+        _chatService = chatService;
+        _chatRealtime = chatRealtime;
     }
 
 
@@ -219,6 +227,59 @@ public class ProductController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:long}/status")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> SetStatus(long id, [FromBody] ProductStatusRequest request)
+    {
+        var product = await _productService.SetStatusAsync(id, request.Status, request.Reason);
+        if (product == null)
+        {
+            return NotFound(new { message = "Product không tồn tại." });
+        }
+
+        if (string.Equals(product.Status, "inactive", StringComparison.OrdinalIgnoreCase))
+        {
+            var notice = await _chatService.NotifyPlatformAsync(
+                GetCurrentUserId(),
+                product.ShopId,
+                product.Id,
+                $"Admin đã ngừng bán sản phẩm \"{product.Name}\". Lý do: {product.InactiveReason}");
+            await _chatRealtime.PublishAsync(notice);
+        }
+
+        return Ok(product);
+    }
+
+    [HttpPut("{id:long}/manage")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> AdminEdit(long id, [FromBody] AdminProductEditDTO request)
+    {
+        var product = await _productService.AdminEditAsync(id, request);
+        if (product == null)
+        {
+            return NotFound(new { message = "Product không tồn tại." });
+        }
+
+        return Ok(product);
+    }
+
+
+    [HttpPut("{id:long}/low-stock")]
+    [Authorize(Roles = "seller")]
+    public async Task<IActionResult> SetLowStock(long id, [FromBody] LowStockRequest request)
+    {
+        var product = await _productService.SetLowStockAsync(
+            GetCurrentUserId(),
+            id,
+            request.Threshold);
+        if (product == null)
+        {
+            return NotFound(new { message = "Product không tồn tại." });
+        }
+
+        return Ok(product);
+    }
+
 
     // =====================================================
     // GET CURRENT USER ID
@@ -247,4 +308,15 @@ public class ProductController : ControllerBase
 
         return parsedUserId;
     }
+}
+
+public class ProductStatusRequest
+{
+    public string Status { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
+public class LowStockRequest
+{
+    public int? Threshold { get; set; }
 }

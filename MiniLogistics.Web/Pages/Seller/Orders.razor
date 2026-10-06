@@ -16,11 +16,11 @@
     <input class="seller-input" placeholder="Mã đơn" @bind="search" />
     <select class="seller-select" @bind="status">
         <option value="">Mọi trạng thái</option>
-        <option value="pending">Chờ xác nhận</option>
+        <option value="pending">Chờ shop xác nhận</option>
         <option value="confirmed">Đã xác nhận</option>
-        <option value="processing">Đang xử lý</option>
         <option value="shipping">Đang giao</option>
-        <option value="delivered">Đã giao</option>
+        <option value="awaiting_receipt">Chờ khách xác nhận</option>
+        <option value="delivered">Đã giao thành công</option>
         <option value="cancelled">Đã hủy</option>
         <option value="awaiting_payment">Chờ thanh toán</option>
         <option value="paid">Đã thanh toán</option>
@@ -53,6 +53,7 @@ else
                     <tr>
                         <th>Mã</th>
                         <th>Khách</th>
+                        <th>Điện thoại</th>
                         <th>Shop</th>
                         <th>Tổng</th>
                         <th>Trạng thái</th>
@@ -64,8 +65,9 @@ else
                     {
                         <tr>
                             <td><a href="@($"/seller/orders/{order.Id}")">@order.OrderCode</a></td>
-                            <td>#@order.CustomerId</td>
-                            <td>#@order.ShopId</td>
+                            <td>@(order.CustomerName ?? $"#{order.CustomerId}")</td>
+                            <td>@(order.CustomerPhone ?? "—")</td>
+                            <td>@(order.ShopName ?? $"#{order.ShopId}")</td>
                             <td>@SellerText.Money(order.Total)</td>
                             <td><span class="seller-badge">@SellerText.OrderStatus(order.Status)</span></td>
                             <td>@SellerText.When(order.PlacedAt)</td>
@@ -95,17 +97,22 @@ else
 
     private IEnumerable<SellerOrder> visible => items.Where(order =>
     {
-        var day = order.PlacedAt.Date;
-        if (fromDate.HasValue && day < fromDate.Value.Date)
+        var day = order.PlacedAt.Kind == DateTimeKind.Utc
+            ? order.PlacedAt.ToLocalTime().Date
+            : order.PlacedAt.Date;
+        if (IsChosenDate(fromDate) && day < fromDate!.Value.Date)
         {
             return false;
         }
-        if (toDate.HasValue && day > toDate.Value.Date)
+        if (IsChosenDate(toDate) && day > toDate!.Value.Date)
         {
             return false;
         }
         return true;
     });
+
+    private static bool IsChosenDate(DateTime? value) =>
+        value.HasValue && value.Value.Year >= 2000;
 
     protected override async Task OnInitializedAsync()
     {

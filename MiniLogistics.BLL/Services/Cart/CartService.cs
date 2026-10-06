@@ -652,6 +652,7 @@ public class CartService : ICartService
             .Include(x => x.CartItems)
                 .ThenInclude(x => x.Variant)
                     .ThenInclude(x => x.Product)
+                        .ThenInclude(x => x.ProductImages)
             .FirstOrDefaultAsync(
                 x =>
                     x.UserId ==
@@ -736,6 +737,9 @@ public class CartService : ICartService
                         ProductId =
                             product.Id,
 
+                        ShopId =
+                            product.ShopId,
+
                         ProductName =
                             product.Name,
 
@@ -744,6 +748,13 @@ public class CartService : ICartService
 
                         Sku =
                             variant.Sku,
+
+                        ImageUrl =
+                            product.ProductImages?
+                                .OrderBy(image => image.SortOrder)
+                                .Select(image => image.Url)
+                                .FirstOrDefault(url =>
+                                    !string.IsNullOrWhiteSpace(url)),
 
                         Price =
                             variant.Price,

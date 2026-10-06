@@ -761,15 +761,7 @@ public class UserService : IUserService
                 : request.Phone.Trim();
 
 
-        // -------------------------------------------------
-        // UPDATE AVATAR URL
-        // -------------------------------------------------
-
-        user.AvatarUrl =
-            string.IsNullOrWhiteSpace(
-                request.AvatarUrl)
-                ? null
-                : request.AvatarUrl.Trim();
+        // AvatarUrl chỉ đổi qua upload ảnh. Giá trị client gửi lên không được ghi.
 
 
         // -------------------------------------------------
@@ -797,6 +789,32 @@ public class UserService : IUserService
         // -------------------------------------------------
 
         return await MapToResponseAsync(user);
+    }
+
+
+    public async Task<string?> ReplaceAvatarUrlAsync(
+        long userId,
+        string avatarUrl)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new NotFoundException(
+                $"User {userId} không tồn tại.");
+        }
+
+        if (!string.Equals(user.Status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException(
+                "Tài khoản hiện không hoạt động.");
+        }
+
+        var previous = user.AvatarUrl;
+        user.AvatarUrl = avatarUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.Users.Update(user);
+        await _unitOfWork.SaveChangesAsync();
+        return previous;
     }
 
 

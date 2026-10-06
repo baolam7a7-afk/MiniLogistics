@@ -28,7 +28,33 @@ public class Order
 
     public string? Note { get; set; }
 
+    public string? CustomerName { get; set; }
+
+    public string? CustomerPhone { get; set; }
+
+    public string? ShopName { get; set; }
+
+    public string? ReceiverName { get; set; }
+
+    public string? ReceiverPhone { get; set; }
+
+    public string? ShippingAddressText { get; set; }
+
+    public string? CancelReason { get; set; }
+
     public DateTime PlacedAt { get; set; }
+
+    public DateTime? ConfirmedAt { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+
+    public DateTime? CustomerConfirmedAt { get; set; }
+
+    public string? ShipperName { get; set; }
+
+    public DateTime? ShipperAcceptedAt { get; set; }
+
+    public DateTime? DeliveredAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
 

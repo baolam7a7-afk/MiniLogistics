@@ -8,11 +8,15 @@ public class CartItemResponseDTO
 
     public long ProductId { get; set; }
 
+    public long ShopId { get; set; }
+
     public string ProductName { get; set; } = null!;
 
     public string VariantName { get; set; } = null!;
 
     public string? Sku { get; set; }
+
+    public string? ImageUrl { get; set; }
 
     public decimal Price { get; set; }
 

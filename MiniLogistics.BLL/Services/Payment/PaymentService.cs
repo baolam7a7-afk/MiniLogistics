@@ -106,6 +106,13 @@ public class PaymentService : IPaymentService
                 .ToList();
         }
 
+        if (request.ShopId.HasValue)
+        {
+            result = result
+                .Where(x => x.ShopId == request.ShopId.Value)
+                .ToList();
+        }
+
         // =================================================
         // SORT
         // =================================================
@@ -250,6 +257,13 @@ public class PaymentService : IPaymentService
                 .Where(x =>
                     x.OrderId ==
                     request.OrderId.Value)
+                .ToList();
+        }
+
+        if (request.ShopId.HasValue)
+        {
+            result = result
+                .Where(x => x.ShopId == request.ShopId.Value)
                 .ToList();
         }
 

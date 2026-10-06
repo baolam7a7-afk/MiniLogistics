@@ -31,6 +31,9 @@ public class User
 
     public string? GoogleId { get; set; }
 
+    // Mã giới thiệu mở shop, mỗi tài khoản một mã.
+    public string? ReferralCode { get; set; }
+
     // ==========================================
     // USER RELATIONSHIPS
     // ==========================================

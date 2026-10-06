@@ -10,9 +10,11 @@
 @using MiniLogistics.Web.Services.Product
 @using MiniLogistics.Web.Services.Cart
 @using MiniLogistics.Web.Services.Auth
+@using MiniLogistics.Web.Services.Voucher
 
 @inject ProductService ProductService
 @inject CartService CartService
+@inject VoucherOfferService VoucherOffers
 @inject NavigationManager NavigationManager
 @inject HttpClient Http
 @inject TokenStorageService TokenStorage
@@ -105,7 +107,23 @@
                         }
                     </div>
 
-                    @if (productImageUrls.Count > 1)
+                    @if (variants.Count > 1)
+                    {
+                        <div class="product-detail-thumbnails" aria-label="Ảnh theo phiên bản">
+                            @foreach (var variant in variants)
+                            {
+                                var variantImage = ImageForVariant(variant);
+                                <button type="button"
+                                        class="product-detail-thumbnail @(selectedVariant?.Id == variant.Id ? "active" : "")"
+                                        @onclick="() => SelectVariant(variant)"
+                                        aria-label="@variant.VariantName">
+                                    <img src="@variantImage" alt="@variant.VariantName" loading="lazy" />
+                                    <span class="product-detail-thumbnail-name">@variant.VariantName</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (productImageUrls.Count > 1)
                     {
                         <div class="product-detail-thumbnails" aria-label="Ảnh sản phẩm">
                             @foreach (var imageUrl in productImageUrls)
@@ -125,17 +143,13 @@
 
                 <div class="product-detail-info">
 
-                    <div class="product-detail-status">
-
-                        @product.Status
-
-                    </div>
-
                     <h1 class="product-detail-name">
 
                         @product.Name
 
                     </h1>
+
+                    <p class="product-detail-shop">@ShopLabel</p>
 
                     @if (!string.IsNullOrWhiteSpace(product.Description))
 
@@ -155,45 +169,13 @@
 
                             <span class="meta-label">
 
-                                Product ID
+                                Cửa hàng
 
                             </span>
 
                             <span class="meta-value">
 
-                                #@product.Id
-
-                            </span>
-
-                        </div>
-
-                        <div class="product-meta-item">
-
-                            <span class="meta-label">
-
-                                Shop ID
-
-                            </span>
-
-                            <span class="meta-value">
-
-                                #@product.ShopId
-
-                            </span>
-
-                        </div>
-
-                        <div class="product-meta-item">
-
-                            <span class="meta-label">
-
-                                Category ID
-
-                            </span>
-
-                            <span class="meta-value">
-
-                                #@product.CategoryId
+                                @ShopLabel
 
                             </span>
 
@@ -293,30 +275,6 @@
 
                                     </h3>
 
-                                    @if (selectedVariant.IsActive)
-
-                                    {
-
-                                        <span class="product-status product-status-success">
-
-                                            Đang bán
-
-                                        </span>
-
-                                    }
-
-                                    else
-
-                                    {
-
-                                        <span class="product-status product-status-danger">
-
-                                            Ngừng bán
-
-                                        </span>
-
-                                    }
-
                                 </div>
 
                                 <div class="selected-variant-info">
@@ -345,11 +303,20 @@
 
                                         </span>
 
-                                        <strong class="variant-price">
+                                        @if (PriceQuote(selectedVariant.Price) is ProductPriceQuote priceQuote)
+                                        {
+                                            <span class="product-price-old">@FormatPrice(priceQuote.Original)</span>
+                                            <strong class="variant-price">@FormatPrice(priceQuote.Sale)</strong>
+                                            <div class="product-voucher-note">@priceQuote.Note</div>
+                                        }
+                                        else
+                                        {
+                                            <strong class="variant-price">
 
-                                            @FormatPrice(selectedVariant.Price)
+                                                @FormatPrice(selectedVariant.Price)
 
-                                        </strong>
+                                            </strong>
+                                        }
 
                                     </div>
 
@@ -479,7 +446,7 @@
                                                 class="app-button app-button-secondary"
                                                 @onclick="StartChatWithSeller"
                                                 disabled="@isStartingChat">
-                                            @(isStartingChat ? "Đang mở chat..." : "Chat với Seller")
+                                            @(isStartingChat ? "Đang mở chat..." : "Chat với Shop")
                                         </button>
 
                                     </div>
@@ -540,6 +507,8 @@
 
             </div>
 
+            <ProductReviews ProductId="@product.Id" />
+
             <!-- Back button -->
 
             <div class="product-detail-bottom">
@@ -565,6 +534,8 @@
     public long Id { get; set; }
 
     private ProductItem? product;
+
+    private IReadOnlyList<VoucherOffer> voucherOffers = Array.Empty<VoucherOffer>();
 
     private List<ProductVariant> variants = new();
 
@@ -614,6 +585,8 @@
                 return;
 
             }
+
+            voucherOffers = await VoucherOffers.GetActiveAsync();
 
             await LoadProductImageAsync();
 
@@ -714,6 +687,8 @@
 
                 quantity = 1;
 
+                ApplyVariantImage(selectedVariant);
+
             }
 
         }
@@ -750,7 +725,30 @@
 
         cartMessage = string.Empty;
 
+        ApplyVariantImage(variant);
+
     }
+
+    private string ShopLabel =>
+        product == null
+            ? ""
+            : string.IsNullOrWhiteSpace(product.ShopName)
+                ? $"Shop #{product.ShopId}"
+                : product.ShopName;
+
+    private void ApplyVariantImage(ProductVariant variant)
+    {
+        var image = ImageForVariant(variant);
+        if (!string.IsNullOrWhiteSpace(image))
+        {
+            productImageUrl = image;
+        }
+    }
+
+    private string ImageForVariant(ProductVariant variant) =>
+        VariantImages.Resolve(
+            variant.VariantName,
+            productImageUrls.FirstOrDefault() ?? product?.ImageUrl);
 
     private void DecreaseQuantity()
 
@@ -939,7 +937,7 @@
             if (!res.IsSuccessStatusCode)
             {
                 cartSuccess = false;
-                cartMessage = "Không thể mở chat với Seller.";
+                cartMessage = "Không thể mở chat với Shop.";
                 return;
             }
 
@@ -1008,6 +1006,11 @@
         }
 
     }
+
+    private ProductPriceQuote? PriceQuote(decimal price) =>
+        product == null
+            ? null
+            : VoucherOfferService.Quote(voucherOffers, product.Id, product.ShopId, price);
 
     private string FormatPrice(decimal price)
 

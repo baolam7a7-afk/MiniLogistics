@@ -28,16 +28,16 @@ else if (data != null)
 {
     <div class="seller-grid">
         <article class="seller-stat">
-            <span>Tổng doanh thu</span>
-            <strong>@SellerText.Money(data.Revenue.TotalRevenue)</strong>
+            <span>Doanh thu nhận về (95%)</span>
+            <strong>@SellerText.Money(decimal.Round(data.Revenue.TotalRevenue * 0.95m, 0))</strong>
         </article>
         <article class="seller-stat">
-            <span>Doanh thu tháng này</span>
-            <strong>@SellerText.Money(data.Revenue.ThisMonthRevenue)</strong>
+            <span>Tháng này (95%)</span>
+            <strong>@SellerText.Money(decimal.Round(data.Revenue.ThisMonthRevenue * 0.95m, 0))</strong>
         </article>
         <article class="seller-stat">
-            <span>Doanh thu hôm nay</span>
-            <strong>@SellerText.Money(data.Revenue.TodayRevenue)</strong>
+            <span>Hôm nay (95%)</span>
+            <strong>@SellerText.Money(decimal.Round(data.Revenue.TodayRevenue * 0.95m, 0))</strong>
         </article>
         <article class="seller-stat">
             <span>Tổng đơn hàng</span>
@@ -64,11 +64,11 @@ else if (data != null)
     <div class="seller-split">
         <section class="seller-card">
             <h2>Doanh thu</h2>
-            <p class="seller-muted">API dashboard trả tổng, hôm nay và tháng này. Không có chuỗi doanh thu theo từng ngày.</p>
+            <p class="seller-muted">Seller nhận 95% tiền sản phẩm đã bán. Phí sàn là 5%. <a href="/seller/revenue">Xem chi tiết đơn đã giao</a>.</p>
             <div class="seller-bars">
-                @Bar("Hôm nay", data.Revenue.TodayRevenue)
-                @Bar("Tháng này", data.Revenue.ThisMonthRevenue)
-                @Bar("Tổng", data.Revenue.TotalRevenue)
+                @Bar("Hôm nay", decimal.Round(data.Revenue.TodayRevenue * 0.95m, 0))
+                @Bar("Tháng này", decimal.Round(data.Revenue.ThisMonthRevenue * 0.95m, 0))
+                @Bar("Tổng", decimal.Round(data.Revenue.TotalRevenue * 0.95m, 0))
             </div>
         </section>
         <section class="seller-card">

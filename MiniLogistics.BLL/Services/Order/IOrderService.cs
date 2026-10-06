@@ -34,4 +34,33 @@ public interface IOrderService
         long actorUserId,
         string role,
         UpdateOrderStatusDTO request);
+
+    Task<OrderResponseDTO> ConfirmByShopAsync(
+        long orderId,
+        long actorUserId,
+        string role);
+
+    Task<OrderResponseDTO> CancelByShopAsync(
+        long orderId,
+        long actorUserId,
+        string role,
+        CancelOrderDTO request);
+
+    Task<List<OrderResponseDTO>> GetAvailableForShipperAsync(
+        long shipperUserId);
+
+    Task<List<OrderResponseDTO>> GetShipperDeliveriesAsync(
+        long shipperUserId);
+
+    Task<OrderResponseDTO> AcceptByShipperAsync(
+        long orderId,
+        long shipperUserId);
+
+    Task<OrderResponseDTO> DeliverByShipperAsync(
+        long orderId,
+        long shipperUserId);
+
+    Task<OrderResponseDTO> ConfirmReceivedAsync(
+        long orderId,
+        long customerId);
 }

@@ -9,7 +9,7 @@
 <div class="seller-page-head">
     <div>
         <h1>Voucher cửa hàng</h1>
-        <p>Seller chỉ tạo voucher scope shop cho cửa hàng của mình.</p>
+        <p>Chọn sản phẩm được giảm giá. Khách chỉ dùng được voucher khi đơn có những sản phẩm đó.</p>
     </div>
 </div>
 
@@ -61,6 +61,23 @@ else
         <label class="seller-field">Mô tả
             <textarea class="seller-textarea" @bind="description"></textarea>
         </label>
+        <div class="seller-field">
+            <span>Sản phẩm áp dụng</span>
+            @if (products.Count == 0)
+            {
+                <p class="seller-muted">Shop chưa có sản phẩm.</p>
+            }
+            else
+            {
+                @foreach (var product in products)
+                {
+                    <label style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                        <input type="checkbox" checked="@selectedProductIds.Contains(product.Id)" @onchange="args => ToggleProduct(product.Id, args)" />
+                        <span>@product.Name</span>
+                    </label>
+                }
+            }
+        </div>
         <button class="app-button app-button-primary" @onclick="Create">Tạo voucher</button>
     </section>
 
@@ -80,6 +97,7 @@ else
                     <thead>
                         <tr>
                             <th>Mã</th>
+                            <th>Sản phẩm</th>
                             <th>Giá trị</th>
                             <th>Đơn tối thiểu</th>
                             <th>Lượt</th>
@@ -93,6 +111,7 @@ else
                         {
                             <tr>
                                 <td>@item.Code</td>
+                                <td>@ProductNames(item)</td>
                                 <td>@(item.DiscountType == "percent" ? $"{item.DiscountValue}%" : SellerText.Money(item.DiscountValue))</td>
                                 <td>@(item.MinOrderValue.HasValue ? SellerText.Money(item.MinOrderValue.Value) : "—")</td>
                                 <td>@item.UsedCount / @(item.UsageLimit?.ToString() ?? "∞")</td>
@@ -114,6 +133,8 @@ else
 
 @code {
     private List<SellerVoucher> items = new();
+    private List<SellerProduct> products = new();
+    private HashSet<long> selectedProductIds = new();
     private bool isLoading = true;
     private bool isError;
     private string? message;
@@ -133,6 +154,22 @@ else
         Session.ShopChanged += OnShopChanged;
         await Session.EnsureAsync();
         await LoadAsync();
+        _ = WatchAsync();
+    }
+
+    private PeriodicTimer? refreshTimer;
+
+    private async Task WatchAsync()
+    {
+        refreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(8));
+        while (await refreshTimer.WaitForNextTickAsync())
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadAsync(quiet: true);
+                StateHasChanged();
+            });
+        }
     }
 
     private async void OnShopChanged() => await InvokeAsync(async () =>
@@ -141,7 +178,7 @@ else
         StateHasChanged();
     });
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool quiet = false)
     {
         if (Session.Shop == null)
         {
@@ -149,10 +186,19 @@ else
             return;
         }
 
-        isLoading = true;
+        if (!quiet)
+        {
+            isLoading = true;
+        }
+        var catalog = await Api.GetAsync<PagedResult<SellerProduct>>(
+            $"api/products?ShopId={Session.Shop.Id}&Page=1&PageSize=100");
+        products = catalog.Data?.Items ?? new();
         var result = await Api.GetAsync<PagedResult<SellerVoucher>>(
             $"api/vouchers/shop/{Session.Shop.Id}?Page=1&PageSize=50");
-        isLoading = false;
+        if (!quiet)
+        {
+            isLoading = false;
+        }
         if (!result.Ok || result.Data == null)
         {
             isError = true;
@@ -183,16 +229,49 @@ else
             MaxDiscount = maxDiscount,
             MinOrderValue = minOrder,
             UsageLimit = usageLimit,
-            StartAt = startAt,
-            EndAt = endAt
+            StartAt = DateTime.SpecifyKind(startAt, DateTimeKind.Local).ToUniversalTime(),
+            EndAt = DateTime.SpecifyKind(endAt, DateTimeKind.Local).ToUniversalTime(),
+            ProductIds = selectedProductIds.ToList()
         });
         isError = !result.Ok;
         message = result.Ok ? "Đã tạo voucher." : result.Error;
         if (result.Ok)
         {
             code = "";
+            selectedProductIds.Clear();
             await LoadAsync();
         }
+    }
+
+    private void ToggleProduct(long productId, ChangeEventArgs args)
+    {
+        if (args.Value is bool on && on)
+        {
+            selectedProductIds.Add(productId);
+        }
+        else
+        {
+            selectedProductIds.Remove(productId);
+        }
+    }
+
+    private string ProductNames(SellerVoucher item)
+    {
+        if (item.ProductNames.Count > 0)
+        {
+            return string.Join(", ", item.ProductNames);
+        }
+
+        if (item.ProductIds.Count == 0)
+        {
+            return "Tất cả sản phẩm";
+        }
+
+        var names = products
+            .Where(product => item.ProductIds.Contains(product.Id))
+            .Select(product => product.Name)
+            .ToList();
+        return names.Count == 0 ? $"{item.ProductIds.Count} sản phẩm" : string.Join(", ", names);
     }
 
     private async Task Toggle(SellerVoucher item)
@@ -207,5 +286,9 @@ else
         }
     }
 
-    public void Dispose() => Session.ShopChanged -= OnShopChanged;
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+        Session.ShopChanged -= OnShopChanged;
+    }
 }

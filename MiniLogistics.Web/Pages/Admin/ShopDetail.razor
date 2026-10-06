@@ -1,0 +1,248 @@
+@page "/admin/shops/{ShopId:long}"
+@layout AdminLayout
+@inject SellerApi Api
+@inject AdminSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>Chi tiết cửa hàng</PageTitle>
+
+<div class="seller-page-head">
+    <div>
+        <h1>@(shop?.Name ?? "Cửa hàng")</h1>
+        <p>Sản phẩm, ví và doanh thu của shop. Ngừng bán cần nhập lý do.</p>
+    </div>
+    <a class="app-button app-button-secondary" href="/admin/shops">Danh sách shop</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="app-alert @(isError ? "app-alert-danger" : "app-alert-success")">@message</div>
+}
+
+@if (isLoading || shop == null)
+{
+    <div class="seller-loading">Đang tải cửa hàng...</div>
+}
+else
+{
+    <section class="seller-card">
+        <p>Trạng thái: <span class="seller-badge">@SellerText.ShopStatus(shop.Status)</span></p>
+        @if (!string.IsNullOrWhiteSpace(shop.StatusReason))
+        {
+            <p>Lý do: @shop.StatusReason</p>
+        }
+        <p>Ví: <strong>@SellerText.Money(walletBalance)</strong></p>
+        @if (finance != null)
+        {
+            <p>Đơn đã giao: tiền hàng @SellerText.Money(finance.ProductSales) · sàn 5% @SellerText.Money(finance.PlatformFee) · seller 95% @SellerText.Money(finance.SellerShare)</p>
+        }
+        <div class="seller-actions">
+            @if (shop.Status == "approved")
+            {
+                <button class="app-button app-button-danger" @onclick="OpenShopStop">Ngừng bán shop</button>
+            }
+            else if (shop.Status == "suspended")
+            {
+                <button class="app-button app-button-primary" @onclick="ResumeShop">Cho bán lại</button>
+            }
+            else if (shop.Status == "pending")
+            {
+                <button class="app-button app-button-primary" @onclick="Approve">Duyệt</button>
+                <button class="app-button app-button-danger" @onclick="Reject">Từ chối</button>
+            }
+        </div>
+    </section>
+
+    <section class="seller-card">
+        <h2>Sản phẩm</h2>
+        @if (products.Count == 0)
+        {
+            <p class="seller-muted">Shop chưa có sản phẩm.</p>
+        }
+        else
+        {
+            <div class="seller-table-wrap">
+                <table class="seller-table">
+                    <thead>
+                        <tr>
+                            <th>Tên</th>
+                            <th>Giá</th>
+                            <th>Trạng thái</th>
+                            <th>Lý do</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in products)
+                        {
+                            <tr>
+                                <td>@product.Name</td>
+                                <td>@(product.MinPrice.HasValue ? SellerText.Money(product.MinPrice.Value) : "—")</td>
+                                <td><span class="seller-badge">@SellerText.ProductStatus(product.Status)</span></td>
+                                <td>@(product.InactiveReason ?? "—")</td>
+                                <td>
+                                    @if (product.Status == "active")
+                                    {
+                                        <button class="app-button app-button-danger" @onclick="() => OpenProductStop(product)">Ngừng bán</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="app-button app-button-secondary" @onclick="() => ResumeProduct(product)">Cho bán lại</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@if (askReason)
+{
+    <div class="order-modal-backdrop" @onclick="CloseReason">
+        <div class="order-modal" @onclick:stopPropagation="true">
+            <h3>@(reasonTarget == "shop" ? "Ngừng bán shop" : "Ngừng bán sản phẩm")</h3>
+            <p>Nhập lý do. Shop hoặc sản phẩm sẽ không còn được bán cho đến khi mở lại.</p>
+            <textarea class="seller-textarea" @bind="reason" placeholder="Lý do ngừng bán"></textarea>
+            <div class="order-modal-actions">
+                <button type="button" class="app-button app-button-secondary" @onclick="CloseReason">Đóng</button>
+                <button type="button" class="app-button app-button-danger" @onclick="ConfirmStop">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long ShopId { get; set; }
+
+    private ShopRecord? shop;
+    private List<SellerProduct> products = new();
+    private decimal walletBalance;
+    private FinanceSnapshot? finance;
+    private bool isLoading = true;
+    private bool isError;
+    private string? message;
+    private bool askReason;
+    private string reason = "";
+    private string reasonTarget = "";
+    private SellerProduct? stoppingProduct;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Session.EnsureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Forbidden || Session.Profile == null)
+        {
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        var shopResult = await Api.GetAsync<ShopRecord>($"api/shops/{ShopId}");
+        var productResult = await Api.GetAsync<PagedResult<SellerProduct>>($"api/products?ShopId={ShopId}&Page=1&PageSize=100");
+        var walletResult = await Api.GetAsync<List<ShopWalletRecord>>("api/shop-wallets");
+        var financeResult = await Api.GetAsync<FinanceSnapshot>($"api/finance/platform?shopId={ShopId}");
+        isLoading = false;
+        if (!shopResult.Ok || shopResult.Data == null)
+        {
+            isError = true;
+            message = shopResult.Error;
+            shop = null;
+            return;
+        }
+
+        shop = shopResult.Data;
+        products = productResult.Data?.Items ?? new();
+        walletBalance = walletResult.Data?.FirstOrDefault(item => item.ShopId == ShopId)?.Balance ?? 0;
+        finance = financeResult.Data;
+    }
+
+    private void OpenShopStop()
+    {
+        reasonTarget = "shop";
+        stoppingProduct = null;
+        reason = "";
+        askReason = true;
+    }
+
+    private void OpenProductStop(SellerProduct product)
+    {
+        reasonTarget = "product";
+        stoppingProduct = product;
+        reason = "";
+        askReason = true;
+    }
+
+    private void CloseReason() => askReason = false;
+
+    private async Task ConfirmStop()
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            isError = true;
+            message = "Nhập lý do ngừng bán.";
+            return;
+        }
+
+        if (reasonTarget == "shop")
+        {
+            var result = await Api.PutAsync<ShopRecord>($"api/shops/{ShopId}/selling", new { Selling = false, Reason = reason.Trim() });
+            isError = !result.Ok;
+            message = result.Ok ? "Đã ngừng bán shop." : result.Error;
+        }
+        else if (stoppingProduct != null)
+        {
+            var result = await Api.PutAsync<SellerProduct>($"api/products/{stoppingProduct.Id}/status", new { Status = "inactive", Reason = reason.Trim() });
+            isError = !result.Ok;
+            message = result.Ok ? "Đã ngừng bán sản phẩm." : result.Error;
+        }
+
+        askReason = false;
+        await LoadAsync();
+    }
+
+    private async Task ResumeShop()
+    {
+        var result = await Api.PutAsync<ShopRecord>($"api/shops/{ShopId}/selling", new { Selling = true });
+        isError = !result.Ok;
+        message = result.Ok ? "Shop được bán lại." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task ResumeProduct(SellerProduct product)
+    {
+        var result = await Api.PutAsync<SellerProduct>($"api/products/{product.Id}/status", new { Status = "active" });
+        isError = !result.Ok;
+        message = result.Ok ? "Sản phẩm được bán lại." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Approve()
+    {
+        var result = await Api.PutAsync<ShopRecord>($"api/shops/{ShopId}/approve");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã duyệt cửa hàng." : result.Error;
+        await LoadAsync();
+    }
+
+    private async Task Reject()
+    {
+        var result = await Api.PutAsync<ShopRecord>($"api/shops/{ShopId}/reject");
+        isError = !result.Ok;
+        message = result.Ok ? "Đã từ chối cửa hàng." : result.Error;
+        await LoadAsync();
+    }
+
+    private sealed class FinanceSnapshot
+    {
+        public decimal ProductSales { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal SellerShare { get; set; }
+    }
+}

@@ -1,5 +1,7 @@
 @using MiniLogistics.Web.Models.Product
+@using MiniLogistics.Web.Services.Voucher
 @inject NavigationManager Navigation
+@inject VoucherOfferService VoucherOffers
 
 <article class="product-card store-product-card"
          @onclick="Open">
@@ -22,7 +24,6 @@
 
     <div class="product-card-body">
         <div class="product-card-tags">
-            <span class="product-status">@StatusText</span>
             @if (!string.IsNullOrWhiteSpace(Product.CategoryName))
             {
                 <span class="product-category-badge">@Product.CategoryName</span>
@@ -39,11 +40,17 @@
 
         <div class="product-card-footer">
             <div class="product-price-block">
-                @if (Product.MinPrice.HasValue)
+                @if (Product.VoucherPrice.HasValue && Product.MinPrice.HasValue)
+                {
+                    <span class="product-price-old">@FormatPrice(Product.MinPrice.Value)</span>
+                    <span class="product-price">@FormatPrice(Product.VoucherPrice.Value)</span>
+                    <span class="product-voucher-note">@Product.VoucherNote</span>
+                }
+                else if (Product.MinPrice.HasValue)
                 {
                     <span class="product-price">@FormatPrice(Product.MinPrice.Value)</span>
                 }
-                <span class="product-shop">Shop #@Product.ShopId</span>
+                <span class="product-shop">@ShopLabel</span>
             </div>
             <a href="@($"/products/{Product.Id}")"
                class="app-button app-button-primary app-button-sm"
@@ -63,16 +70,29 @@
             ? "P"
             : Product.Name.Trim()[0].ToString().ToUpperInvariant();
 
-    private string StatusText =>
-        Product.Status?.Trim().ToLowerInvariant() switch
-        {
-            "active" => "Đang bán",
-            "inactive" => "Ngừng bán",
-            "draft" => "Nháp",
-            _ => Product.Status ?? "—"
-        };
+    private string ShopLabel =>
+        string.IsNullOrWhiteSpace(Product.ShopName)
+            ? $"Shop #{Product.ShopId}"
+            : Product.ShopName;
 
     private bool imageFailed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Product.MinPrice is not decimal price)
+        {
+            return;
+        }
+
+        var quote = await VoucherOffers.QuoteAsync(Product.Id, Product.ShopId, price);
+        if (quote == null)
+        {
+            return;
+        }
+
+        Product.VoucherPrice = quote.Sale;
+        Product.VoucherNote = quote.Note;
+    }
 
     private void OnImageError() => imageFailed = true;
 

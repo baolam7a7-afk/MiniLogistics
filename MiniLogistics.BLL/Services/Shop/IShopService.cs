@@ -11,7 +11,9 @@ public interface IShopService
 
     Task<ShopResponseDTO> CreateAsync(
         long ownerUserId,
-        CreateShopDTO request);
+        CreateShopDTO request,
+        string? clientIp = null,
+        string? userAgent = null);
 
     Task<IEnumerable<ShopResponseDTO>> GetMyShopsAsync(
         long ownerUserId);
@@ -48,4 +50,14 @@ public interface IShopService
 
     Task<ShopResponseDTO?> RejectAsync(
         long shopId);
+
+    Task<ShopResponseDTO?> SetSellingAsync(
+        long shopId,
+        bool selling,
+        string? reason);
+
+    Task<ShopResponseDTO?> SetLogoUrlAsync(
+        long ownerUserId,
+        long shopId,
+        string logoUrl);
 }

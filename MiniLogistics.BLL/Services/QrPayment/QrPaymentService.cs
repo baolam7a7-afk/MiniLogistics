@@ -10,8 +10,8 @@ namespace MiniLogistics.BLL.Services.QrPayment;
 public class VietQrSettings
 {
     public string BankBin { get; set; } = "970422";
-    public string AccountNumber { get; set; } = "0123456789";
-    public string AccountName { get; set; } = "MINI LOGISTICS";
+    public string AccountNumber { get; set; } = "";
+    public string AccountName { get; set; } = "";
     public int ExpireMinutes { get; set; } = 15;
 }
 
@@ -176,14 +176,74 @@ public class QrPaymentService : IQrPaymentService
 
         var orderStatus = payment.Order.Status?.Trim().ToLowerInvariant();
         if (orderStatus is "awaiting_payment" or "paid")
+        {
             payment.Order.Status = "pending";
+            payment.Order.UpdatedAt = now;
+            await _uow.OrderStatusLogs.AddAsync(new OrderStatusLog
+            {
+                OrderId = payment.Order.Id,
+                FromStatus = orderStatus,
+                ToStatus = "pending",
+                Message = "Đã thanh toán. Chờ shop xác nhận.",
+                CreatedByUserId = userId,
+                CreatedAt = now
+            });
+        }
 
+        await RemovePaidItemsFromCartAsync(payment.Order);
         await _uow.SaveChangesAsync();
         return Map(payment.Order, payment);
     }
 
+    private async Task RemovePaidItemsFromCartAsync(OrderEntity order)
+    {
+        var items = await _uow.OrderItems.Query()
+            .Where(item => item.OrderId == order.Id)
+            .ToListAsync();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var cart = await _uow.Carts.Query()
+            .FirstOrDefaultAsync(row => row.UserId == order.CustomerId);
+        if (cart == null)
+        {
+            return;
+        }
+
+        var variantIds = items.Select(item => item.VariantId).ToHashSet();
+        var lines = await _uow.CartItems.Query()
+            .Where(line => line.CartId == cart.Id && variantIds.Contains(line.VariantId))
+            .ToListAsync();
+
+        foreach (var line in lines)
+        {
+            var ordered = items
+                .Where(item => item.VariantId == line.VariantId)
+                .Sum(item => item.Quantity);
+            if (ordered >= line.Quantity)
+            {
+                _uow.CartItems.Delete(line);
+            }
+            else if (ordered > 0)
+            {
+                line.Quantity -= ordered;
+                line.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        cart.UpdatedAt = DateTime.UtcNow;
+    }
+
     private string BuildVietQrUrl(decimal amount, string addInfo)
     {
+        if (string.IsNullOrWhiteSpace(_settings.AccountNumber) ||
+            string.IsNullOrWhiteSpace(_settings.AccountName))
+        {
+            throw new BadRequestException("Chưa cấu hình tài khoản VietQR.");
+        }
+
         var bank = Uri.EscapeDataString(_settings.BankBin);
         var account = Uri.EscapeDataString(_settings.AccountNumber);
         var name = Uri.EscapeDataString(_settings.AccountName);

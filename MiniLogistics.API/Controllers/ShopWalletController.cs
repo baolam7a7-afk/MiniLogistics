@@ -78,6 +78,14 @@ public class ShopWalletController : ControllerBase
     // ADMIN - GET WALLET
     // =====================================================
 
+    [HttpGet]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<List<ShopWalletResponseDTO>>> List()
+    {
+        var result = await _shopWalletService.ListAsync();
+        return Ok(result);
+    }
+
     [HttpGet("{walletId:long}")]
     [Authorize(Roles = "admin")]
     public async Task<ActionResult<ShopWalletResponseDTO>>

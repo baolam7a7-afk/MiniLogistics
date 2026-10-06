@@ -12,6 +12,8 @@ public class OrderItemResponseDTO
 
     public string VariantName { get; set; } = string.Empty;
 
+    public string? ImageUrl { get; set; }
+
     public decimal UnitPrice { get; set; }
 
     public int Quantity { get; set; }

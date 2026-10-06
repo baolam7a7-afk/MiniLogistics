@@ -5,6 +5,7 @@ using MiniLogistics.DAL.UnitOfWork;
 
 using VoucherModel =
     MiniLogistics.DAL.Models.Voucher;
+using MiniLogistics.DAL.Models;
 
 namespace MiniLogistics.BLL.Services.Voucher;
 
@@ -136,6 +137,7 @@ public class VoucherService : IVoucherService
         // PAGINATION
         // =================================================
 
+        await AttachProductIds(result);
         return CreatePagedResponse(
             result,
             request);
@@ -159,7 +161,7 @@ public class VoucherService : IVoucherService
             return null;
         }
 
-        return MapToResponseDTO(voucher);
+        return await WithProducts(voucher);
     }
 
 
@@ -250,6 +252,7 @@ public class VoucherService : IVoucherService
                 .OrderByDescending(x => x.Id)
                 .ToList();
 
+        await AttachProductIds(result);
         return CreatePagedResponse(
             result,
             request);
@@ -289,7 +292,7 @@ public class VoucherService : IVoucherService
             return null;
         }
 
-        return MapToResponseDTO(voucher);
+        return await WithProducts(voucher);
     }
 
 
@@ -524,10 +527,10 @@ public class VoucherService : IVoucherService
                     0,
 
                 StartAt =
-                    request.StartAt,
+                    AsUtc(request.StartAt),
 
                 EndAt =
-                    request.EndAt,
+                    AsUtc(request.EndAt),
 
                 Status =
                     "active",
@@ -542,7 +545,9 @@ public class VoucherService : IVoucherService
         await _unitOfWork
             .SaveChangesAsync();
 
-        return MapToResponseDTO(voucher);
+        await SaveProductLinksAsync(voucher, request.ProductIds, actorRole);
+
+        return await WithProducts(voucher);
     }
 
 
@@ -949,7 +954,7 @@ public class VoucherService : IVoucherService
         // START
         // =================================================
 
-        if (now < voucher.StartAt)
+        if (!VoucherClock.HasStarted(voucher.StartAt, now))
         {
             throw new BadRequestException(
                 "Voucher chưa bắt đầu hiệu lực.");
@@ -959,7 +964,7 @@ public class VoucherService : IVoucherService
         // END
         // =================================================
 
-        if (now > voucher.EndAt)
+        if (VoucherClock.HasEnded(voucher.EndAt, now))
         {
             throw new BadRequestException(
                 "Voucher đã hết hạn.");
@@ -1165,6 +1170,108 @@ public class VoucherService : IVoucherService
         };
     }
 
+    private async Task<VoucherResponseDTO> WithProducts(VoucherModel voucher)
+    {
+        var dto = MapToResponseDTO(voucher);
+        dto.ProductIds = await ProductIdsOf(voucher.Id);
+        var names = await ProductNamesOf(dto.ProductIds);
+        dto.ProductNames = dto.ProductIds
+            .Select(id => names.TryGetValue(id, out var name) ? name : $"Sản phẩm #{id}")
+            .ToList();
+        return dto;
+    }
+
+    private async Task<List<long>> ProductIdsOf(long voucherId)
+    {
+        var links = await _unitOfWork.VoucherProducts
+            .FindAsync(link => link.VoucherId == voucherId);
+        return links.Select(link => link.ProductId).Distinct().ToList();
+    }
+
+    private async Task AttachProductIds(List<VoucherResponseDTO> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var ids = items.Select(item => item.Id).ToList();
+        var links = await _unitOfWork.VoucherProducts
+            .FindAsync(link => ids.Contains(link.VoucherId));
+        var grouped = links
+            .GroupBy(link => link.VoucherId)
+            .ToDictionary(group => group.Key, group => group.Select(link => link.ProductId).Distinct().ToList());
+        var names = await ProductNamesOf(grouped.Values.SelectMany(ids => ids));
+        foreach (var item in items)
+        {
+            item.ProductIds = grouped.TryGetValue(item.Id, out var productIds)
+                ? productIds
+                : new List<long>();
+            item.ProductNames = item.ProductIds
+                .Select(id => names.TryGetValue(id, out var name) ? name : $"Sản phẩm #{id}")
+                .ToList();
+        }
+    }
+
+    private async Task<Dictionary<long, string>> ProductNamesOf(IEnumerable<long> productIds)
+    {
+        var ids = productIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<long, string>();
+        }
+
+        var products = await _unitOfWork.Products
+            .FindAsync(product => ids.Contains(product.Id));
+        return products.ToDictionary(product => product.Id, product => product.Name);
+    }
+
+    private async Task SaveProductLinksAsync(
+        VoucherModel voucher,
+        IEnumerable<long>? productIds,
+        string actorRole)
+    {
+        if (!string.Equals(voucher.Scope, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var ids = (productIds ?? Array.Empty<long>())
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            throw new BadRequestException(
+                "Chọn ít nhất một sản phẩm để áp dụng voucher.");
+        }
+
+        if (!voucher.ShopId.HasValue)
+        {
+            throw new BadRequestException(
+                "Voucher shop chưa có cửa hàng.");
+        }
+
+        foreach (var productId in ids)
+        {
+            var product = await _unitOfWork.Products.GetByIdAsync(productId);
+            if (product == null || product.ShopId != voucher.ShopId.Value)
+            {
+                throw new BadRequestException(
+                    "Sản phẩm không thuộc cửa hàng của voucher.");
+            }
+
+            await _unitOfWork.VoucherProducts.AddAsync(new VoucherProduct
+            {
+                VoucherId = voucher.Id,
+                ProductId = productId
+            });
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+        _ = actorRole;
+    }
+
 
     // =====================================================
     // PAGINATION
@@ -1243,4 +1350,12 @@ public class VoucherService : IVoucherService
                 totalPages
         };
     }
+
+    private static DateTime AsUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime()
+        };
 }

@@ -12,6 +12,8 @@ public class Product
     public string Slug { get; set; } = null!;
     public string? Description { get; set; }
     public string Status { get; set; } = "draft";
+    public string? InactiveReason { get; set; }
+    public int? LowStockThreshold { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Shop Shop { get; set; } = null!;
